@@ -221,7 +221,10 @@ function syncSlide() {
     const rect = slide.getBoundingClientRect();
     const distance = Math.abs(rect.top + rect.height / 2 - center);
     const proximity = Math.max(0, 1 - distance / spacing);
-    slide.querySelector(".modeInner").style.setProperty("--proximity", proximity.toFixed(3));
+    const inner = slide.querySelector(".modeInner");
+    inner.style.setProperty("--proximity", proximity.toFixed(3));
+    // Compute the blur in JavaScript for reliable support across browsers.
+    inner.style.setProperty("--effective-blur", ((1 - proximity) * Number(previewBlur.value)).toFixed(2) + "px");
     if (distance < closest) { closest = distance; current = i; }
   });
   modeSlides.forEach((slide, i) => slide.classList.toggle("isActive", i === current));
