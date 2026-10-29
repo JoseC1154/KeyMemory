@@ -227,8 +227,12 @@ function activateMode(mode) {
 
 
 function visibleOctaves(width) {
-  // Keep a useful note range, but scroll across comfortably sized keys on phones.
-  if (activeMode === "dictionary") return width < 600 ? 3 : width < 1050 ? 4 : 5;
+  if (activeMode === "dictionary" && dictionaryVoicing.length) {
+    // Include the highest actual chord key, including notes raised by inversions.
+    // C-aligned octaves avoid clipping black keys at the keyboard's edges.
+    const highestMidi = Math.max(...dictionaryVoicing);
+    return Math.max(1, Math.ceil((highestMidi - 48 + 1) / 12));
+  }
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
@@ -248,8 +252,11 @@ function renderPiano() {
   const whiteCount = octaves * 7;
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
-  // Portrait phones show around seven white keys at once; the rest scroll.
-  const whiteW = mobile ? Math.max(27, (usable - 11 * gap) / 12) :
+  // Fit one or two dictionary octaves in portrait; only longer ranges scroll.
+  // Other modes retain two-octave scrolling with comfortable touch targets.
+  const visibleWhiteKeys = activeMode === "dictionary" ? Math.min(whiteCount, 14) : 12;
+  const mobileWhiteWidth = (usable - (visibleWhiteKeys - 1) * gap) / visibleWhiteKeys;
+  const whiteW = mobile ? Math.max(26, mobileWhiteWidth) :
     Math.max(1, (usable - (whiteCount - 1) * gap) / whiteCount);
   const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
   piano.style.width = mobile ? keyboardWidth + "px" : "100%";
