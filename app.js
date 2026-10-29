@@ -13,17 +13,23 @@ let achievementTimer = null;
 function dismissAchievement() {
   if (achievementTimer !== null) clearTimeout(achievementTimer);
   achievementTimer = null;
-  achievement.classList.remove("celebrate");
+  achievement.classList.remove("celebrate", "incorrect");
   achievement.hidden = true;
 }
-function celebrate(message = "Excellent! Correct answer!") {
+function showFeedback(correct, message) {
   dismissAchievement();
   achievementText.textContent = message;
+  achievement.querySelector(".achievementIcon").textContent = correct ? "✓" : "✕";
   achievement.hidden = false;
-  // Restart the animation even for consecutive correct answers.
   void achievement.offsetWidth;
-  achievement.classList.add("celebrate");
+  achievement.classList.add(correct ? "celebrate" : "incorrect");
   achievementTimer = setTimeout(dismissAchievement, 3200);
+}
+function celebrate(message = "Excellent! Correct answer!") {
+  showFeedback(true, message);
+}
+function incorrect(message = "Not quite — try again!") {
+  showFeedback(false, message);
 }
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
@@ -46,6 +52,13 @@ let dictionaryVoicing = [];
 const dictionaryRoot = document.getElementById("dictionaryRoot");
 const dictionaryQuality = document.getElementById("dictionaryQuality");
 const dictionaryInversion = document.getElementById("dictionaryInversion");
+const dictionaryExpand = document.getElementById("dictionaryExpand");
+const dictionaryOptions = document.getElementById("dictionaryOptions");
+dictionaryExpand.addEventListener("click", () => {
+  const expanded = dictionaryExpand.getAttribute("aria-expanded") === "true";
+  dictionaryExpand.setAttribute("aria-expanded", String(!expanded));
+  dictionaryOptions.classList.toggle("expanded", !expanded);
+});
 const toggleChordNotes = document.getElementById("toggleChordNotes");
 const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
@@ -73,6 +86,7 @@ checkChordAnswer.addEventListener("click", () => {
     ? "Correct! You remembered every note."
     : "Not quite. Press Show Notes to review the chord and try again.";
   if (correct) celebrate("Perfect chord! You got it!");
+  else incorrect("Not quite — review the chord and try again.");
   checkChordAnswer.disabled = true;
 });
 function showChordOnPiano() {
@@ -191,6 +205,7 @@ function answerKey(midi) {
   const answer = activeMode === "degrees" ? NAMES[chordAnswer] : noteName(targetMidi);
   trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + answer + ".";
   if (correct) celebrate("Great job! Correct note!");
+  else incorrect("Not quite — the answer was " + answer + ".");
   targetMidi = null;
   chordAnswer = null;
   nextChallenge.hidden = false;
@@ -234,11 +249,12 @@ function renderPiano() {
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
   // Portrait phones show around seven white keys at once; the rest scroll.
-  const whiteW = mobile ? Math.max(42, (usable - 6 * gap) / 7) :
+  const whiteW = mobile ? Math.max(27, (usable - 11 * gap) / 12) :
     Math.max(1, (usable - (whiteCount - 1) * gap) / whiteCount);
   const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
   piano.style.width = mobile ? keyboardWidth + "px" : "100%";
-  const whiteH = Math.max(135, Math.min(320, whiteW * 6));
+  const whiteH = mobile ? Math.min(166, Math.max(125, whiteW * 4.6)) :
+    Math.max(135, Math.min(320, whiteW * 6));
   const blackW = whiteW * .65;
   const root = document.documentElement.style;
   root.setProperty("--white-w", whiteW + "px");
