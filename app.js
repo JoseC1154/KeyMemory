@@ -168,7 +168,18 @@ function setMenu(open) {
   }
 }
 function syncSlide() {
-  const current = Math.max(0, Math.min(modeSlides.length - 1, Math.round(modeScroller.scrollTop / Math.max(1, modeScroller.clientHeight))));
+  const viewport = modeScroller.getBoundingClientRect();
+  const center = viewport.top + viewport.height / 2;
+  const spacing = Math.max(1, modeSlides[0]?.getBoundingClientRect().height || 1);
+  let current = 0;
+  let closest = Infinity;
+  modeSlides.forEach((slide, i) => {
+    const rect = slide.getBoundingClientRect();
+    const distance = Math.abs(rect.top + rect.height / 2 - center);
+    const proximity = Math.max(0, 1 - distance / spacing);
+    slide.querySelector(".modeInner").style.setProperty("--proximity", proximity.toFixed(3));
+    if (distance < closest) { closest = distance; current = i; }
+  });
   modeSlides.forEach((slide, i) => slide.classList.toggle("isActive", i === current));
   document.getElementById("modeDots").textContent = modeSlides.map((_, i) => i === current ? "●" : "○").join(" ");
 }
