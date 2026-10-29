@@ -19,17 +19,30 @@
     <section id="modeOverlay" class="modeOverlay" role="dialog" aria-modal="true" aria-label="Choose training mode" hidden>
       <div class="modeTop"><span class="eyebrow">CHOOSE A MODE</span><button id="closeModes" type="button" aria-label="Close modes">✕</button></div>
       <div id="modeScroller" class="modeScroller" tabindex="0" aria-label="Scroll through training modes">
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 04</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 04</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 04</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">04 / 04</span><h2>Chord Degrees</h2><p>Practice the 1st (root), 3rd, and 5th of major and minor chords. Read the chord and degree, then find its note on the keyboard.</p><button type="button" class="startMode" data-mode="degrees">Start Chord Degrees</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 05</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 05</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 05</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">04 / 05</span><h2>Chord Degrees</h2><p>See the chord highlighted on the piano and identify the requested degree.</p><button type="button" class="startMode" data-mode="degrees">Start Chord Degrees</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">05 / 05</span><h2>Chord Dictionary</h2><p>Choose a root note and chord quality to see its notes light up on the piano.</p><button type="button" class="startMode" data-mode="dictionary">Open Chord Dictionary</button></div></article>
       </div>
-      <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○ ○</span></div>
+      <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○ ○ ○</span></div>
     </section>
     <section id="chordQuestion" class="chordQuestion" aria-label="Chord in question" hidden>
       <span class="chordCaption">CHORD IN QUESTION</span>
       <strong id="chordTitle" class="chordTitle"></strong>
       <span id="degreeTitle" class="degreeTitle"></span>
+    </section>
+    <section id="dictionaryControls" class="dictionaryControls" hidden>
+      <label>Root note <select id="dictionaryRoot" aria-label="Chord root"></select></label>
+      <label>Chord quality <select id="dictionaryQuality" aria-label="Chord quality">
+        <option value="major">Major</option><option value="minor">Minor</option>
+        <option value="dim">Diminished</option><option value="aug">Augmented</option>
+        <option value="sus2">Sus2</option><option value="sus4">Sus4</option>
+        <option value="maj7">Major 7</option><option value="min7">Minor 7</option>
+        <option value="dom7">Dominant 7</option><option value="dim7">Diminished 7</option>
+        <option value="m7b5">Half-diminished 7</option>
+      </select></label>
+      <span id="dictionaryNotes" aria-live="polite"></span>
     </section>
     <section class="pianoContainer" aria-label="Interactive piano">
       <div id="piano" class="piano" aria-label="Piano keys"></div>
