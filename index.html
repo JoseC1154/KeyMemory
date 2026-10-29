@@ -12,10 +12,19 @@
 <body>
   <main class="shell">
     <header class="header">
-      <div class="eyebrow">KEYMEMORY</div>
-      <h1>Piano keyboard</h1>
-      <p>Same piano look as KeyTransposer, now fitted to the screen without horizontal scrolling.</p>
+      <div class="brand"><div class="eyebrow">KEYMEMORY</div><h1>Piano Memory Trainer</h1></div>
+      <button id="openModes" class="menuToggle" type="button" aria-label="Open training modes" aria-controls="modeOverlay" aria-expanded="false"><span></span><span></span><span></span></button>
     </header>
+    <section class="trainingBar" aria-live="polite"><span id="activeModeName">Free Play</span><span id="trainingPrompt">Explore the keyboard, or choose a training mode.</span><button id="nextChallenge" type="button" hidden>Next</button></section>
+    <section id="modeOverlay" class="modeOverlay" role="dialog" aria-modal="true" aria-label="Choose training mode" hidden>
+      <div class="modeTop"><span class="eyebrow">CHOOSE A MODE</span><button id="closeModes" type="button" aria-label="Close modes">✕</button></div>
+      <div id="modeScroller" class="modeScroller" tabindex="0" aria-label="Scroll through training modes">
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 03</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 03</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 03</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
+      </div>
+      <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○</span></div>
+    </section>
     <section class="pianoContainer" aria-label="Interactive piano">
       <div id="piano" class="piano" aria-label="Piano keys"></div>
     </section>
