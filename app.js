@@ -13,6 +13,30 @@ const noteName = midi => NAMES[midi % 12]; // Hide octave numbers; keep MIDI pit
 const CHORD_ROOTS = [0, 2, 4, 5, 7, 9, 11];
 const CHORD_DEGREES = [1, 3, 5];
 let chordAnswer = null;
+let displayedChord = [];
+const CHORD_TYPES = {
+  major:[0,4,7], minor:[0,3,7], dim:[0,3,6], aug:[0,4,8],
+  sus2:[0,2,7], sus4:[0,5,7], maj7:[0,4,7,11],
+  min7:[0,3,7,10], dom7:[0,4,7,10], dim7:[0,3,6,9], m7b5:[0,3,6,10]
+};
+const chordMidis = (root, intervals) => intervals.map(step => 48 + ((root + step) % 12));
+function showChordOnPiano() {
+  piano.querySelectorAll(".key").forEach(key => {
+    key.classList.toggle("chordTone", displayedChord.includes(Number(key.dataset.midi) % 12));
+  });
+}
+function updateDictionary() {
+  const root = Number(document.getElementById("dictionaryRoot").value);
+  const quality = document.getElementById("dictionaryQuality").value;
+  displayedChord = CHORD_TYPES[quality].map(step => (root + step) % 12);
+  selected.clear();
+  renderPiano();
+  const label = document.getElementById("dictionaryRoot").selectedOptions[0].textContent + " " +
+    document.getElementById("dictionaryQuality").selectedOptions[0].textContent;
+  document.getElementById("dictionaryNotes").textContent = label + ": " + displayedChord.map(pc => NAMES[pc]).join(" · ");
+  trainingPrompt.textContent = label + " — blue keys show the chord tones.";
+}
+
 let activeMode = "free";
 let targetMidi = null;
 let challengeTimer = null;
@@ -31,10 +55,12 @@ function cancelChallenge() {
   challengeTimer = null;
   targetMidi = null;
   chordAnswer = null;
+  displayedChord = [];
 }
 function chooseChallenge() {
   cancelChallenge();
   if (activeMode === "free") return;
+  if (activeMode === "dictionary") { updateDictionary(); return; }
   selected.clear();
   renderPiano();
   const notes = keyRange();
@@ -46,6 +72,8 @@ function chooseChallenge() {
     const degree = CHORD_DEGREES[Math.floor(Math.random() * CHORD_DEGREES.length)];
     const semitones = degree === 1 ? 0 : degree === 3 ? (minor ? 3 : 4) : 7;
     chordAnswer = (root + semitones) % 12;
+    displayedChord = [0, minor ? 3 : 4, 7].map(step => (root + step) % 12);
+    showChordOnPiano();
     const degreeName = degree === 1 ? "root (1st)" : degree === 3 ? "3rd" : "5th";
     chordTitle.textContent = NAMES[root] + (minor ? " minor" : " major");
     degreeTitle.textContent = "Find the " + degreeName;
@@ -79,8 +107,9 @@ function activateMode(mode) {
   cancelChallenge();
   activeMode = mode;
   chordQuestion.hidden = mode !== "degrees";
+  document.getElementById("dictionaryControls").hidden = mode !== "dictionary";
   selected.clear();
-  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : "Free Play";
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
   nextChallenge.hidden = mode === "free";
   renderPiano();
@@ -131,6 +160,7 @@ function renderPiano() {
     button.setAttribute("aria-label", noteName(midi));
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
+    if (displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     const label = document.createElement("span");
     label.className = "noteLabel";
     label.textContent = NAMES[midi % 12];
@@ -138,6 +168,7 @@ function renderPiano() {
     button.addEventListener("click", () => {
       // All modes share Free Play's green selected-key feedback.
       // Ignore answers while a memory target is being shown.
+      if (activeMode === "dictionary") return;
       if (activeMode !== "free" && (targetMidi === null || challengeTimer !== null)) return;
       if (activeMode === "free") {
         if (selected.has(midi)) selected.delete(midi);
@@ -172,6 +203,15 @@ function renderPiano() {
   }
   updateStatus(start, end - 1);
 }
+const dictionaryRoot = document.getElementById("dictionaryRoot");
+NAMES.forEach((name, pc) => {
+  const option = document.createElement("option");
+  option.value = pc;
+  option.textContent = name;
+  dictionaryRoot.append(option);
+});
+dictionaryRoot.addEventListener("change", updateDictionary);
+document.getElementById("dictionaryQuality").addEventListener("change", updateDictionary);
 document.getElementById("clearNotes").addEventListener("click", () => {
   selected.clear();
   renderPiano();
