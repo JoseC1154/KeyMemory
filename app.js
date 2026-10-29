@@ -9,7 +9,10 @@ const noteText = document.getElementById("noteText");
 const selected = new Set();
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
-const noteName = midi => NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
+const noteName = midi => NAMES[midi % 12]; // Hide octave numbers; keep MIDI pitch internally.
+const CHORD_ROOTS = [0, 2, 4, 5, 7, 9, 11];
+const CHORD_DEGREES = [1, 3, 5];
+let chordAnswer = null;
 let activeMode = "free";
 let targetMidi = null;
 let challengeTimer = null;
@@ -24,6 +27,7 @@ function cancelChallenge() {
   if (challengeTimer !== null) clearTimeout(challengeTimer);
   challengeTimer = null;
   targetMidi = null;
+  chordAnswer = null;
 }
 function chooseChallenge() {
   cancelChallenge();
@@ -33,6 +37,16 @@ function chooseChallenge() {
   const notes = keyRange();
   targetMidi = notes[Math.floor(Math.random() * notes.length)];
   nextChallenge.hidden = true;
+  if (activeMode === "degrees") {
+    const root = CHORD_ROOTS[Math.floor(Math.random() * CHORD_ROOTS.length)];
+    const minor = Math.random() < .5;
+    const degree = CHORD_DEGREES[Math.floor(Math.random() * CHORD_DEGREES.length)];
+    const semitones = degree === 1 ? 0 : degree === 3 ? (minor ? 3 : 4) : 7;
+    chordAnswer = (root + semitones) % 12;
+    const degreeName = degree === 1 ? "root (1st)" : degree === 3 ? "3rd" : "5th";
+    trainingPrompt.textContent = NAMES[root] + (minor ? " minor" : " major") + " chord — find the " + degreeName + ".";
+    return;
+  }
   if (activeMode === "find") {
     trainingPrompt.textContent = "Find the note: " + noteName(targetMidi);
   } else {
@@ -49,16 +63,18 @@ function chooseChallenge() {
 }
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
-  const correct = activeMode === "find" ? midi % 12 === targetMidi % 12 : midi === targetMidi;
-  trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + noteName(targetMidi) + ".";
+  const correct = activeMode === "degrees" ? midi % 12 === chordAnswer : activeMode === "find" ? midi % 12 === targetMidi % 12 : midi === targetMidi;
+  const answer = activeMode === "degrees" ? NAMES[chordAnswer] : noteName(targetMidi);
+  trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + answer + ".";
   targetMidi = null;
+  chordAnswer = null;
   nextChallenge.hidden = false;
 }
 function activateMode(mode) {
   cancelChallenge();
   activeMode = mode;
   selected.clear();
-  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : "Free Play";
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
   nextChallenge.hidden = mode === "free";
   renderPiano();
@@ -71,7 +87,7 @@ function visibleOctaves(width) {
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
-  rangeText.textContent = noteName(start) + " – " + noteName(end);
+  rangeText.textContent = visibleOctaves(piano.clientWidth) + " octaves";
   const notes = [...selected].sort((a,b) => a-b).map(noteName);
   noteText.textContent = notes.length ? "Selected: " + notes.join(", ") : "Tap a key to highlight it";
 }
