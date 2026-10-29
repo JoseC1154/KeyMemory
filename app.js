@@ -7,6 +7,24 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
+const achievement = document.getElementById("achievement");
+const achievementText = document.getElementById("achievementText");
+let achievementTimer = null;
+function dismissAchievement() {
+  if (achievementTimer !== null) clearTimeout(achievementTimer);
+  achievementTimer = null;
+  achievement.classList.remove("celebrate");
+  achievement.hidden = true;
+}
+function celebrate(message = "Excellent! Correct answer!") {
+  dismissAchievement();
+  achievementText.textContent = message;
+  achievement.hidden = false;
+  // Restart the animation even for consecutive correct answers.
+  void achievement.offsetWidth;
+  achievement.classList.add("celebrate");
+  achievementTimer = setTimeout(dismissAchievement, 3200);
+}
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const noteName = midi => NAMES[midi % 12]; // Hide octave numbers; keep MIDI pitch internally.
