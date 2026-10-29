@@ -94,15 +94,39 @@ button:hover { border-color: var(--accent); }
 .modeOverlay[hidden] { display:none; }
 .modeTop { position:absolute; z-index:2; top:0; left:0; right:0; padding:22px clamp(20px,5vw,70px); display:flex; justify-content:space-between; align-items:center; }
 .modeTop button { font-size:21px; width:42px; height:42px; }
-.modeScroller { height:100%; overflow-y:auto; scroll-snap-type:y mandatory; scrollbar-width:none; overscroll-behavior:contain; }
+.modeScroller {
+  height:100%;
+  overflow-y:auto;
+  scroll-snap-type:y mandatory;
+  scroll-padding-block:14%;
+  padding-block:14vh;
+  scrollbar-width:none;
+  overscroll-behavior:contain;
+}
 .modeScroller::-webkit-scrollbar { display:none; }
-.modeSlide { height:100%; min-height:100%; scroll-snap-align:start; scroll-snap-stop:always; display:grid; place-items:center; padding:90px 22px 85px; text-align:center; }
-.modeInner { max-width:580px; opacity:.16; transform:translateY(34px) scale(.97); transition:opacity .5s ease,transform .5s ease; }
-.modeSlide.isActive .modeInner { opacity:1; transform:translateY(0) scale(1); }
+.modeSlide {
+  height:72vh;
+  min-height:72vh;
+  scroll-snap-align:center;
+  scroll-snap-stop:always;
+  display:grid;
+  place-items:center;
+  padding:72px 22px 65px;
+  text-align:center;
+}
+.modeInner {
+  max-width:580px;
+  opacity:calc(.12 + var(--proximity, 0) * .88);
+  filter:blur(calc((1 - var(--proximity, 0)) * 8px));
+  transform:translateY(calc((1 - var(--proximity, 0)) * 24px)) scale(calc(.88 + var(--proximity, 0) * .12));
+  transition:opacity .12s linear,filter .12s linear,transform .12s linear;
+  pointer-events:none;
+}
+.modeSlide.isActive .modeInner { pointer-events:auto; }
 .modeCount { color:var(--accent); letter-spacing:.15em; font-size:13px; font-weight:750; }
 .modeInner h2 { font-size:clamp(36px,7vw,74px); margin:18px 0; line-height:1.08; }
 .modeInner p { font-size:clamp(16px,2.2vw,21px); line-height:1.65; color:#c4cdc6; margin:0 auto 30px; max-width:510px; }
 .startMode { border:1px solid #42c97c; background:#17783e; font-size:16px; font-weight:750; padding:14px 28px; border-radius:99px; }
 .modeFoot { position:absolute; bottom:0; left:0; right:0; display:flex; gap:14px; align-items:center; justify-content:center; padding:23px; color:#bac7be; font-size:13px; pointer-events:none; }
 #modeDots { letter-spacing:7px; color:var(--accent); }
-@media (prefers-reduced-motion:reduce) { .modeInner { transition:none; transform:none; } .modeScroller { scroll-behavior:auto; } }
+@media (prefers-reduced-motion:reduce) { .modeInner { transition:none; transform:none; filter:none; } .modeScroller { scroll-behavior:auto; } }
