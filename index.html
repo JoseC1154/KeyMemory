@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#121212">
   <title>KeyMemory — Piano</title>
   <link rel="stylesheet" href="./styles.css">
@@ -34,6 +34,8 @@
       <span id="degreeTitle" class="degreeTitle"></span>
     </section>
     <section id="dictionaryControls" class="dictionaryControls" hidden>
+      <button id="dictionaryExpand" class="dictionaryExpand" type="button" aria-expanded="false" aria-controls="dictionaryOptions">Chord options <span aria-hidden="true">⌄</span></button>
+      <div id="dictionaryOptions" class="dictionaryOptions">
       <label>Root note <select id="dictionaryRoot" aria-label="Chord root"></select></label>
       <label>Chord quality <select id="dictionaryQuality" aria-label="Chord quality">
         <option value="major">Major</option><option value="minor">Minor</option>
@@ -48,10 +50,12 @@
         <option value="dom13">Dominant 13</option><option value="maj13">Major 13</option><option value="min13">Minor 13</option>
       </select></label>
       <label>Inversion <select id="dictionaryInversion" aria-label="Chord inversion"></select></label>
+      </div>
       <button id="toggleChordNotes" type="button" aria-pressed="false">Hide Notes &amp; Practice</button>
       <button id="checkChordAnswer" type="button" hidden>Check Answer</button>
       <span id="dictionaryNotes" aria-live="polite"></span>
     </section>
+    <div class="pianoHint">Swipe sideways for more keys <span aria-hidden="true">↔</span></div>
     <section class="pianoContainer" aria-label="Interactive piano">
       <div id="piano" class="piano" aria-label="Piano keys"></div>
     </section>
