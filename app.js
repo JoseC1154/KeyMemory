@@ -28,6 +28,32 @@ let dictionaryVoicing = [];
 const dictionaryRoot = document.getElementById("dictionaryRoot");
 const dictionaryQuality = document.getElementById("dictionaryQuality");
 const dictionaryInversion = document.getElementById("dictionaryInversion");
+const toggleChordNotes = document.getElementById("toggleChordNotes");
+const checkChordAnswer = document.getElementById("checkChordAnswer");
+let dictionaryPractice = false;
+function setDictionaryPractice(on) {
+  dictionaryPractice = on;
+  selected.clear();
+  toggleChordNotes.textContent = on ? "Show Notes" : "Hide Notes & Practice";
+  toggleChordNotes.setAttribute("aria-pressed", String(on));
+  checkChordAnswer.hidden = !on;
+  checkChordAnswer.disabled = false;
+  checkChordAnswer.textContent = "Check Answer";
+  renderPiano();
+  if (activeMode === "dictionary") {
+    trainingPrompt.textContent = on ? "Select the chord notes from memory, then check your answer." : "Blue keys show the selected chord inversion.";
+  }
+}
+toggleChordNotes.addEventListener("click", () => setDictionaryPractice(!dictionaryPractice));
+checkChordAnswer.addEventListener("click", () => {
+  if (!dictionaryPractice || activeMode !== "dictionary") return;
+  const correct = selected.size === dictionaryVoicing.length &&
+    dictionaryVoicing.every(midi => selected.has(midi));
+  trainingPrompt.textContent = correct
+    ? "Correct! You remembered every note."
+    : "Not quite. Press Show Notes to review the chord and try again.";
+  checkChordAnswer.disabled = true;
+});
 function showChordOnPiano() {
   piano.querySelectorAll(".key").forEach(key => {
     const midi = Number(key.dataset.midi);
