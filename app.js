@@ -50,6 +50,7 @@ const toggleChordNotes = document.getElementById("toggleChordNotes");
 const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
 function setDictionaryPractice(on) {
+  dismissAchievement();
   dictionaryPractice = on;
   selected.clear();
   toggleChordNotes.textContent = on ? "Show Notes" : "Hide Notes & Practice";
@@ -71,6 +72,7 @@ checkChordAnswer.addEventListener("click", () => {
   trainingPrompt.textContent = correct
     ? "Correct! You remembered every note."
     : "Not quite. Press Show Notes to review the chord and try again.";
+  if (correct) celebrate("Perfect chord! You got it!");
   checkChordAnswer.disabled = true;
 });
 function showChordOnPiano() {
@@ -146,6 +148,7 @@ function cancelChallenge() {
   dictionaryVoicing = [];
 }
 function chooseChallenge() {
+  dismissAchievement();
   cancelChallenge();
   if (activeMode === "free") return;
   if (activeMode === "dictionary") { updateDictionary(); nextChallenge.hidden = true; return; }
@@ -187,11 +190,13 @@ function answerKey(midi) {
   const correct = activeMode === "degrees" ? midi % 12 === chordAnswer : activeMode === "find" ? midi % 12 === targetMidi % 12 : midi === targetMidi;
   const answer = activeMode === "degrees" ? NAMES[chordAnswer] : noteName(targetMidi);
   trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + answer + ".";
+  if (correct) celebrate("Great job! Correct note!");
   targetMidi = null;
   chordAnswer = null;
   nextChallenge.hidden = false;
 }
 function activateMode(mode) {
+  dismissAchievement();
   cancelChallenge();
   activeMode = mode;
   chordQuestion.hidden = mode !== "degrees";
