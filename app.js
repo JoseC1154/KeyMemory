@@ -212,7 +212,7 @@ function activateMode(mode) {
 
 
 function visibleOctaves(width) {
-  // Two octaves on phones, three on tablets, four on desktops.
+  // Keep a useful note range, but scroll across comfortably sized keys on phones.
   if (activeMode === "dictionary") return width < 600 ? 3 : width < 1050 ? 4 : 5;
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
@@ -222,8 +222,10 @@ function updateStatus(start, end) {
   noteText.textContent = notes.length ? "Selected: " + notes.join(", ") : "Tap a key to highlight it";
 }
 function renderPiano() {
-  const width = piano.clientWidth;
-  const mobile = matchMedia("(max-width: 600px)").matches;
+  const container = piano.parentElement;
+  const viewportWidth = container.clientWidth;
+  const mobile = matchMedia("(max-width: 600px) and (orientation: portrait)").matches;
+  const width = viewportWidth;
   const pad = mobile ? 6 : 10;
   const octaves = visibleOctaves(width);
   const start = 48; // C3
@@ -231,7 +233,11 @@ function renderPiano() {
   const whiteCount = octaves * 7;
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
-  const whiteW = Math.max(1, (usable - (whiteCount - 1) * gap) / whiteCount);
+  // Portrait phones show around seven white keys at once; the rest scroll.
+  const whiteW = mobile ? Math.max(42, (usable - 6 * gap) / 7) :
+    Math.max(1, (usable - (whiteCount - 1) * gap) / whiteCount);
+  const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
+  piano.style.width = mobile ? keyboardWidth + "px" : "100%";
   const whiteH = Math.max(135, Math.min(320, whiteW * 6));
   const blackW = whiteW * .65;
   const root = document.documentElement.style;
@@ -325,7 +331,8 @@ document.getElementById("clearNotes").addEventListener("click", () => {
   renderPiano();
 });
 const observer = new ResizeObserver(() => renderPiano());
-observer.observe(piano);
+observer.observe(piano.parentElement);
+window.addEventListener("orientationchange", () => requestAnimationFrame(renderPiano));
 renderPiano();
 
 const modeOverlay = document.getElementById("modeOverlay");
