@@ -153,3 +153,6 @@ button:hover { border-color: var(--accent); }
 .dictionaryControls label { display:grid; gap:6px; color:#9de0b2; font-weight:700; font-size:13px; }
 .dictionaryControls select { border:1px solid #52745e; background:#121e16; color:white; font-size:16px; border-radius:10px; padding:10px; }
 #dictionaryNotes { flex-basis:100%; text-align:center; color:#e3f5e9; }
+#toggleChordNotes { background:#176c37; color:white; font-weight:750; }
+#checkChordAnswer { background:#235879; color:white; font-weight:750; }
+#checkChordAnswer:disabled { opacity:.5; cursor:default; }
