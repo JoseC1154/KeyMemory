@@ -39,6 +39,7 @@ function setDictionaryPractice(on) {
   checkChordAnswer.hidden = !on;
   checkChordAnswer.disabled = false;
   checkChordAnswer.textContent = "Check Answer";
+  document.getElementById("dictionaryNotes").hidden = on;
   renderPiano();
   if (activeMode === "dictionary") {
     trainingPrompt.textContent = on ? "Select the chord notes from memory, then check your answer." : "Blue keys show the selected chord inversion.";
@@ -90,6 +91,11 @@ function updateDictionary() {
   const bassMidi = 48 + bassPc;
   dictionaryVoicing = rotated.map(n => bassMidi + (n - rotated[0]));
   displayedChord = [];
+  dictionaryPractice = false;
+  toggleChordNotes.textContent = "Hide Notes & Practice";
+  toggleChordNotes.setAttribute("aria-pressed", "false");
+  checkChordAnswer.hidden = true;
+  document.getElementById("dictionaryNotes").hidden = false;
   selected.clear();
   renderPiano();
   const label = dictionaryRoot.selectedOptions[0].textContent + " " +
@@ -171,6 +177,7 @@ function activateMode(mode) {
   cancelChallenge();
   activeMode = mode;
   chordQuestion.hidden = mode !== "degrees";
+  dictionaryPractice = false;
   document.getElementById("dictionaryControls").hidden = mode !== "dictionary";
   selected.clear();
   modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
@@ -225,7 +232,7 @@ function renderPiano() {
     button.setAttribute("aria-label", noteName(midi));
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
-    if (activeMode === "dictionary" ? dictionaryVoicing.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
+    if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     const label = document.createElement("span");
     label.className = "noteLabel";
     label.textContent = NAMES[midi % 12];
@@ -233,7 +240,16 @@ function renderPiano() {
     button.addEventListener("click", () => {
       // All modes share Free Play's green selected-key feedback.
       // Ignore answers while a memory target is being shown.
-      if (activeMode === "dictionary") return;
+      if (activeMode === "dictionary") {
+        if (!dictionaryPractice) return;
+        if (selected.has(midi)) selected.delete(midi);
+        else selected.add(midi);
+        button.classList.toggle("selected", selected.has(midi));
+        button.setAttribute("aria-pressed", String(selected.has(midi)));
+        checkChordAnswer.disabled = false;
+        updateStatus(start, end - 1);
+        return;
+      }
       if (activeMode !== "free" && (targetMidi === null || challengeTimer !== null)) return;
       if (activeMode === "free") {
         if (selected.has(midi)) selected.delete(midi);
