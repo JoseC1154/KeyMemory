@@ -170,6 +170,28 @@ const modeScroller = document.getElementById("modeScroller");
 const modeSlides = [...document.querySelectorAll(".modeSlide")];
 const openModes = document.getElementById("openModes");
 const closeModes = document.getElementById("closeModes");
+const previewOpacity = document.getElementById("previewOpacity");
+const previewDistance = document.getElementById("previewDistance");
+const previewOpacityValue = document.getElementById("previewOpacityValue");
+const previewDistanceValue = document.getElementById("previewDistanceValue");
+function updateModePreview() {
+  const opacity = Number(previewOpacity.value);
+  const distance = Number(previewDistance.value);
+  previewOpacityValue.value = opacity + "%";
+  previewDistanceValue.value = distance + "%";
+  modeScroller.style.setProperty("--preview-opacity", String(opacity / 100));
+  modeScroller.style.setProperty("--mode-step", distance + "dvh");
+  syncSlide();
+}
+previewOpacity.addEventListener("input", updateModePreview);
+previewDistance.addEventListener("input", () => {
+  const current = modeSlides.findIndex(slide => slide.classList.contains("isActive"));
+  const index = Math.max(0, current);
+  updateModePreview();
+  modeScroller.scrollTop = index * modeSlides[0].getBoundingClientRect().height;
+  syncSlide();
+});
+updateModePreview();
 let previousFocus = null;
 function setMenu(open) {
   modeOverlay.hidden = !open;
