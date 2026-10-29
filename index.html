@@ -18,14 +18,6 @@
     <section class="trainingBar" aria-live="polite"><span id="activeModeName">Free Play</span><span id="trainingPrompt">Explore the keyboard, or choose a training mode.</span><button id="nextChallenge" type="button" hidden>Next</button></section>
     <section id="modeOverlay" class="modeOverlay" role="dialog" aria-modal="true" aria-label="Choose training mode" hidden>
       <div class="modeTop"><span class="eyebrow">CHOOSE A MODE</span><button id="closeModes" type="button" aria-label="Close modes">✕</button></div>
-      <div class="modeTuner" aria-label="Preview appearance controls">
-        <label for="previewOpacity">Opacity <output id="previewOpacityValue" for="previewOpacity">44%</output></label>
-        <input id="previewOpacity" type="range" min="0" max="100" step="1" value="44">
-        <label for="previewDistance">Distance <output id="previewDistanceValue" for="previewDistance">36%</output></label>
-        <input id="previewDistance" type="range" min="24" max="70" step="1" value="36">
-        <label for="previewBlur">Blur <output id="previewBlurValue" for="previewBlur">3px</output></label>
-        <input id="previewBlur" type="range" min="0" max="20" step="1" value="3">
-      </div>
       <div id="modeScroller" class="modeScroller" tabindex="0" aria-label="Scroll through training modes">
         <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 04</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
         <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 04</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
