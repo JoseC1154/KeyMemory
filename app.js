@@ -226,13 +226,15 @@ function activateMode(mode) {
 }
 
 
+function dictionaryKeyboardRange() {
+  if (!dictionaryVoicing.length) return { start:48, octaves:1 };
+  const low = Math.min(...dictionaryVoicing);
+  const high = Math.max(...dictionaryVoicing);
+  const start = 48 + Math.floor((low - 48) / 12) * 12;
+  return { start, octaves: Math.max(1, Math.ceil((high - start + 1) / 12)) };
+}
 function visibleOctaves(width) {
-  if (activeMode === "dictionary" && dictionaryVoicing.length) {
-    // Include the highest actual chord key, including notes raised by inversions.
-    // C-aligned octaves avoid clipping black keys at the keyboard's edges.
-    const highestMidi = Math.max(...dictionaryVoicing);
-    return Math.max(1, Math.ceil((highestMidi - 48 + 1) / 12));
-  }
+  if (activeMode === "dictionary") return dictionaryKeyboardRange().octaves;
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
@@ -247,7 +249,7 @@ function renderPiano() {
   const width = viewportWidth;
   const pad = mobile ? 6 : 10;
   const octaves = visibleOctaves(width);
-  const start = 48; // C3
+  const start = activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
   const end = start + octaves * 12; // exclusive: whole C-to-B octaves
   const whiteCount = octaves * 7;
   const gap = 2;
