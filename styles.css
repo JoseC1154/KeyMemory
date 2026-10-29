@@ -142,3 +142,14 @@ button:hover { border-color: var(--accent); }
 .chordCaption { color:#98caaa; font-size:11px; font-weight:800; letter-spacing:.16em; }
 .chordTitle { font-size:clamp(27px,5vw,44px); line-height:1.15; color:#fff; }
 .degreeTitle { font-size:clamp(16px,2.5vw,22px); color:#55dc8a; font-weight:700; }
+
+/* Blue chord tones stay visible behind green user-selected notes. */
+.key.chordTone.white { background:linear-gradient(180deg,#d9f2ff,#9bcde8 55%,#64a1c2); box-shadow:inset 0 -7px 15px rgba(0,0,0,.18),0 0 0 2px #51a8d6; }
+.key.chordTone.black { background:linear-gradient(180deg,#4a9eca,#1b608c 55%,#0b3859); box-shadow:0 0 0 2px #64c2ef,0 9px 18px rgba(0,0,0,.65); }
+.key.chordTone.selected.white { background:linear-gradient(180deg,#eafff1,#bff3d1); box-shadow:0 0 0 3px rgba(29,185,84,.65); }
+.key.chordTone.selected.black { background:linear-gradient(180deg,#2a7d48,#125d30 55%,#093219); box-shadow:0 0 0 2px rgba(29,185,84,.7); }
+.dictionaryControls { display:flex; align-items:end; justify-content:center; gap:14px; flex-wrap:wrap; padding:14px; margin-bottom:18px; border:1px solid #32543d; border-radius:14px; background:#1b2a20; }
+.dictionaryControls[hidden] { display:none; }
+.dictionaryControls label { display:grid; gap:6px; color:#9de0b2; font-weight:700; font-size:13px; }
+.dictionaryControls select { border:1px solid #52745e; background:#121e16; color:white; font-size:16px; border-radius:10px; padding:10px; }
+#dictionaryNotes { flex-basis:100%; text-align:center; color:#e3f5e9; }
