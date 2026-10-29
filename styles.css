@@ -117,7 +117,7 @@ button:hover { border-color: var(--accent); }
 .modeInner {
   max-width:580px;
   opacity:calc(var(--preview-opacity, .44) + var(--proximity, 0) * (1 - var(--preview-opacity, .44)));
-  filter:blur(calc((1 - var(--proximity, 0)) * var(--preview-blur, 3px)));
+  filter:blur(var(--effective-blur, 3px));
   transform:translateY(calc((1 - var(--proximity, 0)) * 12px)) scale(calc(.94 + var(--proximity, 0) * .06));
   transition:opacity .12s linear,filter .12s linear,transform .12s linear;
   pointer-events:none;
