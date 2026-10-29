@@ -1,0 +1,29 @@
+<!-- FILE: index.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121212">
+  <title>KeyMemory — Piano</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div class="eyebrow">KEYMEMORY</div>
+      <h1>Piano keyboard</h1>
+      <p>Same piano look as KeyTransposer, now fitted to the screen without horizontal scrolling.</p>
+    </header>
+    <section class="pianoContainer" aria-label="Interactive piano">
+      <div id="piano" class="piano" aria-label="Piano keys"></div>
+    </section>
+    <div class="info">
+      <span id="rangeText" aria-live="polite"></span>
+      <span id="noteText" aria-live="polite">Tap a key to highlight it</span>
+      <button id="clearNotes" type="button">Clear</button>
+    </div>
+  </main>
+</body>
+</html>
