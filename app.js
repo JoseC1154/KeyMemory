@@ -17,24 +17,61 @@ let displayedChord = [];
 const CHORD_TYPES = {
   major:[0,4,7], minor:[0,3,7], dim:[0,3,6], aug:[0,4,8],
   sus2:[0,2,7], sus4:[0,5,7], maj7:[0,4,7,11],
-  min7:[0,3,7,10], dom7:[0,4,7,10], dim7:[0,3,6,9], m7b5:[0,3,6,10]
+  min7:[0,3,7,10], dom7:[0,4,7,10], dim7:[0,3,6,9], m7b5:[0,3,6,10],
+  add9:[0,4,7,14], madd9:[0,3,7,14],
+  maj9:[0,4,7,11,14], min9:[0,3,7,10,14], dom9:[0,4,7,10,14],
+  dom11:[0,4,7,10,14,17], min11:[0,3,7,10,14,17],
+  dom13:[0,4,7,10,14,17,21], maj13:[0,4,7,11,14,17,21], min13:[0,3,7,10,14,17,21]
 };
-const chordMidis = (root, intervals) => intervals.map(step => 48 + ((root + step) % 12));
+// Dictionary uses exact physical MIDI notes, so changing inversion moves the highlighted keys.
+let dictionaryVoicing = [];
+const dictionaryRoot = document.getElementById("dictionaryRoot");
+const dictionaryQuality = document.getElementById("dictionaryQuality");
+const dictionaryInversion = document.getElementById("dictionaryInversion");
 function showChordOnPiano() {
   piano.querySelectorAll(".key").forEach(key => {
-    key.classList.toggle("chordTone", displayedChord.includes(Number(key.dataset.midi) % 12));
+    const midi = Number(key.dataset.midi);
+    const matches = activeMode === "dictionary"
+      ? dictionaryVoicing.includes(midi)
+      : displayedChord.includes(midi % 12);
+    key.classList.toggle("chordTone", matches);
   });
 }
+function updateInversionOptions() {
+  const count = CHORD_TYPES[dictionaryQuality.value].length;
+  const previous = Number(dictionaryInversion.value) || 0;
+  dictionaryInversion.replaceChildren();
+  for (let i = 0; i < count; i++) {
+    const option = document.createElement("option");
+    option.value = i;
+    option.textContent = i === 0 ? "Root position" : i === 1 ? "1st inversion" :
+      i === 2 ? "2nd inversion" : i === 3 ? "3rd inversion" : i + "th inversion";
+    dictionaryInversion.append(option);
+  }
+  dictionaryInversion.value = String(Math.min(previous, count - 1));
+}
 function updateDictionary() {
-  const root = Number(document.getElementById("dictionaryRoot").value);
-  const quality = document.getElementById("dictionaryQuality").value;
-  displayedChord = CHORD_TYPES[quality].map(step => (root + step) % 12);
+  if (activeMode !== "dictionary") return;
+  const root = Number(dictionaryRoot.value);
+  const quality = dictionaryQuality.value;
+  const intervals = CHORD_TYPES[quality];
+  const inversion = Number(dictionaryInversion.value);
+  // Compact ascending voicing: reduce compound extensions into the closest
+  // octave, then raise lower chord tones to create successive inversions.
+  const pitches = [...new Set(intervals.map(n => n % 12))].sort((a,b) => a-b);
+  const rotated = [...pitches.slice(inversion), ...pitches.slice(0,inversion).map(n => n+12)];
+  const bassPc = (root + rotated[0]) % 12;
+  const bassMidi = 48 + bassPc;
+  dictionaryVoicing = rotated.map(n => bassMidi + (n - rotated[0]));
+  displayedChord = [];
   selected.clear();
   renderPiano();
-  const label = document.getElementById("dictionaryRoot").selectedOptions[0].textContent + " " +
-    document.getElementById("dictionaryQuality").selectedOptions[0].textContent;
-  document.getElementById("dictionaryNotes").textContent = label + ": " + displayedChord.map(pc => NAMES[pc]).join(" · ");
-  trainingPrompt.textContent = label + " — blue keys show the chord tones.";
+  const label = dictionaryRoot.selectedOptions[0].textContent + " " +
+    dictionaryQuality.selectedOptions[0].textContent;
+  document.getElementById("dictionaryNotes").textContent =
+    label + " · " + dictionaryInversion.selectedOptions[0].textContent +
+    " · Notes low to high: " + dictionaryVoicing.map(noteName).join(" · ");
+  trainingPrompt.textContent = label + " — blue keys show this inversion.";
 }
 
 let activeMode = "free";
@@ -56,11 +93,12 @@ function cancelChallenge() {
   targetMidi = null;
   chordAnswer = null;
   displayedChord = [];
+  dictionaryVoicing = [];
 }
 function chooseChallenge() {
   cancelChallenge();
   if (activeMode === "free") return;
-  if (activeMode === "dictionary") { updateDictionary(); return; }
+  if (activeMode === "dictionary") { updateDictionary(); nextChallenge.hidden = true; return; }
   selected.clear();
   renderPiano();
   const notes = keyRange();
@@ -111,7 +149,7 @@ function activateMode(mode) {
   selected.clear();
   modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
-  nextChallenge.hidden = mode === "free";
+  nextChallenge.hidden = mode === "free" || mode === "dictionary";
   renderPiano();
   if (mode !== "free") chooseChallenge();
 }
@@ -119,6 +157,7 @@ function activateMode(mode) {
 
 function visibleOctaves(width) {
   // Two octaves on phones, three on tablets, four on desktops.
+  if (activeMode === "dictionary") return width < 600 ? 3 : width < 1050 ? 4 : 5;
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
@@ -160,7 +199,7 @@ function renderPiano() {
     button.setAttribute("aria-label", noteName(midi));
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
-    if (displayedChord.includes(midi % 12)) button.classList.add("chordTone");
+    if (activeMode === "dictionary" ? dictionaryVoicing.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     const label = document.createElement("span");
     label.className = "noteLabel";
     label.textContent = NAMES[midi % 12];
@@ -203,7 +242,6 @@ function renderPiano() {
   }
   updateStatus(start, end - 1);
 }
-const dictionaryRoot = document.getElementById("dictionaryRoot");
 NAMES.forEach((name, pc) => {
   const option = document.createElement("option");
   option.value = pc;
@@ -211,7 +249,12 @@ NAMES.forEach((name, pc) => {
   dictionaryRoot.append(option);
 });
 dictionaryRoot.addEventListener("change", updateDictionary);
-document.getElementById("dictionaryQuality").addEventListener("change", updateDictionary);
+dictionaryQuality.addEventListener("change", () => {
+  updateInversionOptions();
+  updateDictionary();
+});
+dictionaryInversion.addEventListener("change", updateDictionary);
+updateInversionOptions();
 document.getElementById("clearNotes").addEventListener("click", () => {
   selected.clear();
   renderPiano();
