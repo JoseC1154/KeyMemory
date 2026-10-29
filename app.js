@@ -19,6 +19,9 @@ let challengeTimer = null;
 const modeName = document.getElementById("activeModeName");
 const trainingPrompt = document.getElementById("trainingPrompt");
 const nextChallenge = document.getElementById("nextChallenge");
+const chordQuestion = document.getElementById("chordQuestion");
+const chordTitle = document.getElementById("chordTitle");
+const degreeTitle = document.getElementById("degreeTitle");
 function keyRange() {
   const count = visibleOctaves(piano.clientWidth);
   return Array.from({length:count * 12}, (_,i) => i + 48);
@@ -44,7 +47,9 @@ function chooseChallenge() {
     const semitones = degree === 1 ? 0 : degree === 3 ? (minor ? 3 : 4) : 7;
     chordAnswer = (root + semitones) % 12;
     const degreeName = degree === 1 ? "root (1st)" : degree === 3 ? "3rd" : "5th";
-    trainingPrompt.textContent = NAMES[root] + (minor ? " minor" : " major") + " chord — find the " + degreeName + ".";
+    chordTitle.textContent = NAMES[root] + (minor ? " minor" : " major");
+    degreeTitle.textContent = "Find the " + degreeName;
+    trainingPrompt.textContent = "Select the correct piano key.";
     return;
   }
   if (activeMode === "find") {
@@ -73,6 +78,7 @@ function answerKey(midi) {
 function activateMode(mode) {
   cancelChallenge();
   activeMode = mode;
+  chordQuestion.hidden = mode !== "degrees";
   selected.clear();
   modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
