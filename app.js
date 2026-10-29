@@ -136,7 +136,7 @@ const chordQuestion = document.getElementById("chordQuestion");
 const chordTitle = document.getElementById("chordTitle");
 const degreeTitle = document.getElementById("degreeTitle");
 function keyRange() {
-  const count = visibleOctaves(piano.clientWidth);
+  const count = visibleOctaves(piano.parentElement.clientWidth);
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
@@ -217,7 +217,7 @@ function visibleOctaves(width) {
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
-  rangeText.textContent = visibleOctaves(piano.clientWidth) + " octaves";
+  rangeText.textContent = visibleOctaves(piano.parentElement.clientWidth) + " octaves";
   const notes = [...selected].sort((a,b) => a-b).map(noteName);
   noteText.textContent = notes.length ? "Selected: " + notes.join(", ") : "Tap a key to highlight it";
 }
