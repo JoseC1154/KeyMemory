@@ -130,15 +130,24 @@ function renderPiano() {
     label.textContent = NAMES[midi % 12];
     button.append(label);
     button.addEventListener("click", () => {
-      if (activeMode !== "free") {
-        answerKey(midi);
-        return;
+      // All modes share Free Play's green selected-key feedback.
+      // Ignore answers while a memory target is being shown.
+      if (activeMode !== "free" && (targetMidi === null || challengeTimer !== null)) return;
+      if (activeMode === "free") {
+        if (selected.has(midi)) selected.delete(midi);
+        else selected.add(midi);
+      } else {
+        selected.clear();
+        selected.add(midi);
+        piano.querySelectorAll(".key.selected").forEach(key => {
+          key.classList.remove("selected");
+          key.setAttribute("aria-pressed", "false");
+        });
       }
-      if (selected.has(midi)) selected.delete(midi);
-      else selected.add(midi);
       button.classList.toggle("selected", selected.has(midi));
       button.setAttribute("aria-pressed", String(selected.has(midi)));
       updateStatus(start, end - 1);
+      if (activeMode !== "free") answerKey(midi);
     });
     return button;
   }
