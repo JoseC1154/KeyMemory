@@ -80,7 +80,13 @@ p { margin: 4px 0; color: var(--muted); }
 #noteText { flex: 1; }
 button { border: 1px solid #3d3d3d; border-radius: 10px; background: #222; color: #fff; padding: 9px 16px; cursor: pointer; }
 button:hover { border-color: var(--accent); }
-@media (max-width: 600px) { .shell { padding: 18px 6px; } .header { padding: 0 6px; } .piano { padding-left: 6px; padding-right: 6px; } .key { padding-bottom: 6px; } .noteLabel { font-size: 8px; } }
+@media (max-width: 600px) { .shell { padding: 18px 6px; } .header { padding: 0 6px; } .piano { padding-left: 6px; padding-right: 6px; } .key { padding-bottom: 6px; } .noteLabel { font-size: 11px; } }
+@media (max-width:600px) and (orientation:portrait) {
+  .pianoContainer { overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; touch-action:pan-x; scrollbar-width:thin; }
+  .piano { min-width:100%; max-width:none; overflow:visible; touch-action:pan-x; }
+  .key { touch-action:pan-x; }
+  .noteLabel { font-size:11px; }
+}
 
 /* Training mode menu: fullscreen, vertically snap-scrolling slides. */
 .header { display:flex; align-items:center; justify-content:space-between; gap:16px; }
