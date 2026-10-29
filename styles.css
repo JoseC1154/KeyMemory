@@ -98,15 +98,15 @@ button:hover { border-color: var(--accent); }
   height:100%;
   overflow-y:auto;
   scroll-snap-type:y mandatory;
-  scroll-padding-block:32%;
-  padding-block:32dvh;
+  scroll-padding-block:calc((100% - var(--mode-step, 36dvh))/2);
+  padding-block:calc((100dvh - var(--mode-step, 36dvh))/2);
   scrollbar-width:none;
   overscroll-behavior:contain;
 }
 .modeScroller::-webkit-scrollbar { display:none; }
 .modeSlide {
-  height:36dvh;
-  min-height:36dvh;
+  height:var(--mode-step, 36dvh);
+  min-height:var(--mode-step, 36dvh);
   scroll-snap-align:center;
   scroll-snap-stop:always;
   display:grid;
@@ -116,7 +116,7 @@ button:hover { border-color: var(--accent); }
 }
 .modeInner {
   max-width:580px;
-  opacity:calc(.44 + var(--proximity, 0) * .56);
+  opacity:calc(var(--preview-opacity, .44) + var(--proximity, 0) * (1 - var(--preview-opacity, .44)));
   filter:blur(calc((1 - var(--proximity, 0)) * 3px));
   transform:translateY(calc((1 - var(--proximity, 0)) * 12px)) scale(calc(.94 + var(--proximity, 0) * .06));
   transition:opacity .12s linear,filter .12s linear,transform .12s linear;
@@ -135,3 +135,10 @@ button:hover { border-color: var(--accent); }
 .modeInner h2 { margin:12px 0; }
 .modeInner p { margin-bottom:18px; }
 @media (max-height:650px) { .modeInner h2 { font-size:clamp(28px,5vh,42px); } .modeInner p { font-size:14px; line-height:1.35; margin-bottom:10px; } .modeSlide { padding:10px 18px; } }
+
+/* Live preview controls. Fixed above the scrolling area, without obstructing the active card. */
+.modeTuner { position:absolute; z-index:3; top:76px; left:50%; transform:translateX(-50%); width:min(440px,calc(100% - 36px)); padding:10px 16px; background:rgba(18,25,20,.93); border:1px solid #43634e; border-radius:14px; display:grid; grid-template-columns:auto 1fr; align-items:center; gap:8px 12px; backdrop-filter:blur(10px); }
+.modeTuner label { display:flex; flex-direction:column; gap:2px; font-size:12px; color:#d7e8db; font-weight:700; }
+.modeTuner output { font-variant-numeric:tabular-nums; color:#5eec93; }
+.modeTuner input { width:100%; accent-color:#1db954; cursor:pointer; }
+@media (max-height:560px) { .modeTuner { top:56px; padding:5px 12px; } .modeTop { padding-block:8px; } }
