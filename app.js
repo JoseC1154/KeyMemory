@@ -10,6 +10,61 @@ const selected = new Set();
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const noteName = midi => NAMES[midi % 12] + (Math.floor(midi / 12) - 1);
+let activeMode = "free";
+let targetMidi = null;
+let challengeTimer = null;
+const modeName = document.getElementById("activeModeName");
+const trainingPrompt = document.getElementById("trainingPrompt");
+const nextChallenge = document.getElementById("nextChallenge");
+function keyRange() {
+  const count = visibleOctaves(piano.clientWidth);
+  return Array.from({length:count * 12}, (_,i) => i + 48);
+}
+function cancelChallenge() {
+  if (challengeTimer !== null) clearTimeout(challengeTimer);
+  challengeTimer = null;
+  targetMidi = null;
+}
+function chooseChallenge() {
+  cancelChallenge();
+  if (activeMode === "free") return;
+  selected.clear();
+  renderPiano();
+  const notes = keyRange();
+  targetMidi = notes[Math.floor(Math.random() * notes.length)];
+  nextChallenge.hidden = true;
+  if (activeMode === "find") {
+    trainingPrompt.textContent = "Find the note: " + noteName(targetMidi);
+  } else {
+    trainingPrompt.textContent = "Memorize the highlighted key...";
+    const key = piano.querySelector('[data-midi="' + targetMidi + '"]');
+    if (key) key.classList.add("selected");
+    challengeTimer = setTimeout(() => {
+      const highlighted = piano.querySelector('[data-midi="' + targetMidi + '"]');
+      if (highlighted) highlighted.classList.remove("selected");
+      trainingPrompt.textContent = "Now press the key you just saw.";
+      challengeTimer = null;
+    }, 1800);
+  }
+}
+function answerKey(midi) {
+  if (targetMidi === null || challengeTimer !== null) return;
+  const correct = activeMode === "find" ? midi % 12 === targetMidi % 12 : midi === targetMidi;
+  trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + noteName(targetMidi) + ".";
+  targetMidi = null;
+  nextChallenge.hidden = false;
+}
+function activateMode(mode) {
+  cancelChallenge();
+  activeMode = mode;
+  selected.clear();
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : "Free Play";
+  trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
+  nextChallenge.hidden = mode === "free";
+  renderPiano();
+  if (mode !== "free") chooseChallenge();
+}
+
 
 function visibleOctaves(width) {
   // Two octaves on phones, three on tablets, four on desktops.
@@ -59,6 +114,10 @@ function renderPiano() {
     label.textContent = NAMES[midi % 12];
     button.append(label);
     button.addEventListener("click", () => {
+      if (activeMode !== "free") {
+        answerKey(midi);
+        return;
+      }
       if (selected.has(midi)) selected.delete(midi);
       else selected.add(midi);
       button.classList.toggle("selected", selected.has(midi));
@@ -89,3 +148,47 @@ document.getElementById("clearNotes").addEventListener("click", () => {
 const observer = new ResizeObserver(() => renderPiano());
 observer.observe(piano);
 renderPiano();
+
+const modeOverlay = document.getElementById("modeOverlay");
+const modeScroller = document.getElementById("modeScroller");
+const modeSlides = [...document.querySelectorAll(".modeSlide")];
+const openModes = document.getElementById("openModes");
+const closeModes = document.getElementById("closeModes");
+let previousFocus = null;
+function setMenu(open) {
+  modeOverlay.hidden = !open;
+  openModes.setAttribute("aria-expanded", String(open));
+  document.body.style.overflow = open ? "hidden" : "";
+  if (open) {
+    previousFocus = document.activeElement;
+    modeScroller.focus();
+    syncSlide();
+  } else {
+    (previousFocus || openModes).focus();
+  }
+}
+function syncSlide() {
+  const current = Math.max(0, Math.min(modeSlides.length - 1, Math.round(modeScroller.scrollTop / Math.max(1, modeScroller.clientHeight))));
+  modeSlides.forEach((slide, i) => slide.classList.toggle("isActive", i === current));
+  document.getElementById("modeDots").textContent = modeSlides.map((_, i) => i === current ? "●" : "○").join(" ");
+}
+openModes.addEventListener("click", () => setMenu(true));
+closeModes.addEventListener("click", () => setMenu(false));
+modeScroller.addEventListener("scroll", syncSlide, {passive:true});
+document.querySelectorAll(".startMode").forEach(button => button.addEventListener("click", () => {
+  setMenu(false);
+  activateMode(button.dataset.mode);
+}));
+nextChallenge.addEventListener("click", chooseChallenge);
+document.addEventListener("keydown", e => {
+  if (modeOverlay.hidden) return;
+  if (e.key === "Escape") { setMenu(false); return; }
+  if (e.key === "Tab") {
+    const controls = [closeModes, ...modeOverlay.querySelectorAll(".startMode")];
+    const focusable = controls.filter(el => el.getBoundingClientRect().height > 0);
+    if (!focusable.length) return;
+    const index = focusable.indexOf(document.activeElement);
+    if (e.shiftKey && index <= 0) { e.preventDefault(); focusable[focusable.length - 1].focus(); }
+    if (!e.shiftKey && index === focusable.length - 1) { e.preventDefault(); focusable[0].focus(); }
+  }
+});
