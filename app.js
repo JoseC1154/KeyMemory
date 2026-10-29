@@ -174,15 +174,21 @@ const previewOpacity = document.getElementById("previewOpacity");
 const previewDistance = document.getElementById("previewDistance");
 const previewOpacityValue = document.getElementById("previewOpacityValue");
 const previewDistanceValue = document.getElementById("previewDistanceValue");
+const previewBlur = document.getElementById("previewBlur");
+const previewBlurValue = document.getElementById("previewBlurValue");
 function updateModePreview() {
   const opacity = Number(previewOpacity.value);
   const distance = Number(previewDistance.value);
+  const blur = Number(previewBlur.value);
   previewOpacityValue.value = opacity + "%";
   previewDistanceValue.value = distance + "%";
+  previewBlurValue.value = blur + "px";
   modeScroller.style.setProperty("--preview-opacity", String(opacity / 100));
   modeScroller.style.setProperty("--mode-step", distance + "dvh");
+  modeScroller.style.setProperty("--preview-blur", blur + "px");
   syncSlide();
 }
+previewBlur.addEventListener("input", updateModePreview);
 previewOpacity.addEventListener("input", updateModePreview);
 previewDistance.addEventListener("input", () => {
   const current = modeSlides.findIndex(slide => slide.classList.contains("isActive"));
