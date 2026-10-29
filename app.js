@@ -170,34 +170,6 @@ const modeScroller = document.getElementById("modeScroller");
 const modeSlides = [...document.querySelectorAll(".modeSlide")];
 const openModes = document.getElementById("openModes");
 const closeModes = document.getElementById("closeModes");
-const previewOpacity = document.getElementById("previewOpacity");
-const previewDistance = document.getElementById("previewDistance");
-const previewOpacityValue = document.getElementById("previewOpacityValue");
-const previewDistanceValue = document.getElementById("previewDistanceValue");
-const previewBlur = document.getElementById("previewBlur");
-const previewBlurValue = document.getElementById("previewBlurValue");
-function updateModePreview() {
-  const opacity = Number(previewOpacity.value);
-  const distance = Number(previewDistance.value);
-  const blur = Number(previewBlur.value);
-  previewOpacityValue.value = opacity + "%";
-  previewDistanceValue.value = distance + "%";
-  previewBlurValue.value = blur + "px";
-  modeScroller.style.setProperty("--preview-opacity", String(opacity / 100));
-  modeScroller.style.setProperty("--mode-step", distance + "dvh");
-  modeScroller.style.setProperty("--preview-blur", blur + "px");
-  syncSlide();
-}
-previewBlur.addEventListener("input", updateModePreview);
-previewOpacity.addEventListener("input", updateModePreview);
-previewDistance.addEventListener("input", () => {
-  const current = modeSlides.findIndex(slide => slide.classList.contains("isActive"));
-  const index = Math.max(0, current);
-  updateModePreview();
-  modeScroller.scrollTop = index * modeSlides[0].getBoundingClientRect().height;
-  syncSlide();
-});
-updateModePreview();
 let previousFocus = null;
 function setMenu(open) {
   modeOverlay.hidden = !open;
@@ -224,7 +196,7 @@ function syncSlide() {
     const inner = slide.querySelector(".modeInner");
     inner.style.setProperty("--proximity", proximity.toFixed(3));
     // Compute the blur in JavaScript for reliable support across browsers.
-    inner.style.setProperty("--effective-blur", ((1 - proximity) * Number(previewBlur.value)).toFixed(2) + "px");
+    inner.style.setProperty("--effective-blur", ((1 - proximity) * 9).toFixed(2) + "px");
     if (distance < closest) { closest = distance; current = i; }
   });
   modeSlides.forEach((slide, i) => slide.classList.toggle("isActive", i === current));
