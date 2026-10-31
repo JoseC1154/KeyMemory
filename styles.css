@@ -226,3 +226,12 @@ button:hover { border-color: var(--accent); }
   .timerControls,.semitoneControls { padding:6px 9px; gap:7px; font-size:12px; margin-bottom:7px; }
   .timerControls select,.semitoneControls select { padding:3px; font-size:12px; }
 }
+
+/* Make the actionable part of each practice question instantly recognizable. */
+#trainingPrompt { display:flex; flex-wrap:wrap; align-items:center; gap:4px 7px; line-height:1.35; font-size:clamp(17px,2.25vw,25px); font-weight:700; color:#f4f8f5; }
+.questionContext { color:#ecf0ed; }
+.questionFocus { display:inline-block; color:#121a13; background:#a1ffc0; border:1px solid #c8ffda; border-radius:9px; padding:3px 9px; font-size:1.15em; font-weight:900; letter-spacing:.01em; font-variant-numeric:tabular-nums; }
+@media (max-width:600px) {
+  #trainingPrompt { flex-basis:100%; font-size:17px; line-height:1.3; gap:3px 5px; }
+  .questionFocus { font-size:1.15em; padding:3px 7px; border-radius:7px; }
+}
