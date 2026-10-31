@@ -63,6 +63,27 @@ const toggleChordNotes = document.getElementById("toggleChordNotes");
 const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
 let dictionaryTimedOut = false;
+let autoNextTimer = null;
+function cancelAutoNext() {
+  if (autoNextTimer !== null) clearTimeout(autoNextTimer);
+  autoNextTimer = null;
+}
+function scheduleAutoNext() {
+  cancelAutoNext();
+  if (!timerEnabled.checked || activeMode === "free") return;
+  const modeAtAnswer = activeMode;
+  nextChallenge.hidden = true;
+  autoNextTimer = setTimeout(() => {
+    autoNextTimer = null;
+    if (!timerEnabled.checked || activeMode !== modeAtAnswer) return;
+    if (activeMode === "dictionary") {
+      // Repeat the same chord and voicing in a fresh memory attempt.
+      setDictionaryPractice(true);
+    } else {
+      chooseChallenge();
+    }
+  }, 1800);
+}
 const timerControls = document.getElementById("timerControls");
 const timerEnabled = document.getElementById("timerEnabled");
 const timerDuration = document.getElementById("timerDuration");
@@ -108,18 +129,22 @@ function startCountdown() {
         trainingPrompt.textContent = "Time is up! Correct answer: " + answer;
       }
       incorrect("Time is up!");
+      scheduleAutoNext();
     }
   }
   tick();
   countdown = setInterval(tick, 100);
 }
 timerEnabled.addEventListener("change", () => {
+  cancelAutoNext();
+  nextChallenge.hidden = activeMode === "free" || activeMode === "dictionary" || targetMidi !== null;
   stopCountdown();
   if (timerEnabled.checked && (targetMidi !== null && challengeTimer === null || activeMode === "dictionary" && dictionaryPractice && !checkChordAnswer.disabled)) startCountdown();
 });
 timerDuration.addEventListener("change", () => { if (countdown !== null) startCountdown(); });
 semitoneDifficulty.addEventListener("change", () => { if (activeMode === "semitones") chooseChallenge(); });
 function setDictionaryPractice(on) {
+  cancelAutoNext();
   dismissAchievement();
   dictionaryPractice = on;
   dictionaryTimedOut = false;
@@ -148,6 +173,7 @@ checkChordAnswer.addEventListener("click", () => {
   else incorrect("Not quite — review the chord and try again.");
   checkChordAnswer.disabled = true;
   stopCountdown();
+  scheduleAutoNext();
 });
 function showChordOnPiano() {
   piano.querySelectorAll(".key").forEach(key => {
@@ -226,6 +252,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  cancelAutoNext();
   stopCountdown();
   if (challengeTimer !== null) clearTimeout(challengeTimer);
   challengeTimer = null;
@@ -305,7 +332,8 @@ function answerKey(midi) {
   else incorrect("Not quite — the answer was " + answer + ".");
   targetMidi = null;
   chordAnswer = null;
-  nextChallenge.hidden = false;
+  nextChallenge.hidden = !(!timerEnabled.checked);
+  scheduleAutoNext();
 }
 function activateMode(mode) {
   dismissAchievement();
