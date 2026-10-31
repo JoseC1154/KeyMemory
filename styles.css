@@ -214,3 +214,15 @@ button:hover { border-color: var(--accent); }
   .achievementIcon { width:34px; height:34px; font-size:23px; }
 }
 @media (prefers-reduced-motion:reduce) { .achievement.incorrect { animation:none; } }
+
+/* Compact optional challenge clock, shared by practice modes. */
+.timerControls,.semitoneControls { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; border:1px solid #335343; background:#19271e; border-radius:12px; padding:9px 12px; margin-bottom:9px; font-size:14px; }
+.timerControls[hidden],.semitoneControls[hidden] { display:none; }
+.timerControls label,.semitoneControls label { display:flex; gap:7px; align-items:center; }
+.timerControls select,.semitoneControls select { color:#fff; background:#202f25; border:1px solid #53715a; border-radius:7px; padding:5px; }
+#timerRemaining { min-width:35px; font-weight:800; font-variant-numeric:tabular-nums; color:#b9ffcf; }
+#timerProgress { width:100%; height:6px; accent-color:#1db954; }
+@media(max-width:600px) {
+  .timerControls,.semitoneControls { padding:6px 9px; gap:7px; font-size:12px; margin-bottom:7px; }
+  .timerControls select,.semitoneControls select { padding:3px; font-size:12px; }
+}
