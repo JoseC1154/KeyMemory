@@ -62,6 +62,7 @@ dictionaryExpand.addEventListener("click", () => {
 const toggleChordNotes = document.getElementById("toggleChordNotes");
 const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
+let dictionaryTimedOut = false;
 const timerControls = document.getElementById("timerControls");
 const timerEnabled = document.getElementById("timerEnabled");
 const timerDuration = document.getElementById("timerDuration");
@@ -96,6 +97,7 @@ function startCountdown() {
       stopCountdown();
       if (activeMode === "dictionary") {
         if (!dictionaryPractice || checkChordAnswer.disabled) return;
+        dictionaryTimedOut = true;
         checkChordAnswer.disabled = true;
         trainingPrompt.textContent = "Time is up! Press Show Notes to review.";
       } else {
@@ -120,6 +122,7 @@ semitoneDifficulty.addEventListener("change", () => { if (activeMode === "semito
 function setDictionaryPractice(on) {
   dismissAchievement();
   dictionaryPractice = on;
+  dictionaryTimedOut = false;
   selected.clear();
   toggleChordNotes.textContent = on ? "Show Notes" : "Hide Notes & Practice";
   toggleChordNotes.setAttribute("aria-pressed", String(on));
@@ -135,7 +138,7 @@ function setDictionaryPractice(on) {
 }
 toggleChordNotes.addEventListener("click", () => setDictionaryPractice(!dictionaryPractice));
 checkChordAnswer.addEventListener("click", () => {
-  if (!dictionaryPractice || activeMode !== "dictionary") return;
+  if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled || activeMode !== "dictionary") return;
   const correct = selected.size === dictionaryVoicing.length &&
     dictionaryVoicing.every(midi => selected.has(midi));
   trainingPrompt.textContent = correct
@@ -183,6 +186,8 @@ function updateDictionary() {
   dictionaryVoicing = rotated.map(n => bassMidi + (n - rotated[0]));
   displayedChord = [];
   dictionaryPractice = false;
+  dictionaryTimedOut = false;
+  stopCountdown();
   toggleChordNotes.textContent = "Hide Notes & Practice";
   toggleChordNotes.setAttribute("aria-pressed", "false");
   checkChordAnswer.hidden = true;
@@ -371,7 +376,7 @@ function renderPiano() {
       // All modes share Free Play's green selected-key feedback.
       // Ignore answers while a memory target is being shown.
       if (activeMode === "dictionary") {
-        if (!dictionaryPractice) return;
+        if (!dictionaryPractice || dictionaryTimedOut) return;
         if (selected.has(midi)) selected.delete(midi);
         else selected.add(midi);
         button.classList.toggle("selected", selected.has(midi));
