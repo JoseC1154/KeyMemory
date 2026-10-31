@@ -20,14 +20,22 @@
     <section id="modeOverlay" class="modeOverlay" role="dialog" aria-modal="true" aria-label="Choose training mode" hidden>
       <div class="modeTop"><span class="eyebrow">CHOOSE A MODE</span><button id="closeModes" type="button" aria-label="Close modes">✕</button></div>
       <div id="modeScroller" class="modeScroller" tabindex="0" aria-label="Scroll through training modes">
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 05</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 05</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 05</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">04 / 05</span><h2>Chord Degrees</h2><p>See the chord highlighted on the piano and identify the requested degree.</p><button type="button" class="startMode" data-mode="degrees">Start Chord Degrees</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">05 / 05</span><h2>Chord Dictionary</h2><p>Choose a root note and chord quality to see its notes light up on the piano.</p><button type="button" class="startMode" data-mode="dictionary">Open Chord Dictionary</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 06</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 06</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 06</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">04 / 06</span><h2>Semitones</h2><p>Find notes by moving a specified number of semitones up or down. Beat the optional countdown.</p><button type="button" class="startMode" data-mode="semitones">Start Semitones</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">05 / 06</span><h2>Chord Degrees</h2><p>See the chord highlighted on the piano and identify the requested degree.</p><button type="button" class="startMode" data-mode="degrees">Start Chord Degrees</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">06 / 06</span><h2>Chord Dictionary</h2><p>Choose a root note and chord quality to see its notes light up on the piano.</p><button type="button" class="startMode" data-mode="dictionary">Open Chord Dictionary</button></div></article>
       </div>
-      <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○ ○ ○</span></div>
+      <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○ ○ ○ ○</span></div>
     </section>
+    <section id="timerControls" class="timerControls" hidden>
+      <label><input id="timerEnabled" type="checkbox"> Timed challenge</label>
+      <label>Seconds <select id="timerDuration"><option>5</option><option selected>10</option><option>15</option><option>30</option><option>60</option></select></label>
+      <span id="timerRemaining" role="timer" aria-label="Time remaining" aria-live="off"></span>
+      <progress id="timerProgress" max="100" value="100" hidden></progress>
+    </section>
+    <section id="semitoneControls" class="semitoneControls" hidden><label>Difficulty <select id="semitoneDifficulty"><option value="easy">Beginner (1–3)</option><option value="medium">Intermediate (1–7)</option><option value="hard">Advanced (1–12)</option></select></label></section>
     <section id="chordQuestion" class="chordQuestion" aria-label="Chord in question" hidden>
       <span class="chordCaption">CHORD IN QUESTION</span>
       <strong id="chordTitle" class="chordTitle"></strong>
