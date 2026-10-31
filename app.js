@@ -62,6 +62,61 @@ dictionaryExpand.addEventListener("click", () => {
 const toggleChordNotes = document.getElementById("toggleChordNotes");
 const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
+const timerControls = document.getElementById("timerControls");
+const timerEnabled = document.getElementById("timerEnabled");
+const timerDuration = document.getElementById("timerDuration");
+const timerRemaining = document.getElementById("timerRemaining");
+const timerProgress = document.getElementById("timerProgress");
+const semitoneControls = document.getElementById("semitoneControls");
+const semitoneDifficulty = document.getElementById("semitoneDifficulty");
+let countdown = null;
+let deadline = 0;
+let secondsLeft = 0;
+let semitoneAnswer = null;
+let semitoneStart = null;
+let semitoneSteps = 0;
+function stopCountdown() {
+  if (countdown !== null) clearInterval(countdown);
+  countdown = null;
+  timerRemaining.textContent = "";
+  timerProgress.hidden = true;
+}
+function startCountdown() {
+  stopCountdown();
+  if (!timerEnabled.checked || activeMode === "free") return;
+  const seconds = Number(timerDuration.value);
+  deadline = Date.now() + seconds * 1000;
+  timerProgress.hidden = false;
+  function tick() {
+    const remaining = Math.max(0, deadline - Date.now());
+    secondsLeft = Math.ceil(remaining / 1000);
+    timerRemaining.textContent = secondsLeft + "s";
+    timerProgress.value = remaining / (seconds * 1000) * 100;
+    if (remaining <= 0) {
+      stopCountdown();
+      if (activeMode === "dictionary") {
+        if (!dictionaryPractice || checkChordAnswer.disabled) return;
+        checkChordAnswer.disabled = true;
+        trainingPrompt.textContent = "Time is up! Press Show Notes to review.";
+      } else {
+        if (targetMidi === null) return;
+        const answer = activeMode === "degrees" ? NAMES[chordAnswer] : activeMode === "semitones" ? noteName(semitoneAnswer) : noteName(targetMidi);
+        targetMidi = null;
+        nextChallenge.hidden = false;
+        trainingPrompt.textContent = "Time is up! Correct answer: " + answer;
+      }
+      incorrect("Time is up!");
+    }
+  }
+  tick();
+  countdown = setInterval(tick, 100);
+}
+timerEnabled.addEventListener("change", () => {
+  stopCountdown();
+  if (timerEnabled.checked && (targetMidi !== null && challengeTimer === null || activeMode === "dictionary" && dictionaryPractice && !checkChordAnswer.disabled)) startCountdown();
+});
+timerDuration.addEventListener("change", () => { if (countdown !== null) startCountdown(); });
+semitoneDifficulty.addEventListener("change", () => { if (activeMode === "semitones") chooseChallenge(); });
 function setDictionaryPractice(on) {
   dismissAchievement();
   dictionaryPractice = on;
@@ -75,6 +130,7 @@ function setDictionaryPractice(on) {
   renderPiano();
   if (activeMode === "dictionary") {
     trainingPrompt.textContent = on ? "Select the chord notes from memory, then check your answer." : "Blue keys show the selected chord inversion.";
+    if (on) startCountdown(); else stopCountdown();
   }
 }
 toggleChordNotes.addEventListener("click", () => setDictionaryPractice(!dictionaryPractice));
@@ -88,6 +144,7 @@ checkChordAnswer.addEventListener("click", () => {
   if (correct) celebrate("Perfect chord! You got it!");
   else incorrect("Not quite — review the chord and try again.");
   checkChordAnswer.disabled = true;
+  stopCountdown();
 });
 function showChordOnPiano() {
   piano.querySelectorAll(".key").forEach(key => {
@@ -154,6 +211,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  stopCountdown();
   if (challengeTimer !== null) clearTimeout(challengeTimer);
   challengeTimer = null;
   targetMidi = null;
@@ -183,10 +241,24 @@ function chooseChallenge() {
     chordTitle.textContent = NAMES[root] + (minor ? " minor" : " major");
     degreeTitle.textContent = "Find the " + degreeName;
     trainingPrompt.textContent = "Select the correct piano key.";
+    startCountdown();
     return;
   }
   if (activeMode === "find") {
     trainingPrompt.textContent = "Find the note: " + noteName(targetMidi);
+    startCountdown();
+  } else if (activeMode === "semitones") {
+    const difficulty = semitoneDifficulty.value;
+    const max = difficulty === "easy" ? 3 : difficulty === "medium" ? 7 : 12;
+    const notesAvailable = keyRange();
+    semitoneSteps = 1 + Math.floor(Math.random() * max);
+    const up = Math.random() < .5;
+    const validStarts = notesAvailable.filter(m => notesAvailable.includes(m + (up ? semitoneSteps : -semitoneSteps)));
+    semitoneStart = validStarts[Math.floor(Math.random() * validStarts.length)];
+    semitoneAnswer = semitoneStart + (up ? semitoneSteps : -semitoneSteps);
+    targetMidi = semitoneAnswer;
+    trainingPrompt.textContent = "From " + noteName(semitoneStart) + ", move " + semitoneSteps + " semitone" + (semitoneSteps === 1 ? "" : "s") + " " + (up ? "up" : "down") + ".";
+    startCountdown();
   } else {
     trainingPrompt.textContent = "Memorize the highlighted key...";
     const key = piano.querySelector('[data-midi="' + targetMidi + '"]');
@@ -196,11 +268,13 @@ function chooseChallenge() {
       if (highlighted) highlighted.classList.remove("selected");
       trainingPrompt.textContent = "Now press the key you just saw.";
       challengeTimer = null;
+      startCountdown();
     }, 1800);
   }
 }
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
+  stopCountdown();
   const correct = activeMode === "degrees" ? midi % 12 === chordAnswer : activeMode === "find" ? midi % 12 === targetMidi % 12 : midi === targetMidi;
   const answer = activeMode === "degrees" ? NAMES[chordAnswer] : noteName(targetMidi);
   trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + answer + ".";
@@ -217,8 +291,10 @@ function activateMode(mode) {
   chordQuestion.hidden = mode !== "degrees";
   dictionaryPractice = false;
   document.getElementById("dictionaryControls").hidden = mode !== "dictionary";
+  timerControls.hidden = mode === "free";
+  semitoneControls.hidden = mode !== "semitones";
   selected.clear();
-  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
   nextChallenge.hidden = mode === "free" || mode === "dictionary";
   renderPiano();
