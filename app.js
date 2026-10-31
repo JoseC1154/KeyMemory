@@ -207,6 +207,16 @@ let targetMidi = null;
 let challengeTimer = null;
 const modeName = document.getElementById("activeModeName");
 const trainingPrompt = document.getElementById("trainingPrompt");
+// Emphasize the answer target without placing octave numbers on the screen.
+function displayQuestion(parts) {
+  trainingPrompt.replaceChildren();
+  for (const part of parts) {
+    const span = document.createElement("span");
+    span.className = part.strong ? "questionFocus" : "questionContext";
+    span.textContent = part.text;
+    trainingPrompt.appendChild(span);
+  }
+}
 const nextChallenge = document.getElementById("nextChallenge");
 const chordQuestion = document.getElementById("chordQuestion");
 const chordTitle = document.getElementById("chordTitle");
@@ -245,12 +255,12 @@ function chooseChallenge() {
     const degreeName = degree === 1 ? "root (1st)" : degree === 3 ? "3rd" : "5th";
     chordTitle.textContent = NAMES[root] + (minor ? " minor" : " major");
     degreeTitle.textContent = "Find the " + degreeName;
-    trainingPrompt.textContent = "Select the correct piano key.";
+    displayQuestion([{text:"Find the "}, {text:degreeName, strong:true}, {text:" of " + chordTitle.textContent}]);
     startCountdown();
     return;
   }
   if (activeMode === "find") {
-    trainingPrompt.textContent = "Find the note: " + noteName(targetMidi);
+    displayQuestion([{text:"Find the note "}, {text:noteName(targetMidi),strong:true}]);
     startCountdown();
   } else if (activeMode === "semitones") {
     const difficulty = semitoneDifficulty.value;
@@ -262,16 +272,20 @@ function chooseChallenge() {
     semitoneStart = validStarts[Math.floor(Math.random() * validStarts.length)];
     semitoneAnswer = semitoneStart + (up ? semitoneSteps : -semitoneSteps);
     targetMidi = semitoneAnswer;
-    trainingPrompt.textContent = "From " + noteName(semitoneStart) + ", move " + semitoneSteps + " semitone" + (semitoneSteps === 1 ? "" : "s") + " " + (up ? "up" : "down") + ".";
+    displayQuestion([
+      {text:"From "}, {text:noteName(semitoneStart),strong:true},
+      {text:" move "}, {text:String(semitoneSteps) + " semitone" + (semitoneSteps === 1 ? "" : "s"),strong:true},
+      {text:up ? " ↑ UP" : " ↓ DOWN",strong:true}
+    ]);
     startCountdown();
   } else {
-    trainingPrompt.textContent = "Memorize the highlighted key...";
+    displayQuestion([{text:"Memorize the "}, {text:"highlighted key",strong:true}]);
     const key = piano.querySelector('[data-midi="' + targetMidi + '"]');
     if (key) key.classList.add("selected");
     challengeTimer = setTimeout(() => {
       const highlighted = piano.querySelector('[data-midi="' + targetMidi + '"]');
       if (highlighted) highlighted.classList.remove("selected");
-      trainingPrompt.textContent = "Now press the key you just saw.";
+      displayQuestion([{text:"Find the "}, {text:"same key",strong:true}]);
       challengeTimer = null;
       startCountdown();
     }, 1800);
