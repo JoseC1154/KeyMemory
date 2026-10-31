@@ -339,12 +339,18 @@ function renderPiano() {
   // Other modes retain two-octave scrolling with comfortable touch targets.
   const visibleWhiteKeys = activeMode === "dictionary" ? Math.min(whiteCount, 14) : 12;
   const mobileWhiteWidth = (usable - (visibleWhiteKeys - 1) * gap) / visibleWhiteKeys;
-  const whiteW = mobile ? Math.max(activeMode === "dictionary" ? 22 : 26, mobileWhiteWidth) :
-    Math.max(1, (usable - (whiteCount - 1) * gap) / whiteCount);
+  // Cap desktop key width so a short keyboard never stretches into giant keys.
+  // Use the keyboard's own natural width and center it when space remains.
+  const desktopWhiteWidth = (usable - (whiteCount - 1) * gap) / whiteCount;
+  const whiteW = mobile
+    ? Math.max(activeMode === "dictionary" ? 22 : 26, mobileWhiteWidth)
+    : Math.max(18, Math.min(54, desktopWhiteWidth));
   const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
-  piano.style.width = mobile ? keyboardWidth + "px" : "100%";
-  const whiteH = mobile ? Math.min(166, Math.max(125, whiteW * 4.6)) :
-    Math.max(135, Math.min(320, whiteW * 6));
+  piano.style.width = keyboardWidth + "px";
+  piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
+  const whiteH = mobile
+    ? Math.min(166, Math.max(125, whiteW * 4.6))
+    : Math.min(270, Math.max(120, whiteW * 5.2));
   const blackW = whiteW * .65;
   const root = document.documentElement.style;
   root.setProperty("--white-w", whiteW + "px");
