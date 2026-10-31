@@ -280,7 +280,11 @@ function chooseChallenge() {
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
   stopCountdown();
-  const correct = activeMode === "degrees" ? midi % 12 === chordAnswer : activeMode === "find" ? midi % 12 === targetMidi % 12 : midi === targetMidi;
+  // Semitone prompts display note names without octave numbers.
+  // Accept the correct pitch class in any visible octave, like Find the Note.
+  const correct = activeMode === "degrees" ? midi % 12 === chordAnswer :
+    (activeMode === "find" || activeMode === "semitones") ? midi % 12 === targetMidi % 12 :
+    midi === targetMidi;
   const answer = activeMode === "degrees" ? NAMES[chordAnswer] : noteName(targetMidi);
   trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + answer + ".";
   if (correct) celebrate("Great job! Correct note!");
