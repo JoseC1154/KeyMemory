@@ -77,8 +77,9 @@ function scheduleAutoNext() {
     autoNextTimer = null;
     if (!timerEnabled.checked || activeMode !== modeAtAnswer) return;
     if (activeMode === "dictionary") {
-      // Repeat the same chord and voicing in a fresh memory attempt.
       setDictionaryPractice(true);
+    } else if (activeMode === "builder") {
+      advanceBuilder();
     } else {
       chooseChallenge();
     }
@@ -97,6 +98,61 @@ let secondsLeft = 0;
 let semitoneAnswer = null;
 let semitoneStart = null;
 let semitoneSteps = 0;
+let builderNotes = [];
+let builderTargets = [];
+let builderStep = 1;
+let builderAdvancePending = false;
+let builderQuality = "major";
+function builderQuestion() {
+  const last = builderNotes[builderNotes.length - 1];
+  const goal = builderTargets[builderStep];
+  targetMidi = goal;
+  selected.clear();
+  renderPiano();
+  const distance = goal - last;
+  const part = builderStep === 1 ? (builderQuality === "major" ? "major third" : "minor third") :
+    builderStep === 2 ? "fifth" : "dominant seventh";
+  displayQuestion([{text:"Build the "}, {text:part,strong:true},
+    {text:" • From " + noteName(last) + " move "}, {text:distance + " semitones UP",strong:true}]);
+  nextChallenge.hidden = true;
+  startCountdown();
+}
+function beginBuilder() {
+  // Start between C3 and B3. Explicit ascending MIDI voicing, not all matching octaves.
+  const root = 48 + Math.floor(Math.random() * 12);
+  builderQuality = Math.random() < .5 ? "major" : "minor";
+  const third = builderQuality === "major" ? 4 : 3;
+  builderTargets = [root, root + third, root + 7, root + 10];
+  builderNotes = [root];
+  builderStep = 1;
+  builderAdvancePending = false;
+  chordTitle.textContent = noteName(root) + (builderQuality === "major" ? " major" : " minor") + " → dominant 7";
+  degreeTitle.textContent = "Build the chord step by step";
+  builderQuestion();
+}
+function advanceBuilder() {
+  cancelAutoNext();
+  dismissAchievement();
+  if (builderAdvancePending) {
+    builderNotes.push(builderTargets[builderStep]);
+    builderStep++;
+    builderAdvancePending = false;
+  }
+  if (builderStep >= builderTargets.length) {
+    celebrate("Chord completed! " + builderNotes.map(noteName).join(" – "));
+    nextChallenge.hidden = !timerEnabled.checked;
+    if (timerEnabled.checked) {
+      autoNextTimer = setTimeout(() => {
+        autoNextTimer = null;
+        if (activeMode === "builder" && timerEnabled.checked) beginBuilder();
+      }, 2500);
+    } else {
+      nextChallenge.textContent = "Build another chord";
+    }
+    return;
+  }
+  builderQuestion();
+}
 function stopCountdown() {
   if (countdown !== null) clearInterval(countdown);
   countdown = null;
@@ -266,6 +322,7 @@ function chooseChallenge() {
   cancelChallenge();
   if (activeMode === "free") return;
   if (activeMode === "dictionary") { updateDictionary(); nextChallenge.hidden = true; return; }
+  if (activeMode === "builder") { beginBuilder(); return; }
   selected.clear();
   renderPiano();
   const notes = keyRange();
@@ -321,6 +378,20 @@ function chooseChallenge() {
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
   stopCountdown();
+  if (activeMode === "builder") {
+    const correct = midi === targetMidi;
+    if (correct) {
+      builderAdvancePending = true;
+      celebrate("Correct! " + noteName(midi) + " added.");
+    } else {
+      incorrect("Not quite — try " + noteName(targetMidi) + ".");
+    }
+    targetMidi = null;
+    nextChallenge.hidden = timerEnabled.checked;
+    nextChallenge.textContent = correct ? "Continue building" : "Try this step again";
+    scheduleAutoNext();
+    return;
+  }
   // Semitone prompts display note names without octave numbers.
   // Accept the correct pitch class in any visible octave, like Find the Note.
   const correct = activeMode === "degrees" ? midi % 12 === chordAnswer :
@@ -339,13 +410,14 @@ function activateMode(mode) {
   dismissAchievement();
   cancelChallenge();
   activeMode = mode;
-  chordQuestion.hidden = mode !== "degrees";
+  chordQuestion.hidden = mode !== "degrees" && mode !== "builder";
+  nextChallenge.textContent = "Next";
   dictionaryPractice = false;
   document.getElementById("dictionaryControls").hidden = mode !== "dictionary";
   timerControls.hidden = mode === "free";
   semitoneControls.hidden = mode !== "semitones";
   selected.clear();
-  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
   nextChallenge.hidden = mode === "free" || mode === "dictionary";
   renderPiano();
@@ -362,6 +434,7 @@ function dictionaryKeyboardRange() {
 }
 function visibleOctaves(width) {
   if (activeMode === "dictionary") return dictionaryKeyboardRange().octaves;
+  if (activeMode === "builder" && builderTargets.length) return Math.max(1, Math.ceil((builderTargets[builderTargets.length - 1] - 48 + 1) / 12));
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
@@ -419,7 +492,9 @@ function renderPiano() {
     button.setAttribute("aria-label", noteName(midi));
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
-    if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
+    if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) :
+      activeMode === "builder" ? builderNotes.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
+    if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
     const label = document.createElement("span");
     label.className = "noteLabel";
     label.textContent = NAMES[midi % 12];
@@ -537,7 +612,8 @@ document.querySelectorAll(".startMode").forEach(button => button.addEventListene
   setMenu(false);
   activateMode(button.dataset.mode);
 }));
-nextChallenge.addEventListener("click", chooseChallenge);
+nextChallenge.addEventListener("click", () => activeMode === "builder" ?
+  (builderStep >= builderTargets.length ? beginBuilder() : advanceBuilder()) : chooseChallenge());
 document.addEventListener("keydown", e => {
   if (modeOverlay.hidden) return;
   if (e.key === "Escape") { setMenu(false); return; }
