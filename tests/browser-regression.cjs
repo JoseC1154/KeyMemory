@@ -21,6 +21,7 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${server.address().port}`);
       await page.evaluate(()=>{document.getElementById('builderLevel').value='sevenths';});
+      const settings = async action => { await page.locator('#openSettings').click(); await action(); await page.locator('#closeSettings').click(); };
       const press = async midi => mobile ? page.locator(`[data-midi="${midi}"]`).tap() : page.locator(`[data-midi="${midi}"]`).click();
       for (const mode of ['find','semitones','degrees','remember','builder']) {
         await page.evaluate(mode => activateMode(mode), mode);
@@ -64,7 +65,7 @@ const server = http.createServer((req, res) => {
         assert.notEqual(await page.evaluate(()=>targetMidi), null);
       }
       // Timed completion continues automatically, with a manual fallback on timer disable.
-      await page.locator('#timerEnabled').check();
+      await settings(()=>page.locator('#timerEnabled').check());
       for (let step=1;step<=3;step++) {
         await press(await page.evaluate(()=>targetMidi));
         await page.waitForTimeout(step===2?4100:1900);
@@ -76,7 +77,7 @@ const server = http.createServer((req, res) => {
       await page.evaluate(()=>{builderStep=3;builderNotes=builderTargets.slice(0,3);builderQuestion();});
       await press(await page.evaluate(()=>targetMidi));
       await page.waitForTimeout(1900);
-      await page.locator('#timerEnabled').uncheck();
+      await settings(()=>page.locator('#timerEnabled').uncheck());
       assert.equal(await page.locator('#nextChallenge').isVisible(), true);
       await page.locator('#nextChallenge').click();
       assert.equal(await page.evaluate(()=>builderStep), 1);
@@ -93,10 +94,10 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('.key.selected').count(),2);
       await page.evaluate(()=>activateMode('dictionary'));
       assert.equal(await page.locator('.key.chordTone').count(),3);
-      await page.locator('#dictionaryInversion').selectOption('1');
+      await settings(()=>page.locator('#dictionaryInversion').selectOption('1'));
       assert.deepEqual(await page.evaluate(()=>dictionaryVoicing),[52,55,60]);
       await page.locator('#toggleChordNotes').click();
-      await page.locator('#timerEnabled').check();
+      await settings(()=>page.locator('#timerEnabled').check());
       const deadlineBefore=await page.evaluate(()=>deadline);
       await press(52);await press(49);await press(49);
       assert.equal(await page.locator('[data-midi="49"]').evaluate(k=>k.classList.contains('wrongAnswer')),true);
@@ -107,7 +108,7 @@ const server = http.createServer((req, res) => {
       await press(55);await press(60);await page.locator('#checkChordAnswer').click();
       assert.equal(await page.locator('#checkChordAnswer').isDisabled(),true);
       await press(52);assert.deepEqual(await page.evaluate(()=>[...selected]),[52,55,60]);
-      await page.locator('#timerEnabled').uncheck();
+      await settings(()=>page.locator('#timerEnabled').uncheck());
       await page.waitForTimeout(1100);
       assert.equal(await page.locator('[data-midi="49"]').evaluate(k=>k.classList.contains('wrongAnswer')),false);
       assert.deepEqual(errors, []);

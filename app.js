@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.5";
+const APP_VERSION = "2026.11.01.6";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -59,13 +59,6 @@ let dictionaryVoicing = [];
 const dictionaryRoot = document.getElementById("dictionaryRoot");
 const dictionaryQuality = document.getElementById("dictionaryQuality");
 const dictionaryInversion = document.getElementById("dictionaryInversion");
-const dictionaryExpand = document.getElementById("dictionaryExpand");
-const dictionaryOptions = document.getElementById("dictionaryOptions");
-dictionaryExpand.addEventListener("click", () => {
-  const expanded = dictionaryExpand.getAttribute("aria-expanded") === "true";
-  dictionaryExpand.setAttribute("aria-expanded", String(!expanded));
-  dictionaryOptions.classList.toggle("expanded", !expanded);
-});
 const toggleChordNotes = document.getElementById("toggleChordNotes");
 const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
@@ -386,6 +379,7 @@ function stopCountdown() {
   if (countdown !== null) clearInterval(countdown);
   countdown = null;
   timerRemaining.textContent = "";
+  document.querySelectorAll(".countdownMirror").forEach(el=>el.textContent="");
   timerProgress.hidden = true;
 }
 function startCountdown() {
@@ -398,6 +392,7 @@ function startCountdown() {
     const remaining = Math.max(0, deadline - Date.now());
     secondsLeft = Math.ceil(remaining / 1000);
     timerRemaining.textContent = secondsLeft + "s";
+    document.querySelectorAll(".countdownMirror").forEach(el=>el.textContent=secondsLeft+"s");
     timerProgress.value = remaining / (seconds * 1000) * 100;
     if (remaining <= 0) {
       stopCountdown();
@@ -451,6 +446,7 @@ function setDictionaryPractice(on) {
   if (activeMode === "dictionary") {
     trainingPrompt.textContent = on ? "Select the chord notes from memory, then check your answer." : "Blue keys show the selected chord inversion.";
     if (on) startCountdown(); else stopCountdown();
+    updatePracticeChrome();
   }
 }
 toggleChordNotes.addEventListener("click", () => setDictionaryPractice(!dictionaryPractice));
@@ -522,6 +518,7 @@ function updateDictionary() {
     label + " · " + dictionaryInversion.selectedOptions[0].textContent +
     " · Notes low to high: " + dictionaryVoicing.map(noteName).join(" · ");
   trainingPrompt.textContent = label + " — blue keys show this inversion.";
+  updatePracticeChrome();
 }
 
 let activeMode = "free";
@@ -687,6 +684,7 @@ function activateMode(mode) {
   nextChallenge.hidden = mode === "free" || mode === "dictionary";
   renderPiano();
   if (mode !== "free") chooseChallenge();
+  updatePracticeChrome();
 }
 
 
@@ -732,7 +730,8 @@ function renderPiano() {
   const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
   piano.style.width = keyboardWidth + "px";
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
-  const whiteH = mobile
+  const shortLandscape = matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
+  const whiteH = shortLandscape ? 118 : mobile
     ? Math.min(166, Math.max(125, whiteW * 4.6))
     : Math.min(270, Math.max(120, whiteW * 5.2));
   const blackW = whiteW * .65;
@@ -848,62 +847,66 @@ observer.observe(piano.parentElement);
 window.addEventListener("orientationchange", () => requestAnimationFrame(renderPiano));
 renderPiano();
 
-const modeOverlay = document.getElementById("modeOverlay");
-const modeScroller = document.getElementById("modeScroller");
-const modeSlides = [...document.querySelectorAll(".modeSlide")];
-const openModes = document.getElementById("openModes");
-const closeModes = document.getElementById("closeModes");
-let previousFocus = null;
-function setMenu(open) {
-  modeOverlay.hidden = !open;
-  openModes.setAttribute("aria-expanded", String(open));
-  document.body.style.overflow = open ? "hidden" : "";
-  if (open) {
-    previousFocus = document.activeElement;
-    modeScroller.focus();
-    syncSlide();
-  } else {
-    (previousFocus || openModes).focus();
-  }
+// Single compact dialogs preserve the live question and its clock on open/close.
+let currentDialog = null;
+let dialogReturnFocus = null;
+const shell = document.querySelector(".shell");
+function closePracticeDialog() {
+  if (!currentDialog) return;
+  currentDialog.hidden=true;
+  currentDialog=null;
+  shell.inert=false;
+  document.body.style.overflow="";
+  for(const id of ["openModes","openSettings","openHint"]) document.getElementById(id).setAttribute("aria-expanded","false");
+  if(dialogReturnFocus?.isConnected) dialogReturnFocus.focus();
+  dialogReturnFocus=null;
 }
-function syncSlide() {
-  const viewport = modeScroller.getBoundingClientRect();
-  const center = viewport.top + viewport.height / 2;
-  const spacing = Math.max(1, modeSlides[0]?.getBoundingClientRect().height || 1);
-  let current = 0;
-  let closest = Infinity;
-  modeSlides.forEach((slide, i) => {
-    const rect = slide.getBoundingClientRect();
-    const distance = Math.abs(rect.top + rect.height / 2 - center);
-    const proximity = Math.max(0, 1 - distance / spacing);
-    const inner = slide.querySelector(".modeInner");
-    inner.style.setProperty("--proximity", proximity.toFixed(3));
-    // Compute the blur in JavaScript for reliable support across browsers.
-    inner.style.setProperty("--effective-blur", ((1 - proximity) * 9).toFixed(2) + "px");
-    if (distance < closest) { closest = distance; current = i; }
-  });
-  modeSlides.forEach((slide, i) => slide.classList.toggle("isActive", i === current));
-  document.getElementById("modeDots").textContent = modeSlides.map((_, i) => i === current ? "●" : "○").join(" ");
+function openPracticeDialog(id,buttonId) {
+  if(currentDialog) closePracticeDialog();
+  dialogReturnFocus=document.activeElement;
+  currentDialog=document.getElementById(id);
+  currentDialog.hidden=false;
+  shell.inert=true;
+  document.body.style.overflow="hidden";
+  document.getElementById(buttonId).setAttribute("aria-expanded","true");
+  currentDialog.querySelector(".modalTop button").focus();
 }
-openModes.addEventListener("click", () => setMenu(true));
-closeModes.addEventListener("click", () => setMenu(false));
-modeScroller.addEventListener("scroll", syncSlide, {passive:true});
-document.querySelectorAll(".startMode").forEach(button => button.addEventListener("click", () => {
-  setMenu(false);
-  activateMode(button.dataset.mode);
+for(const [open,dialog,close] of [["openModes","modeOverlay","closeModes"],["openSettings","settingsOverlay","closeSettings"],["openHint","hintOverlay","closeHint"]]) {
+  document.getElementById(open).addEventListener("click",()=>openPracticeDialog(dialog,open));
+  document.getElementById(close).addEventListener("click",closePracticeDialog);
+  document.getElementById(dialog).addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
+}
+document.querySelectorAll(".startMode").forEach(button=>button.addEventListener("click",()=>{
+  closePracticeDialog();activateMode(button.dataset.mode);
 }));
-nextChallenge.addEventListener("click", () => activeMode === "builder" ? advanceBuilder() : chooseChallenge());
-document.addEventListener("keydown", e => {
-  if (modeOverlay.hidden) return;
-  if (e.key === "Escape") { setMenu(false); return; }
-  if (e.key === "Tab") {
-    const controls = [closeModes, ...modeOverlay.querySelectorAll(".startMode")];
-    const focusable = controls.filter(el => el.getBoundingClientRect().height > 0);
-    if (!focusable.length) return;
-    const index = focusable.indexOf(document.activeElement);
-    if (e.shiftKey && index <= 0) { e.preventDefault(); focusable[focusable.length - 1].focus(); }
-    if (!e.shiftKey && index === focusable.length - 1) { e.preventDefault(); focusable[0].focus(); }
-  }
+nextChallenge.addEventListener("click",()=>activeMode==="builder"?advanceBuilder():chooseChallenge());
+document.addEventListener("keydown",event=>{
+  if(!currentDialog)return;
+  if(event.key==="Escape"){event.preventDefault();closePracticeDialog();return;}
+  if(event.key!=="Tab")return;
+  const focusable=[...currentDialog.querySelectorAll("button,input,select,summary,[tabindex='0']")].filter(el=>!el.disabled&&!el.closest("[hidden]")&&(!el.closest("details:not([open])")||el.tagName==="SUMMARY"));
+  if(!focusable.length){event.preventDefault();return;}
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(event.shiftKey&&(document.activeElement===first||!currentDialog.contains(document.activeElement))){event.preventDefault();last.focus();}
+  else if(!event.shiftKey&&(document.activeElement===last||!currentDialog.contains(document.activeElement))){event.preventDefault();first.focus();}
 });
+function updatePracticeChrome() {
+  const summary=document.getElementById("practiceSummary");
+  let text="";
+  if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
+  if(activeMode==="semitones") text=semitoneDifficulty.selectedOptions[0].textContent;
+  if(activeMode==="dictionary") text=dictionaryRoot.selectedOptions[0]?.textContent+" · "+dictionaryQuality.selectedOptions[0]?.textContent+" · "+dictionaryInversion.selectedOptions[0]?.textContent;
+  summary.textContent=text;
+  document.getElementById("dictionaryActions").hidden=activeMode!=="dictionary";
+  document.getElementById("openHint").hidden=activeMode!=="builder"&&(activeMode!=="dictionary"||dictionaryPractice);
+  builderHint.hidden=activeMode!=="builder";
+  document.getElementById("dictionaryNotes").hidden=activeMode!=="dictionary"||dictionaryPractice;
+  if(activeMode!=="builder")hearBuilder.hidden=true;
+  document.querySelectorAll(".startMode").forEach(button=>button.setAttribute("aria-current",button.dataset.mode===activeMode?"true":"false"));
+}
+document.getElementById("settingsOverlay").addEventListener("change",updatePracticeChrome);
+document.getElementById("builderSelectAll").addEventListener("click",updatePracticeChrome);
+document.getElementById("builderClear").addEventListener("click",updatePracticeChrome);
+updatePracticeChrome();
 
 document.getElementById("buildVersion").textContent = "Build " + APP_VERSION;

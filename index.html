@@ -1,86 +1,75 @@
 <!-- FILE: index.html -->
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#121212">
-  <title>KeyMemory — Piano</title>
-  <link rel="stylesheet" href="./styles.css?v=20261101-5">
-  <script src="./app.js?v=20261101-5" defer></script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<meta content="#121212" name="theme-color"/>
+<title>KeyMemory — Piano</title>
+<link href="./styles.css?v=20261101-6" rel="stylesheet"/>
+<script defer="" src="./app.js?v=20261101-6"></script>
 </head>
 <body>
-  <main class="shell">
-    <header class="header">
-      <div class="brand"><div class="eyebrow">KEYMEMORY</div><h1>Piano Memory Trainer</h1></div>
-      <button id="openModes" class="menuToggle" type="button" aria-label="Open training modes" aria-controls="modeOverlay" aria-expanded="false"><span></span><span></span><span></span></button>
-    </header>
-    <div id="achievement" class="achievement" role="status" aria-live="polite" aria-atomic="true" hidden><span class="achievementIcon" aria-hidden="true">✓</span><span id="achievementText">Great job!</span><span class="achievementSpark" aria-hidden="true">✦ ✦ ✦</span></div>
-    <section class="trainingBar" aria-live="polite"><span id="activeModeName">Free Play</span><span id="trainingPrompt">Explore the keyboard, or choose a training mode.</span><button id="nextChallenge" type="button" hidden>Next</button></section>
-    <section id="modeOverlay" class="modeOverlay" role="dialog" aria-modal="true" aria-label="Choose training mode" hidden>
-      <div class="modeTop"><span class="eyebrow">CHOOSE A MODE</span><button id="closeModes" type="button" aria-label="Close modes">✕</button></div>
-      <div id="modeScroller" class="modeScroller" tabindex="0" aria-label="Scroll through training modes">
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">01 / 07</span><h2>Free Play</h2><p>Explore the piano freely. Tap keys to highlight notes and get familiar with their placement.</p><button type="button" class="startMode" data-mode="free">Start Free Play</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">02 / 07</span><h2>Find the Note</h2><p>A note name appears above the piano. Find and press the matching key to strengthen your note recognition.</p><button type="button" class="startMode" data-mode="find">Start Find the Note</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 07</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">04 / 07</span><h2>Semitones</h2><p>Find notes by moving a specified number of semitones up or down. Beat the optional countdown.</p><button type="button" class="startMode" data-mode="semitones">Start Semitones</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">05 / 07</span><h2>Chord Degrees</h2><p>See the chord highlighted on the piano and identify the requested degree.</p><button type="button" class="startMode" data-mode="degrees">Start Chord Degrees</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">06 / 07</span><h2>Chord Builder</h2><p>Explore five levels: triads, suspended/added/sixth chords, sevenths, extensions and altered dominants. Choose your chord types and hear each milestone.</p><button type="button" class="startMode" data-mode="builder">Start Chord Builder</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">07 / 07</span><h2>Chord Dictionary</h2><p>Choose a root note and chord quality to see its notes light up on the piano.</p><button type="button" class="startMode" data-mode="dictionary">Open Chord Dictionary</button></div></article>
-      </div>
-      <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○ ○ ○ ○ ○</span></div>
-    </section>
-    <section id="timerControls" class="timerControls" hidden>
-      <label><input id="timerEnabled" type="checkbox"> Timed challenge</label>
-      <label>Seconds <select id="timerDuration"><option>5</option><option selected>10</option><option>15</option><option>30</option><option>60</option></select></label>
-      <span id="timerRemaining" role="timer" aria-label="Time remaining" aria-live="off"></span>
-      <progress id="timerProgress" max="100" value="100" hidden></progress>
-    </section>
-    <section id="semitoneControls" class="semitoneControls" hidden><label>Difficulty <select id="semitoneDifficulty"><option value="easy">Beginner (1–3)</option><option value="medium">Intermediate (1–7)</option><option value="hard">Advanced (1–12)</option></select></label></section>
-    <section id="builderControls" class="builderControls" hidden>
-      <label>Practice <select id="builderLevel"><option value="triads">1 · Triads</option><option value="colors">2 · Suspended / added / sixths</option><option value="sevenths">3 · Sevenths</option><option value="extended">4 · Ninths / elevenths / thirteenths</option><option value="altered">5 · Altered dominants</option><option value="mixed">Mixed · All levels</option></select></label>
-      <label>Selection <select id="builderSelection"><option value="random">Random</option><option value="custom">Choose chord types</option></select></label>
-      <details id="builderTypes" hidden><summary>Chord types <span id="builderSelectionCount"></span></summary><div class="builderTypeActions"><button id="builderSelectAll" type="button">Select all</button><button id="builderClear" type="button">Clear</button><small>Applies to this level. One type isolates it; several mix only your choices.</small></div><div id="builderTypeOptions"></div></details>
-      <button id="hearBuilder" type="button" hidden>Hear chord</button>
-      <span id="builderHint"></span>
-    </section>
-    <section id="chordQuestion" class="chordQuestion" aria-label="Chord in question" hidden>
-      <span class="chordCaption">CHORD IN QUESTION</span>
-      <strong id="chordTitle" class="chordTitle"></strong>
-      <span id="degreeTitle" class="degreeTitle"></span>
-    </section>
-    <section id="dictionaryControls" class="dictionaryControls" hidden>
-      <button id="dictionaryExpand" class="dictionaryExpand" type="button" aria-expanded="false" aria-controls="dictionaryOptions">Chord options <span aria-hidden="true">⌄</span></button>
-      <div id="dictionaryOptions" class="dictionaryOptions">
-      <label>Root note <select id="dictionaryRoot" aria-label="Chord root"></select></label>
-      <label>Chord quality <select id="dictionaryQuality" aria-label="Chord quality">
-        <option value="major">Major</option><option value="minor">Minor</option>
-        <option value="dim">Diminished</option><option value="aug">Augmented</option>
-        <option value="sus2">Sus2</option><option value="sus4">Sus4</option>
-        <option value="maj7">Major 7</option><option value="min7">Minor 7</option>
-        <option value="dom7">Dominant 7</option><option value="dim7">Diminished 7</option>
-        <option value="m7b5">Half-diminished 7</option>
-        <option value="add9">Add 9</option><option value="madd9">Minor add 9</option>
-        <option value="maj9">Major 9</option><option value="min9">Minor 9</option><option value="dom9">Dominant 9</option>
-        <option value="dom11">Dominant 11</option><option value="min11">Minor 11</option>
-        <option value="dom13">Dominant 13</option><option value="maj13">Major 13</option><option value="min13">Minor 13</option>
-      </select></label>
-      <label>Inversion <select id="dictionaryInversion" aria-label="Chord inversion"></select></label>
-      </div>
-      <button id="toggleChordNotes" type="button" aria-pressed="false">Hide Notes &amp; Practice</button>
-      <button id="checkChordAnswer" type="button" hidden>Check Answer</button>
-      <span id="dictionaryNotes" aria-live="polite"></span>
-    </section>
-    <div class="pianoHint">Swipe sideways for more keys <span aria-hidden="true">↔</span></div>
-    <section class="pianoContainer" aria-label="Interactive piano">
-      <div id="piano" class="piano" aria-label="Piano keys"></div>
-    </section>
-    <div class="info">
-      <span id="rangeText" aria-live="polite"></span>
-      <span id="noteText" aria-live="polite">Tap a key to highlight it</span>
-      <button id="clearNotes" type="button">Clear</button>
-    </div>
-    <small id="buildVersion" aria-label="App build"></small>
-  </main>
-</body>
+<main class="shell">
+<header class="header">
+<div class="brand"><h1>KeyMemory</h1></div>
+
+<nav aria-label="Practice controls" class="headerActions"><button aria-controls="modeOverlay" aria-expanded="false" aria-label="Choose training mode" class="toolbarButton" id="openModes" type="button">Modes</button><button aria-controls="settingsOverlay" aria-expanded="false" id="openSettings" type="button">Settings</button></nav></header>
+
+<section aria-live="polite" class="practicePanel"><div class="practiceMeta"><span id="activeModeName">Free Play</span><span id="practiceSummary"></span><span aria-label="Time remaining" aria-live="off" id="timerRemaining" role="timer"></span></div><section aria-label="Chord in question" class="chordQuestion" hidden="" id="chordQuestion">
+
+<strong class="chordTitle" id="chordTitle"></strong>
+<span class="degreeTitle" id="degreeTitle"></span>
+</section><span id="trainingPrompt">Explore the keyboard, or choose a training mode.</span><progress hidden="" id="timerProgress" max="100" value="100"></progress><div class="practiceActions"><button hidden="" id="nextChallenge" type="button">Next</button><button hidden="" id="hearBuilder" type="button">Hear chord</button><div class="dictionaryActions" hidden="" id="dictionaryActions"><button aria-pressed="false" id="toggleChordNotes" type="button">Hide Notes &amp; Practice</button><button hidden="" id="checkChordAnswer" type="button">Check Answer</button></div><button aria-controls="hintOverlay" aria-expanded="false" hidden="" id="openHint" type="button">Hint</button></div><div aria-atomic="true" aria-live="polite" class="achievement" hidden="" id="achievement" role="status"><span aria-hidden="true" class="achievementIcon">✓</span><span id="achievementText">Great job!</span></div></section>
+
+
+
+
+
+
+<div class="pianoHint">Swipe sideways for more keys <span aria-hidden="true">↔</span></div>
+<section aria-label="Interactive piano" class="pianoContainer">
+<div aria-label="Piano keys" class="piano" id="piano"></div>
+</section>
+<div class="info">
+<span aria-live="polite" id="rangeText"></span>
+<span aria-live="polite" id="noteText">Tap a key to highlight it</span>
+<button id="clearNotes" type="button">Clear</button>
+</div>
+
+</main>
+<section aria-labelledby="modeOverlayTitle" aria-modal="true" class="modalOverlay" hidden="" id="modeOverlay" role="dialog"><div class="modalPanel"><div class="modalTop"><h2 id="modeOverlayTitle">Choose a mode</h2><span aria-label="Time remaining" class="countdownMirror"></span><button id="closeModes" type="button">Close</button></div><div class="modeGrid" id="modeScroller"><button class="startMode" data-mode="free" type="button"><strong>Free Play</strong><small>Explore any notes</small></button><button class="startMode" data-mode="find" type="button"><strong>Find the Note</strong><small>Name → key</small></button><button class="startMode" data-mode="remember" type="button"><strong>Remember the Key</strong><small>Watch, then recall</small></button><button class="startMode" data-mode="semitones" type="button"><strong>Semitones</strong><small>Count the distance</small></button><button class="startMode" data-mode="degrees" type="button"><strong>Chord Degrees</strong><small>Find a chord tone</small></button><button class="startMode" data-mode="builder" type="button"><strong>Chord Builder</strong><small>Build step by step</small></button><button class="startMode" data-mode="dictionary" type="button"><strong>Chord Dictionary</strong><small>Explore and practice</small></button></div></div></section><section aria-labelledby="settingsOverlayTitle" aria-modal="true" class="modalOverlay" hidden="" id="settingsOverlay" role="dialog"><div class="modalPanel"><div class="modalTop"><h2 id="settingsOverlayTitle">Practice settings</h2><span aria-label="Time remaining" class="countdownMirror"></span><button id="closeSettings" type="button">Done</button></div><p class="settingsNote">Changes apply immediately. Active timers keep running while this sheet is open.</p><section class="timerControls" hidden="" id="timerControls">
+<label><input id="timerEnabled" type="checkbox"/> Timed challenge</label>
+<label>Seconds <select id="timerDuration"><option>5</option><option selected="">10</option><option>15</option><option>30</option><option>60</option></select></label>
+
+
+</section><section class="semitoneControls" hidden="" id="semitoneControls"><label>Difficulty <select id="semitoneDifficulty"><option value="easy">Beginner (1–3)</option><option value="medium">Intermediate (1–7)</option><option value="hard">Advanced (1–12)</option></select></label></section><section class="builderControls" hidden="" id="builderControls">
+<label>Practice <select id="builderLevel"><option value="triads">1 · Triads</option><option value="colors">2 · Suspended / added / sixths</option><option value="sevenths">3 · Sevenths</option><option value="extended">4 · Ninths / elevenths / thirteenths</option><option value="altered">5 · Altered dominants</option><option value="mixed">Mixed · All levels</option></select></label>
+<label>Selection <select id="builderSelection"><option value="random">Random</option><option value="custom">Choose chord types</option></select></label>
+<details hidden="" id="builderTypes"><summary>Chord types <span id="builderSelectionCount"></span></summary><div class="builderTypeActions"><button id="builderSelectAll" type="button">Select all</button><button id="builderClear" type="button">Clear</button><small>Applies to this level. One type isolates it; several mix only your choices.</small></div><div id="builderTypeOptions"></div></details>
+
+
+</section><section class="dictionaryControls" hidden="" id="dictionaryControls">
+
+<div class="dictionaryOptions" id="dictionaryOptions">
+<label>Root note <select aria-label="Chord root" id="dictionaryRoot"></select></label>
+<label>Chord quality <select aria-label="Chord quality" id="dictionaryQuality">
+<option value="major">Major</option><option value="minor">Minor</option>
+<option value="dim">Diminished</option><option value="aug">Augmented</option>
+<option value="sus2">Sus2</option><option value="sus4">Sus4</option>
+<option value="maj7">Major 7</option><option value="min7">Minor 7</option>
+<option value="dom7">Dominant 7</option><option value="dim7">Diminished 7</option>
+<option value="m7b5">Half-diminished 7</option>
+<option value="add9">Add 9</option><option value="madd9">Minor add 9</option>
+<option value="maj9">Major 9</option><option value="min9">Minor 9</option><option value="dom9">Dominant 9</option>
+<option value="dom11">Dominant 11</option><option value="min11">Minor 11</option>
+<option value="dom13">Dominant 13</option><option value="maj13">Major 13</option><option value="min13">Minor 13</option>
+</select></label>
+<label>Inversion <select aria-label="Chord inversion" id="dictionaryInversion"></select></label>
+</div>
+
+
+
+</section><small aria-label="App build" id="buildVersion"></small></div></section><section aria-labelledby="hintOverlayTitle" aria-modal="true" class="modalOverlay" hidden="" id="hintOverlay" role="dialog"><div class="modalPanel"><div class="modalTop"><h2 id="hintOverlayTitle">Practice hint</h2><span aria-label="Time remaining" class="countdownMirror"></span><button id="closeHint" type="button">Close</button></div><span id="builderHint"></span><span aria-live="polite" id="dictionaryNotes"></span></div></section></body>
 </html>
