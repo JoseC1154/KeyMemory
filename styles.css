@@ -235,3 +235,7 @@ button:hover { border-color: var(--accent); }
   #trainingPrompt { flex-basis:100%; font-size:17px; line-height:1.3; gap:3px 5px; }
   .questionFocus { font-size:1.15em; padding:3px 7px; border-radius:7px; }
 }
+
+/* Chord Builder: blue = completed notes, green = newest completed note. */
+.key.chordTone.builderNewest.white { background:linear-gradient(180deg,#eafff1,#bff3d1); box-shadow:0 0 0 3px rgba(29,185,84,.65),inset 0 -7px 15px rgba(0,0,0,.15); }
+.key.chordTone.builderNewest.black { background:linear-gradient(180deg,#2a7d48,#125d30 55%,#093219); box-shadow:0 0 0 2px rgba(29,185,84,.7),0 9px 18px rgba(0,0,0,.65); }
