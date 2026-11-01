@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.3";
+const APP_VERSION = "2026.11.01.4";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -138,18 +138,96 @@ const SEVENTH_LESSONS = [
   const triad = TRIAD_LESSONS.find(t => t.id === lesson.triad);
   return {...lesson, intervals:[...triad.intervals, lesson.seventh], third:triad.third, fifth:triad.fifth};
 });
+// Each note has a diatonic degree independent of its physical semitone offset.
+// This keeps suspended, added, sixth and altered notes spelled by musical role.
+const COLOR_LESSONS = [
+  {id:"sus2",name:"suspended second",intervals:[0,2,7],degrees:[1,2,5],roles:["root","major second","perfect fifth"],foundation:"suspended second chord",effect:"The second replaces the third: this is neither a major nor a minor chord."},
+  {id:"sus4",name:"suspended fourth",intervals:[0,5,7],degrees:[1,4,5],roles:["root","perfect fourth","perfect fifth"],foundation:"suspended fourth chord",effect:"The fourth replaces the third: listen for its pull toward the major third."},
+  {id:"add9",name:"major add9",triad:"major",intervals:[0,4,7,14],degrees:[1,3,5,9],roles:["root","major third","perfect fifth","major ninth"],effect:"Add9 adds a ninth to a triad without a seventh."},
+  {id:"minorAdd9",name:"minor add9",triad:"minor",intervals:[0,3,7,14],degrees:[1,3,5,9],roles:["root","minor third","perfect fifth","major ninth"],effect:"Minor add9 keeps the minor triad and adds a ninth, with no seventh."},
+  {id:"major6",name:"major sixth",triad:"major",intervals:[0,4,7,9],degrees:[1,3,5,6],roles:["root","major third","perfect fifth","major sixth"],effect:"The major sixth adds warmth to the major triad; there is no seventh."},
+  {id:"minor6",name:"minor sixth",triad:"minor",intervals:[0,3,7,9],degrees:[1,3,5,6],roles:["root","minor third","perfect fifth","major sixth"],effect:"Minor sixth means a minor triad plus a MAJOR sixth, not a minor sixth."},
+  {id:"sixNine",name:"major 6/9",triad:"major",intervals:[0,4,7,9,14],degrees:[1,3,5,6,9],roles:["root","major third","perfect fifth","major sixth","major ninth"],stages:{4:"major sixth"},effect:"6/9 combines a sixth and a ninth over the major triad, without a seventh."}
+];
+const EXTENDED_LESSONS = ["dominant","major","minor"].flatMap(quality => [9,11,13].map(extension => {
+  const minor = quality === "minor", major = quality === "major";
+  const count = extension === 9 ? 5 : extension === 11 ? 6 : 7;
+  const stages = {4:quality + " seventh",5:quality + " ninth",6:quality + " eleventh"};
+  return {id:quality+extension, name:quality+" "+({9:"ninth",11:"eleventh",13:"thirteenth"}[extension]), triad:minor?"minor":"major",
+    intervals:[0,minor?3:4,7,major?11:10,14,17,21].slice(0,count),degrees:[1,3,5,7,9,11,13].slice(0,count),
+    roles:["root",minor?"minor third":"major third","perfect fifth",major?"major seventh":"minor seventh","major ninth","perfect eleventh","major thirteenth"].slice(0,count),stages,
+    effect:"Build the full learning stack through its seventh foundation." + (extension >= 11 && !minor ? " The natural eleventh can clash with the major third; performers often omit notes or choose another voicing. Here we learn every written degree." : " Higher extensions add color above the seventh.")};
+}));
+const ALTERED_LESSONS = [
+  {id:"dominant7b5",name:"dominant seventh ♭5",intervals:[0,4,6,10],degrees:[1,3,5,7],roles:["root","major third","diminished fifth","minor seventh"],foundation:"major-third / flat-fifth foundation",effect:"Lower the usual perfect fifth by one semitone; retain the major third and minor seventh of a dominant chord."},
+  {id:"dominant7sharp5",name:"dominant seventh ♯5",triad:"augmented",intervals:[0,4,8,10],degrees:[1,3,5,7],roles:["root","major third","augmented fifth","minor seventh"],effect:"Raise the fifth by one semitone. This is also called an augmented dominant seventh."},
+  ...[{suffix:"b9",symbol:"♭9",offset:13,degree:9,role:"minor ninth"},{suffix:"sharp9",symbol:"♯9",offset:15,degree:9,role:"augmented ninth"},{suffix:"sharp11",symbol:"♯11",offset:18,degree:11,role:"augmented eleventh"},{suffix:"b13",symbol:"♭13",offset:20,degree:13,role:"minor thirteenth"}].map(a=>({
+    id:"dominant7"+a.suffix,name:"dominant seventh "+a.symbol,triad:"major",intervals:[0,4,7,10,a.offset],degrees:[1,3,5,7,a.degree],roles:["root","major third","perfect fifth","minor seventh",a.role],stages:{4:"dominant seventh"},
+    effect:"Add the altered "+a.symbol+" to a dominant seventh foundation for tension. This focused voicing leaves out unrequested intermediate extensions."}))
+];
+for (const lesson of TRIAD_LESSONS) { lesson.level="triads"; lesson.degrees=[1,3,5]; lesson.roles=["root",lesson.third,lesson.fifth]; }
+for (const lesson of SEVENTH_LESSONS) { lesson.level="sevenths"; lesson.degrees=[1,3,5,7]; lesson.roles=["root",lesson.third,lesson.fifth,lesson.seventhName]; }
+for (const [level,lessons] of [["colors",COLOR_LESSONS],["extended",EXTENDED_LESSONS],["altered",ALTERED_LESSONS]]) for (const lesson of lessons) lesson.level=level;
+const ALL_BUILDER_LESSONS = [...TRIAD_LESSONS,...COLOR_LESSONS,...SEVENTH_LESSONS,...EXTENDED_LESSONS,...ALTERED_LESSONS];
+const builderSelection = document.getElementById("builderSelection");
+const builderTypes = document.getElementById("builderTypes");
+const builderTypeOptions = document.getElementById("builderTypeOptions");
+const builderSelectionCount = document.getElementById("builderSelectionCount");
+let chosenBuilderTypes = new Set(ALL_BUILDER_LESSONS.map(l=>l.id));
+function saveBuilderPreferences() {
+  try { localStorage.setItem("keymemory.builder.preferences.v1",JSON.stringify({level:builderLevel.value,selection:builderSelection.value,types:[...chosenBuilderTypes]})); } catch (_) { /* Practice still works when storage is unavailable. */ }
+}
+try {
+  const saved = JSON.parse(localStorage.getItem("keymemory.builder.preferences.v1"));
+  if (saved && typeof saved === "object") {
+    if ([...builderLevel.options].some(o=>o.value===saved.level)) builderLevel.value=saved.level;
+    if (["random","custom"].includes(saved.selection)) builderSelection.value=saved.selection;
+    if (Array.isArray(saved.types)) chosenBuilderTypes=new Set(saved.types.filter(id=>ALL_BUILDER_LESSONS.some(l=>l.id===id)));
+  }
+} catch (_) { /* Ignore unavailable or damaged local preferences. */ }
+function levelBuilderLessons() { return ALL_BUILDER_LESSONS.filter(l=>builderLevel.value==="mixed" || l.level===builderLevel.value); }
+function renderBuilderChoices() {
+  const focusedType=builderTypeOptions.contains(document.activeElement) ? document.activeElement.value : null;
+  builderTypes.hidden=builderSelection.value!=="custom";
+  builderTypeOptions.replaceChildren();
+  const choices=levelBuilderLessons();
+  for (const lesson of choices) {
+    const label=document.createElement("label"), input=document.createElement("input");
+    input.type="checkbox";input.value=lesson.id;input.checked=chosenBuilderTypes.has(lesson.id);
+    input.addEventListener("change",()=>{ if(input.checked)chosenBuilderTypes.add(lesson.id);else chosenBuilderTypes.delete(lesson.id); restartBuilderPreferences(); });
+    label.append(input,document.createTextNode(lesson.name));builderTypeOptions.append(label);
+  }
+  const count=choices.filter(l=>chosenBuilderTypes.has(l.id)).length;
+  builderSelectionCount.textContent=count+" of "+choices.length+" types selected in this level";
+  if(focusedType) builderTypeOptions.querySelector('input[value="'+focusedType+'"]')?.focus({preventScroll:true});
+}
+function restartBuilderPreferences() { builderDeck=[];saveBuilderPreferences();renderBuilderChoices();if(activeMode==="builder")beginBuilder(); }
+builderSelection.addEventListener("change",()=>{builderTypes.open=builderSelection.value==="custom";restartBuilderPreferences();});
+builderTypes.open=builderSelection.value==="custom";
+document.getElementById("builderSelectAll").addEventListener("click",()=>{levelBuilderLessons().forEach(l=>chosenBuilderTypes.add(l.id));restartBuilderPreferences();});
+document.getElementById("builderClear").addEventListener("click",()=>{levelBuilderLessons().forEach(l=>chosenBuilderTypes.delete(l.id));restartBuilderPreferences();});
+renderBuilderChoices();
 const BUILDER_ROOT_NAMES = ["C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
 function builderTriad() {
   return TRIAD_LESSONS.find(t => t.id === (builderLesson.triad || builderLesson.id));
 }
+function builderFoundation() { return builderLesson.foundation || builderTriad().name + " triad"; }
 function builderName(triadOnly = false) {
-  return BUILDER_ROOT_NAMES[builderRoot % 12] + " " + (triadOnly ? builderTriad().name + " triad" : builderLesson.name + (builderTargets.length === 3 ? " triad" : ""));
+  return BUILDER_ROOT_NAMES[builderRoot % 12] + " " + (triadOnly ? builderFoundation() : builderLesson.name + (builderLesson.level === "triads" ? " triad" : ""));
+}
+function builderStageName() {
+  if (builderNotes.length===3) return builderName(true);
+  return BUILDER_ROOT_NAMES[builderRoot%12]+" "+(builderLesson.stages?.[builderNotes.length] || builderLesson.name);
+}
+function builderNextLabel() {
+  const degree=builderLesson.degrees[builderStep];
+  return "Add the "+({6:"sixth",7:"seventh",9:"ninth",11:"eleventh",13:"thirteenth"}[degree] || "next note");
 }
 function builderSpelling(index) {
   const letters = ["C","D","E","F","G","A","B"];
   const naturals = [0,2,4,5,7,9,11];
   const rootLetter = letters.indexOf(BUILDER_ROOT_NAMES[builderRoot % 12][0]);
-  const letter = (rootLetter + index * 2) % 7;
+  const letter = (rootLetter + builderLesson.degrees[index] - 1) % 7;
   const pitch = builderTargets[index] % 12;
   let accidental = (pitch - naturals[letter] + 18) % 12 - 6;
   return letters[letter] + (accidental < 0 ? "♭".repeat(-accidental) : "♯".repeat(accidental));
@@ -172,22 +250,22 @@ function builderQuestion() {
   selected.clear();
   renderPiano();
   const distance = goal - last;
-  const part = builderStep === 1 ? builderLesson.third : builderStep === 2 ? builderLesson.fifth : builderLesson.seventhName;
-  chordTitle.textContent = builderStep < 3 ? builderName(true) : builderName();
-  degreeTitle.textContent = builderStep < 3 ? "Build the triad · note " + (builderStep + 1) + " of 3" : "Extend the triad · add the seventh";
-  displayQuestion([{text:builderStep === 3 ? "Extend " + builderName(true) + ": add the " : "Building " + builderName(true) + ": add the "},
+  const part = builderLesson.roles[builderStep];
+  const foundation = builderName(true);
+  chordTitle.textContent = builderStep < 3 ? foundation : builderName();
+  degreeTitle.textContent = builderStep < 3 ? "Build the foundation · note " + (builderStep + 1) + " of 3" : "Extend the chord · note " + (builderStep+1) + " of " + builderTargets.length;
+  displayQuestion([{text:(builderStep >= 3 ? "Extend " + builderStageName() : "Building " + foundation) + ": add the "},
     {text:part,strong:true}, {text:" • From " + builderNoteLabel(builderStep - 1) + " move "},
     {text:distance + " semitone" + (distance === 1 ? "" : "s") + " UP",strong:true}]);
-  builderHint.textContent = builderStep === 3
-    ? builderName(true) + " + " + part + " above the root = " + builderName() + ". Follow the upward distance from the last note shown above."
-    : builderStep === 2 ? "Root + " + builderLesson.third + " + " + builderLesson.fifth + " make a " + builderTriad().name + " triad."
-    : "The root is already highlighted. Build upward using the exact keys in this octave.";
+  const effect=builderLesson.effect || (builderStep>=3 ? foundation+" gains a "+part+" to become "+builderName()+"." : "The third and fifth define the "+builderTriad().name+" triad.");
+  builderHint.textContent = "Degree "+builderLesson.degrees[builderStep]+": "+builderLesson.intervals[builderStep]+" semitones above the root. "+effect+" Use the exact ascending key, not its other octave.";
   hearBuilder.hidden = builderNotes.length < 3;
   nextChallenge.hidden = true;
   startCountdown();
 }
 function nextBuilderLesson() {
-  const choices = builderLevel.value === "triads" ? TRIAD_LESSONS : builderLevel.value === "sevenths" ? SEVENTH_LESSONS : [...TRIAD_LESSONS,...SEVENTH_LESSONS];
+  const choices = levelBuilderLessons().filter(l=>builderSelection.value!=="custom" || chosenBuilderTypes.has(l.id));
+  if (!choices.length) return null;
   if (!builderDeck.length) {
     builderDeck = [...choices];
     for (let i=builderDeck.length-1;i>0;i--) {
@@ -205,7 +283,14 @@ function beginBuilder() {
   stopCountdown();
   stopBuilderAudio();
   dismissAchievement();
+  piano.parentElement.scrollLeft=0;
   builderLesson = nextBuilderLesson();
+  if (!builderLesson) {
+    clearWrongKeyFeedback();builderPhase="empty";builderTargets=[];builderNotes=[];targetMidi=null;selected.clear();builderAdvancePending=false;
+    chordTitle.textContent="Choose chord types";degreeTitle.textContent="No types selected in this level";
+    trainingPrompt.textContent="Select at least one chord type, choose Select all, or switch to Random to begin.";
+    builderHint.textContent="Your selections in other levels are kept.";hearBuilder.hidden=true;nextChallenge.hidden=true;renderPiano();return;
+  }
   const roots = Array.from({length:12},(_,i)=>48+i).filter(root=>root!==lastBuilderRoot);
   builderRoot = roots[Math.floor(Math.random()*roots.length)];
   lastBuilderRoot = builderRoot;
@@ -231,22 +316,23 @@ function showBuilderMilestone(complete) {
   builderPhase = complete ? "complete" : "triad";
   selected.clear();
   renderPiano();
-  const name = builderName(!complete);
+  const name = complete ? builderName() : builderStageName();
   chordTitle.textContent = name;
-  degreeTitle.textContent = complete ? "All " + builderNotes.length + " notes completed" : "Triad complete · recognize this sound";
+  degreeTitle.textContent = complete ? "All " + builderNotes.length + " notes completed" : builderNotes.length===3 ? "Foundation complete · recognize this sound" : "Stage complete · recognize this sound";
   trainingPrompt.textContent = complete ? "Completed " + name + "! " + (timerEnabled.checked ? "Next chord starts in 4 seconds." : "Choose Build another chord to continue.")
-    : "You built " + name + ". Next: add a " + builderLesson.seventhName + " to make " + builderName() + ".";
+    : "You built " + name + ". Next: add the " + builderLesson.roles[builderStep] + " toward " + builderName() + ".";
   builderHint.textContent = builderNoteList() + ". Hear the chord before moving on." + (timerEnabled.checked ? " Listening restarts the 4-second pause." : "");
   hearBuilder.hidden = false;
   nextChallenge.hidden = false;
-  nextChallenge.textContent = complete ? "Build another chord" : "Add the seventh";
-  celebrate((complete ? "Chord complete! " : "Triad complete! ") + name);
+  nextChallenge.textContent = complete ? "Build another chord" : builderNextLabel();
+  celebrate((complete ? "Chord complete! " : "Stage complete! ") + name);
   scheduleBuilderMilestone();
 }
 function advanceBuilder() {
   cancelAutoNext();
   stopBuilderAudio();
   dismissAchievement();
+  if (builderPhase === "empty") return;
   if (builderPhase === "complete") { beginBuilder(); return; }
   if (builderPhase === "triad") { builderQuestion(); return; }
   if (builderAdvancePending) {
@@ -254,7 +340,7 @@ function advanceBuilder() {
     builderStep++;
     builderAdvancePending = false;
     if (builderStep >= builderTargets.length) { showBuilderMilestone(true); return; }
-    if (builderStep === 3) { showBuilderMilestone(false); return; }
+    if (builderStep >= 3) { showBuilderMilestone(false); return; }
   }
   builderQuestion();
 }
@@ -295,7 +381,7 @@ hearBuilder.addEventListener("click", async () => {
   }
   if (activeMode === "builder" && (builderPhase === "triad" || builderPhase === "complete")) scheduleBuilderMilestone();
 });
-builderLevel.addEventListener("change", () => { builderDeck = []; if (activeMode === "builder") beginBuilder(); });
+builderLevel.addEventListener("change", restartBuilderPreferences);
 function stopCountdown() {
   if (countdown !== null) clearInterval(countdown);
   countdown = null;
@@ -339,6 +425,7 @@ timerEnabled.addEventListener("change", () => {
   nextChallenge.hidden = activeMode === "free" || activeMode === "dictionary" || targetMidi !== null;
   stopCountdown();
   if (activeMode === "builder" && targetMidi === null) {
+    if (builderPhase === "empty") { nextChallenge.hidden=true;return; }
     if (builderPhase === "triad" || builderPhase === "complete") showBuilderMilestone(builderPhase === "complete");
     else if (timerEnabled.checked) scheduleAutoNext();
     return;

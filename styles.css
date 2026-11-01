@@ -267,3 +267,13 @@ button:hover { border-color: var(--accent); }
 .builderControls select { padding:7px; border-radius:7px; color:var(--text); background:#222; border:1px solid #444; }
 #builderHint { flex:1 1 240px; color:var(--muted); font-size:13px; line-height:1.4; }
 @media (max-width:600px) { .builderControls { padding:8px; } #builderHint { flex-basis:100%; font-size:12px; } }
+
+#builderTypes { flex-basis:100%; min-width:0; }
+#builderTypes[hidden] { display:none; }
+#builderTypes summary { cursor:pointer; padding:5px 0; }
+#builderSelectionCount { color:#aaa; font-size:12px; margin-left:8px; }
+.builderTypeActions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:8px 0; }
+#builderTypeOptions { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:6px; max-height:180px; overflow-y:auto; padding:4px; }
+#builderTypeOptions label { font-size:13px; padding:5px; border:1px solid #383838; border-radius:6px; }
+.builderControls select { max-width:100%; min-width:0; }
+@media(max-width:600px) { .builderControls > label { width:100%; } .builderControls > label select { flex:1; } #builderTypeOptions { max-height:145px; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); } }

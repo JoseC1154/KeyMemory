@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#121212">
   <title>KeyMemory — Piano</title>
-  <link rel="stylesheet" href="./styles.css?v=20261101-3">
-  <script src="./app.js?v=20261101-3" defer></script>
+  <link rel="stylesheet" href="./styles.css?v=20261101-4">
+  <script src="./app.js?v=20261101-4" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -25,7 +25,7 @@
         <article class="modeSlide"><div class="modeInner"><span class="modeCount">03 / 07</span><h2>Remember the Key</h2><p>Watch one key light up, then find it from memory after the highlight disappears.</p><button type="button" class="startMode" data-mode="remember">Start Remember the Key</button></div></article>
         <article class="modeSlide"><div class="modeInner"><span class="modeCount">04 / 07</span><h2>Semitones</h2><p>Find notes by moving a specified number of semitones up or down. Beat the optional countdown.</p><button type="button" class="startMode" data-mode="semitones">Start Semitones</button></div></article>
         <article class="modeSlide"><div class="modeInner"><span class="modeCount">05 / 07</span><h2>Chord Degrees</h2><p>See the chord highlighted on the piano and identify the requested degree.</p><button type="button" class="startMode" data-mode="degrees">Start Chord Degrees</button></div></article>
-        <article class="modeSlide"><div class="modeInner"><span class="modeCount">06 / 07</span><h2>Chord Builder</h2><p>Learn major, minor, diminished and augmented triads, then extend them into eight seventh-chord types. Hear each milestone and keep building.</p><button type="button" class="startMode" data-mode="builder">Start Chord Builder</button></div></article>
+        <article class="modeSlide"><div class="modeInner"><span class="modeCount">06 / 07</span><h2>Chord Builder</h2><p>Explore five levels: triads, suspended/added/sixth chords, sevenths, extensions and altered dominants. Choose your chord types and hear each milestone.</p><button type="button" class="startMode" data-mode="builder">Start Chord Builder</button></div></article>
         <article class="modeSlide"><div class="modeInner"><span class="modeCount">07 / 07</span><h2>Chord Dictionary</h2><p>Choose a root note and chord quality to see its notes light up on the piano.</p><button type="button" class="startMode" data-mode="dictionary">Open Chord Dictionary</button></div></article>
       </div>
       <div class="modeFoot">Scroll up or down to explore <span id="modeDots">● ○ ○ ○ ○ ○ ○</span></div>
@@ -38,7 +38,9 @@
     </section>
     <section id="semitoneControls" class="semitoneControls" hidden><label>Difficulty <select id="semitoneDifficulty"><option value="easy">Beginner (1–3)</option><option value="medium">Intermediate (1–7)</option><option value="hard">Advanced (1–12)</option></select></label></section>
     <section id="builderControls" class="builderControls" hidden>
-      <label>Practice <select id="builderLevel"><option value="triads">Triads</option><option value="sevenths">Sevenths</option><option value="mixed">Mixed Practice</option></select></label>
+      <label>Practice <select id="builderLevel"><option value="triads">1 · Triads</option><option value="colors">2 · Suspended / added / sixths</option><option value="sevenths">3 · Sevenths</option><option value="extended">4 · Ninths / elevenths / thirteenths</option><option value="altered">5 · Altered dominants</option><option value="mixed">Mixed · All levels</option></select></label>
+      <label>Selection <select id="builderSelection"><option value="random">Random</option><option value="custom">Choose chord types</option></select></label>
+      <details id="builderTypes" hidden><summary>Chord types <span id="builderSelectionCount"></span></summary><div class="builderTypeActions"><button id="builderSelectAll" type="button">Select all</button><button id="builderClear" type="button">Clear</button><small>Applies to this level. One type isolates it; several mix only your choices.</small></div><div id="builderTypeOptions"></div></details>
       <button id="hearBuilder" type="button" hidden>Hear chord</button>
       <span id="builderHint"></span>
     </section>
