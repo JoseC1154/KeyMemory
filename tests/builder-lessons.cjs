@@ -8,7 +8,7 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const source=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const storageKey='keymemory.builder.preferences.v1';
 function setup(saved) {
- const dom=new JSDOM(html,{runScripts:'outside-only',url:'https://keymemory.test/'}),win=dom.window;
+ const dom=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'https://keymemory.test/'}),win=dom.window;
  if(saved!==undefined)win.localStorage.setItem(storageKey,saved);
  win.matchMedia=()=>({matches:false});win.ResizeObserver=class {observe(){}};
  let now=0,id=0;const timers=new Map();

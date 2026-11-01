@@ -2,7 +2,7 @@
 const {JSDOM}=require('jsdom');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
-const dom=new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'),{runScripts:'outside-only',url:'https://keymemory.test/'}),w=dom.window,d=w.document;
+const dom=new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'),{pretendToBeVisual:true,runScripts:'outside-only',url:'https://keymemory.test/'}),w=dom.window,d=w.document;
 w.matchMedia=()=>({matches:false});w.ResizeObserver=class{observe(){}};
 let now=0,id=0;const timers=new Map();
 w.Date.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};w.clearTimeout=id=>timers.delete(id);w.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};w.clearInterval=id=>timers.delete(id);
@@ -38,8 +38,8 @@ for(const exit of ['done','escape','backdrop']){
 assert(d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));advance(650);assert(!d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));assert.equal(s().targetMidi,before.targetMidi);
 // Dialog interiors never count as backdrop clicks. Focus trap wraps visible controls.
 open('openSettings');el('settingsOverlay').querySelector('.modalPanel').click();assert(!el('settingsOverlay').hidden);
-el('closeSettings').focus();keyboard('Tab',true);assert.equal(d.activeElement,el('builderSelection'));keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));
-change('builderSelection','custom');el('builderTypes').open=true;const lastInput=el('builderTypes').querySelector('label:last-child input');lastInput.focus();keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));keyboard('Tab',true);assert.equal(d.activeElement,lastInput);
+el('closeSettings').focus();keyboard('Tab',true);assert.equal(d.activeElement,el('connectMidi'));keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));
+change('builderSelection','custom');el('builderTypes').open=true;const lastInput=el('builderTypes').querySelector('label:last-child input');assert(lastInput);el('connectMidi').focus();keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));keyboard('Tab',true);assert.equal(d.activeElement,el('connectMidi'));
 // Immediate settings changes take effect in place; closing does not roll them back.
 change('builderLevel','extended');assert.equal(s().notes.length,1);assert.match(el('practiceSummary').textContent,/Level 4/);assert(s().targetMidi!==null);
 change('builderSelection','random');change('timerDuration','15');assert.equal(s().deadline,now+15000);const afterSetting=s();el('closeSettings').click();assert.equal(s().targetMidi,afterSetting.targetMidi);assert.equal(s().deadline,afterSetting.deadline);

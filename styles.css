@@ -226,3 +226,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
  .modeGrid { grid-template-columns:1fr 1fr; gap:5px; }
  .startMode { min-height:48px; padding:5px 9px; }
 }
+
+/* MIDI stays inside the scrollable Settings sheet, never above the piano. */
+.midiControls{border-top:1px solid #555;padding-top:12px;margin-top:12px;min-width:0}
+.midiControls h3{font-size:1rem;margin:0 0 8px}
+.midiActions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.midiControls label{display:flex;align-items:center;gap:8px}
+.midiControls select{min-width:0;max-width:100%;flex:1}
+.midiControls p{margin:8px 0;font-size:.85rem;overflow-wrap:anywhere}
+.midiControls small{display:block;line-height:1.4}

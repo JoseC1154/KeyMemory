@@ -7,8 +7,9 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="#121212" name="theme-color"/>
 <title>KeyMemory — Piano</title>
-<link href="./styles.css?v=20261101-9" rel="stylesheet"/>
-<script defer="" src="./app.js?v=20261101-9"></script>
+<link href="./styles.css?v=20261101-10" rel="stylesheet"/>
+<script defer="" src="./midi.js?v=20261101-10"></script>
+<script defer="" src="./app.js?v=20261101-10"></script>
 </head>
 <body>
 <main class="shell">
@@ -71,5 +72,5 @@
 
 
 
-</section><small aria-label="App build" id="buildVersion"></small></div></section><section aria-labelledby="hintOverlayTitle" aria-modal="true" class="modalOverlay" hidden="" id="hintOverlay" role="dialog"><div class="modalPanel"><div class="modalTop"><h2 id="hintOverlayTitle">Practice hint</h2><span aria-label="Time remaining" class="countdownMirror"></span><button id="closeHint" type="button">Close</button></div><span id="builderHint"></span><span aria-live="polite" id="dictionaryNotes"></span></div></section></body>
+</section><section class="midiControls" aria-labelledby="midiHeading"><h3 id="midiHeading">MIDI keyboard</h3><div class="midiActions"><button id="connectMidi" type="button">Connect MIDI</button><button id="disconnectMidi" type="button" hidden>Disconnect MIDI</button></div><label>Input <select id="midiInput" disabled aria-describedby="midiStatus"></select></label><p id="midiStatus" role="status" aria-live="polite"></p><small>Use Chrome or Edge on your Mac with the keyboard connected by USB. YC Series Port 1 is preferred when available. Play the shown octave for memory, builder and dictionary exercises. The screen starts at MIDI note 48 (C below middle C); middle C is MIDI 60. Keyboard octave labels can differ. Release keys before the next question. MIDI is paused while a sheet is open. Your keyboard’s own sound may play alongside the app; KeyMemory sends no MIDI output and changes no keyboard settings.</small></section><small aria-label="App build" id="buildVersion"></small></div></section><section aria-labelledby="hintOverlayTitle" aria-modal="true" class="modalOverlay" hidden="" id="hintOverlay" role="dialog"><div class="modalPanel"><div class="modalTop"><h2 id="hintOverlayTitle">Practice hint</h2><span aria-label="Time remaining" class="countdownMirror"></span><button id="closeHint" type="button">Close</button></div><span id="builderHint"></span><span aria-live="polite" id="dictionaryNotes"></span></div></section></body>
 </html>

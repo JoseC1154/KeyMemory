@@ -7,7 +7,8 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.9";
+const APP_VERSION = "2026.11.01.10";
+let midiController = null;
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -239,6 +240,7 @@ function builderNoteList() {
   return builderNotes.map((_, index) => builderNoteLabel(index)).join(" · ");
 }
 function builderQuestion() {
+  midiController?.resetQuestion();
   clearWrongKeyFeedback();
   cancelAutoNext();
   builderPhase = "question";
@@ -480,6 +482,7 @@ timerEnabled.addEventListener("change",()=>{
 timerDuration.addEventListener("change", () => { if (countdown !== null) startCountdown(); });
 semitoneDifficulty.addEventListener("change", () => { if (activeMode === "semitones") chooseChallenge(); });
 function setDictionaryPractice(on) {
+  midiController?.resetQuestion();
   stopBuilderAudio();
   lastCorrectNotes=[];
   clearWrongKeyFeedback();
@@ -538,6 +541,7 @@ function updateInversionOptions() {
   dictionaryInversion.value = String(Math.min(previous, count - 1));
 }
 function updateDictionary() {
+  midiController?.resetQuestion();
   if (activeMode !== "dictionary") return;
   cancelAutoNext();
   stopBuilderAudio();
@@ -598,6 +602,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  midiController?.resetQuestion();
   stopBuilderAudio();
   clearWrongKeyFeedback();
   cancelAutoNext();
@@ -764,6 +769,55 @@ function updateStatus(start, end) {
   noteText.textContent = notes.length ? "Selected: " + notes.join(", ") : "Tap a key to highlight it";
   updateHearControl();
 }
+// Screen keys and external MIDI share grading, selection and progression.
+function updateStatusFromPiano() {
+  const keys=[...piano.querySelectorAll(".key")].map(k=>Number(k.dataset.midi));
+  updateStatus(Math.min(...keys),Math.max(...keys));
+}
+function pressPianoKey(midi,fromMidi=false) {
+  if(currentDialog || (fromMidi && document.hidden))return;
+  const button=piano.querySelector('[data-midi="'+midi+'"]');
+  // Only correct training answers use the green selected-key feedback.
+  // Ignore answers while a memory target is being shown.
+  if (activeMode === "dictionary") {
+    if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled) return;
+    if (!dictionaryVoicing.includes(midi)) {
+      if(button)flashWrongKey(button);
+      incorrect("That key is not in this voicing — try another key.");
+      return;
+    }
+    if (!fromMidi && selected.has(midi)) selected.delete(midi);
+    else selected.add(midi);
+    button?.classList.toggle("selected", selected.has(midi));
+    button?.setAttribute("aria-pressed", String(selected.has(midi)));
+    completeDictionaryAnswer();
+    updateStatusFromPiano();
+    return;
+  }
+  if (activeMode !== "free" && (targetMidi === null || challengeTimer !== null)) return;
+  if (activeMode === "free") {
+    stopBuilderAudio();
+    if (!fromMidi && selected.has(midi)) selected.delete(midi);
+    else selected.add(midi);
+  } else {
+    selected.clear();
+    const correct = answerKey(midi);
+    if (correct) selected.add(midi);
+    else if(button)flashWrongKey(button);
+    piano.querySelectorAll(".key.selected").forEach(key => {
+      key.classList.remove("selected");
+      key.setAttribute("aria-pressed", "false");
+    });
+  }
+  button?.classList.toggle("selected", selected.has(midi));
+  button?.setAttribute("aria-pressed", String(selected.has(midi)));
+  if (button && !button.isConnected) {
+    // The final builder answer rerenders the completed chord immediately.
+    selected.clear();
+  }
+  updateStatusFromPiano();
+}
+
 function renderPiano() {
   const container = piano.parentElement;
   const viewportWidth = container.clientWidth;
@@ -827,47 +881,7 @@ function renderPiano() {
     label.className = "noteLabel";
     label.textContent = NAMES[midi % 12];
     button.append(label);
-    button.addEventListener("click", () => {
-      // Only correct training answers use the green selected-key feedback.
-      // Ignore answers while a memory target is being shown.
-      if (activeMode === "dictionary") {
-        if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled) return;
-        if (!dictionaryVoicing.includes(midi)) {
-          flashWrongKey(button);
-          incorrect("That key is not in this voicing — try another key.");
-          return;
-        }
-        if (selected.has(midi)) selected.delete(midi);
-        else selected.add(midi);
-        button.classList.toggle("selected", selected.has(midi));
-        button.setAttribute("aria-pressed", String(selected.has(midi)));
-        completeDictionaryAnswer();
-        updateStatus(start, end - 1);
-        return;
-      }
-      if (activeMode !== "free" && (targetMidi === null || challengeTimer !== null)) return;
-      if (activeMode === "free") {
-        stopBuilderAudio();
-        if (selected.has(midi)) selected.delete(midi);
-        else selected.add(midi);
-      } else {
-        selected.clear();
-        const correct = answerKey(midi);
-        if (correct) selected.add(midi);
-        else flashWrongKey(button);
-        piano.querySelectorAll(".key.selected").forEach(key => {
-          key.classList.remove("selected");
-          key.setAttribute("aria-pressed", "false");
-        });
-      }
-      button.classList.toggle("selected", selected.has(midi));
-      button.setAttribute("aria-pressed", String(selected.has(midi)));
-      if (!button.isConnected) {
-        // The final builder answer rerenders the completed chord immediately.
-        selected.clear();
-      }
-      updateStatus(start, end - 1);
-    });
+    button.addEventListener("click", () => pressPianoKey(midi));
     return button;
   }
   for (let midi = start; midi < end; midi++) {
@@ -924,6 +938,7 @@ function closePracticeDialog() {
   dialogReturnFocus=null;
 }
 function openPracticeDialog(id,buttonId) {
+  midiController?.resetQuestion();
   if(currentDialog) closePracticeDialog();
   dialogReturnFocus=document.activeElement;
   currentDialog=document.getElementById(id);
@@ -972,3 +987,39 @@ document.getElementById("builderClear").addEventListener("click",updatePracticeC
 updatePracticeChrome();
 
 document.getElementById("buildVersion").textContent = "Build " + APP_VERSION;
+
+// MIDI key taps use short, releaseable voices, separate from contextual Hear.
+let midiAudioContext=null, midiVoiceGeneration=0;
+const midiVoices=new Map(), midiNoteRequests=new Map();
+let midiNoteRequest=0;
+function releaseMidiNote(note) {
+  midiNoteRequests.delete(note);
+  const voice=midiVoices.get(note);if(!voice)return;
+  midiVoices.delete(note);
+  try{const now=midiAudioContext.currentTime;voice.gain.gain.cancelScheduledValues(now);voice.gain.gain.setTargetAtTime(0,now,.025);voice.osc.stop(now+.12);}catch{}
+}
+function resetMidiAudio(){midiVoiceGeneration++;midiNoteRequests.clear();for(const note of midiVoices.keys())releaseMidiNote(note);}
+function unlockMidiAudio(){
+  try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;midiAudioContext ||= new Audio();midiAudioContext.resume().catch(()=>{});}catch{}
+}
+async function soundMidiNote(note){
+  if(!midiAudioContext)return;
+  const generation=midiVoiceGeneration,request=++midiNoteRequest;
+  midiNoteRequests.set(note,request);
+  try{
+    await midiAudioContext.resume();if(generation!==midiVoiceGeneration||midiNoteRequests.get(note)!==request||currentDialog||document.hidden)return;
+    releaseMidiNote(note);
+    const now=midiAudioContext.currentTime,osc=midiAudioContext.createOscillator(),gain=midiAudioContext.createGain();
+    osc.type="triangle";osc.frequency.value=440*2**((note-69)/12);
+    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(.07,now+.015);gain.gain.exponentialRampToValueAtTime(.001,now+.7);
+    osc.connect(gain);gain.connect(midiAudioContext.destination);osc.start(now);osc.stop(now+.75);
+    const voice={osc,gain};midiVoices.set(note,voice);
+    osc.onended=()=>{osc.disconnect();gain.disconnect();if(midiVoices.get(note)===voice)midiVoices.delete(note);};
+  }catch{}
+}
+if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
+  status:document.getElementById("midiStatus"),select:document.getElementById("midiInput"),
+  connect:document.getElementById("connectMidi"),disconnect:document.getElementById("disconnectMidi"),
+  onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,
+  onNote:note=>{if(currentDialog||document.hidden)return;soundMidiNote(note);pressPianoKey(note,true);}
+});

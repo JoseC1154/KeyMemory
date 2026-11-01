@@ -10,6 +10,7 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 - `node tests/layout-controls.cjs`
 - `node tests/audio-sustain.cjs`
 - `node tests/auto-audio.cjs`
+- `node tests/midi-input.cjs`
 - `node tests/browser-regression.cjs`
 
 The DOM suite uses a deterministic clock to test immediate wrong→wrong→correct retries without Next, preserved prompts/targets/phases/deadlines, repeated red feedback, chord completion, timer toggles, timeouts, navigation, stale animation events, Free Play, and Dictionary exact inversions/partial-check retry/success lock. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
@@ -25,3 +26,5 @@ The audio-sustain suite uses a controllable fake AudioContext and clock to verif
 The auto-audio suite checks untimed automatic success progression across answer modes, all 34 builder lessons without Next clicks, dictionary exact-set automatic completion and duplicate locking, same-chord practice restarts, contextual Hear notes/frequencies across all seven modes, empty selection, and success/timeout/audio-resume races. Timer changes and inspecting settings cannot cancel pending success. Like audio-sustain, this uses a fake AudioContext and deterministic clock rather than audible hardware output.
 
 Duration regression expectations are independent of application constants: Chord Builder sustains every Hear selection for 5 seconds with a .35-second release; other modes sustain single notes for 1 second and groups for 2 seconds, with a .15-second release. Tests check envelopes/oscillator stops and progression waits (ordinary success minimum 1.8 seconds, non-builder group playback 2.3 seconds, builder playback 5.5 seconds).
+
+The midi-input suite simulates Web MIDI permission responses and input ports. It checks explicit opt-in with SysEx disabled, no output access, YC Series Port 1 preference, note-on/off and velocity-zero on 16 channels, layered-note deduplication, held-key/question barriers, stale timestamps/callbacks/permission results, hotplug and selected-device reconnect, errors, all seven app modes, pitch-class versus exact-octave grading, timer fairness, modal/background gates, and MIDI audio-resume/release races. No connected hardware, browser MIDI permission UI, USB driver, or audible sound is verified by this simulated suite.

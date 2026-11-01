@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const dom = new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'), {runScripts:'outside-only'});
+const dom = new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'), {pretendToBeVisual:true,runScripts:'outside-only'});
 const win = dom.window;
 win.matchMedia = ()=>({matches:false});
 win.ResizeObserver = class {observe(){}};
