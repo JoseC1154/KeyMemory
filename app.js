@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.12";
+const APP_VERSION = "2026.11.01.13";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -989,6 +989,7 @@ function updatePracticeChrome() {
   document.getElementById("phraseControls").hidden=activeMode!=="phrase";
   const summary=document.getElementById("practiceSummary");
   let text="";
+  if(activeMode==="phrase"&&phraseSnapshot)text=(phraseSnapshot.options.rhythm?"Notes + rhythm":"Notes only")+" · "+phraseSnapshot.options.playBpm+" BPM";
   if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
   if(activeMode==="semitones") text=semitoneDifficulty.selectedOptions[0].textContent;
   // Dictionary choices are already visible inline; avoid repeating them in the summary.
