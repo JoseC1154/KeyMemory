@@ -20,6 +20,7 @@ const server = http.createServer((req, res) => {
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${server.address().port}`);
+      await page.evaluate(()=>{document.getElementById('builderLevel').value='sevenths';});
       const press = async midi => mobile ? page.locator(`[data-midi="${midi}"]`).tap() : page.locator(`[data-midi="${midi}"]`).click();
       for (const mode of ['find','semitones','degrees','remember','builder']) {
         await page.evaluate(mode => activateMode(mode), mode);
@@ -63,11 +64,11 @@ const server = http.createServer((req, res) => {
       await page.locator('#timerEnabled').check();
       for (let step=1;step<=3;step++) {
         await press(await page.evaluate(()=>targetMidi));
-        await page.waitForTimeout(1900);
+        await page.waitForTimeout(step===2?4100:1900);
       }
       assert.equal(await page.evaluate(()=>builderStep), 4);
-      assert.equal(await page.locator('#nextChallenge').isVisible(), false);
-      await page.waitForTimeout(2600);
+      assert.equal(await page.locator('#nextChallenge').isVisible(), true);
+      await page.waitForTimeout(4100);
       assert.equal(await page.evaluate(()=>builderStep), 1);
       await page.evaluate(()=>{builderStep=3;builderNotes=builderTargets.slice(0,3);builderQuestion();});
       await press(await page.evaluate(()=>targetMidi));

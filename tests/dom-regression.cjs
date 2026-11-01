@@ -17,6 +17,7 @@ win.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;
 win.clearInterval=id=>timers.delete(id);
 function advance(ms){const end=now+ms;for(;;){const pending=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!pending)break;const [key,timer]=pending;now=timer.time;if(timer.repeat)timer.time+=timer.repeat;else timers.delete(key);timer.fn();}now=end;}
 win.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode; window.renderPiano=renderPiano; window.testState = () => ({targetMidi,chordAnswer,activeMode,builderStep,builderTargets:[...builderTargets],builderNotes:[...builderNotes],semitoneAnswer});');
+const level=win.document.getElementById('builderLevel');level.value='sevenths';
 const state=()=>win.testState();
 const key=m=>win.document.querySelector(`[data-midi="${m}"]`);
 const press=m=>key(m).click();
@@ -56,15 +57,15 @@ for(let attempt=0;attempt<3;attempt++){
 }
 for(let chord=0;chord<5;chord++){
  for(let step=1;step<=3;step++){press(state().targetMidi);if(step<3)next.click();}
- assert.equal(state().builderStep,4);assert.match(win.document.getElementById('trainingPrompt').textContent,/Chord complete/);assert.equal(next.hidden,false);assert.equal(next.textContent,'Build another chord');
+ assert.equal(state().builderStep,4);assert.match(win.document.getElementById('trainingPrompt').textContent,/Completed/);assert.equal(next.hidden,false);assert.equal(next.textContent,'Build another chord');
  assert.equal(win.document.querySelectorAll('.key.chordTone').length,4);
  next.click();assert.equal(state().builderStep,1);assert.notEqual(state().targetMidi,null);
 }
 setTimed(true);
-for(let step=1;step<=3;step++){press(state().targetMidi);advance(1800);}
-assert.equal(state().builderStep,4);assert.equal(next.hidden,true);
-advance(2500);assert.equal(state().builderStep,1);
-for(let step=1;step<=3;step++){press(state().targetMidi);advance(1800);}
+for(let step=1;step<=3;step++){press(state().targetMidi);advance(step===2?4000:1800);}
+assert.equal(state().builderStep,4);assert.equal(next.hidden,false);
+advance(4000);assert.equal(state().builderStep,1);
+for(let step=1;step<=3;step++){press(state().targetMidi);advance(step===2?4000:1800);}
 setTimed(false);assert.equal(next.hidden,false);next.click();assert.equal(state().builderStep,1);
 advance(3000);assert.equal(state().builderStep,1);
 // Timeout retries and navigation cancel any pending auto-advance.

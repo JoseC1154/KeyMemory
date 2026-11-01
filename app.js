@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.2";
+const APP_VERSION = "2026.11.01.3";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -109,64 +109,193 @@ let builderNotes = [];
 let builderTargets = [];
 let builderStep = 1;
 let builderAdvancePending = false;
-let builderQuality = "major";
+let builderPhase = "question";
+let builderLesson = null;
+let builderRoot = 48;
+let builderDeck = [];
+let lastBuilderType = null;
+let lastBuilderRoot = null;
+const builderControls = document.getElementById("builderControls");
+const builderLevel = document.getElementById("builderLevel");
+const builderHint = document.getElementById("builderHint");
+const hearBuilder = document.getElementById("hearBuilder");
+const TRIAD_LESSONS = [
+  {id:"major", name:"major", intervals:[0,4,7], third:"major third", fifth:"perfect fifth"},
+  {id:"minor", name:"minor", intervals:[0,3,7], third:"minor third", fifth:"perfect fifth"},
+  {id:"diminished", name:"diminished", intervals:[0,3,6], third:"minor third", fifth:"diminished fifth"},
+  {id:"augmented", name:"augmented", intervals:[0,4,8], third:"major third", fifth:"augmented fifth"}
+];
+const SEVENTH_LESSONS = [
+  {id:"dominant7", name:"dominant seventh", triad:"major", seventh:10, seventhName:"minor seventh"},
+  {id:"major7", name:"major seventh", triad:"major", seventh:11, seventhName:"major seventh"},
+  {id:"minor7", name:"minor seventh", triad:"minor", seventh:10, seventhName:"minor seventh"},
+  {id:"minorMajor7", name:"minor-major seventh", triad:"minor", seventh:11, seventhName:"major seventh"},
+  {id:"halfDiminished7", name:"half-diminished seventh", triad:"diminished", seventh:10, seventhName:"minor seventh"},
+  {id:"diminished7", name:"diminished seventh", triad:"diminished", seventh:9, seventhName:"diminished seventh"},
+  {id:"augmented7", name:"augmented dominant seventh", triad:"augmented", seventh:10, seventhName:"minor seventh"},
+  {id:"augmentedMajor7", name:"augmented major seventh", triad:"augmented", seventh:11, seventhName:"major seventh"}
+].map(lesson => {
+  const triad = TRIAD_LESSONS.find(t => t.id === lesson.triad);
+  return {...lesson, intervals:[...triad.intervals, lesson.seventh], third:triad.third, fifth:triad.fifth};
+});
+const BUILDER_ROOT_NAMES = ["C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+function builderTriad() {
+  return TRIAD_LESSONS.find(t => t.id === (builderLesson.triad || builderLesson.id));
+}
+function builderName(triadOnly = false) {
+  return BUILDER_ROOT_NAMES[builderRoot % 12] + " " + (triadOnly ? builderTriad().name + " triad" : builderLesson.name + (builderTargets.length === 3 ? " triad" : ""));
+}
+function builderSpelling(index) {
+  const letters = ["C","D","E","F","G","A","B"];
+  const naturals = [0,2,4,5,7,9,11];
+  const rootLetter = letters.indexOf(BUILDER_ROOT_NAMES[builderRoot % 12][0]);
+  const letter = (rootLetter + index * 2) % 7;
+  const pitch = builderTargets[index] % 12;
+  let accidental = (pitch - naturals[letter] + 18) % 12 - 6;
+  return letters[letter] + (accidental < 0 ? "♭".repeat(-accidental) : "♯".repeat(accidental));
+}
+function builderNoteLabel(index) {
+  const spelling = builderSpelling(index);
+  const keyName = noteName(builderTargets[index]);
+  return spelling === keyName ? spelling : spelling + " (" + keyName + " key)";
+}
+function builderNoteList() {
+  return builderNotes.map((_, index) => builderNoteLabel(index)).join(" · ");
+}
 function builderQuestion() {
   clearWrongKeyFeedback();
+  cancelAutoNext();
+  builderPhase = "question";
   const last = builderNotes[builderNotes.length - 1];
   const goal = builderTargets[builderStep];
   targetMidi = goal;
   selected.clear();
   renderPiano();
   const distance = goal - last;
-  const part = builderStep === 1 ? (builderQuality === "major" ? "major third" : "minor third") :
-    builderStep === 2 ? "fifth" : "dominant seventh";
-  displayQuestion([{text:"Build the "}, {text:part,strong:true},
-    {text:" • From " + noteName(last) + " move "}, {text:distance + " semitones UP",strong:true}]);
+  const part = builderStep === 1 ? builderLesson.third : builderStep === 2 ? builderLesson.fifth : builderLesson.seventhName;
+  chordTitle.textContent = builderStep < 3 ? builderName(true) : builderName();
+  degreeTitle.textContent = builderStep < 3 ? "Build the triad · note " + (builderStep + 1) + " of 3" : "Extend the triad · add the seventh";
+  displayQuestion([{text:builderStep === 3 ? "Extend " + builderName(true) + ": add the " : "Building " + builderName(true) + ": add the "},
+    {text:part,strong:true}, {text:" • From " + builderNoteLabel(builderStep - 1) + " move "},
+    {text:distance + " semitone" + (distance === 1 ? "" : "s") + " UP",strong:true}]);
+  builderHint.textContent = builderStep === 3
+    ? builderName(true) + " + " + part + " above the root = " + builderName() + ". Follow the upward distance from the last note shown above."
+    : builderStep === 2 ? "Root + " + builderLesson.third + " + " + builderLesson.fifth + " make a " + builderTriad().name + " triad."
+    : "The root is already highlighted. Build upward using the exact keys in this octave.";
+  hearBuilder.hidden = builderNotes.length < 3;
   nextChallenge.hidden = true;
   startCountdown();
 }
+function nextBuilderLesson() {
+  const choices = builderLevel.value === "triads" ? TRIAD_LESSONS : builderLevel.value === "sevenths" ? SEVENTH_LESSONS : [...TRIAD_LESSONS,...SEVENTH_LESSONS];
+  if (!builderDeck.length) {
+    builderDeck = [...choices];
+    for (let i=builderDeck.length-1;i>0;i--) {
+      const j=Math.floor(Math.random()*(i+1));
+      [builderDeck[i],builderDeck[j]]=[builderDeck[j],builderDeck[i]];
+    }
+    if (builderDeck[0].id === lastBuilderType && builderDeck.length > 1) [builderDeck[0],builderDeck[1]]=[builderDeck[1],builderDeck[0]];
+  }
+  const lesson = builderDeck.shift();
+  lastBuilderType = lesson.id;
+  return lesson;
+}
 function beginBuilder() {
-  // Start between C3 and B3. Explicit ascending MIDI voicing, not all matching octaves.
-  const root = 48 + Math.floor(Math.random() * 12);
-  builderQuality = Math.random() < .5 ? "major" : "minor";
-  const third = builderQuality === "major" ? 4 : 3;
-  builderTargets = [root, root + third, root + 7, root + 10];
-  builderNotes = [root];
+  cancelAutoNext();
+  stopCountdown();
+  stopBuilderAudio();
+  dismissAchievement();
+  builderLesson = nextBuilderLesson();
+  const roots = Array.from({length:12},(_,i)=>48+i).filter(root=>root!==lastBuilderRoot);
+  builderRoot = roots[Math.floor(Math.random()*roots.length)];
+  lastBuilderRoot = builderRoot;
+  builderTargets = builderLesson.intervals.map(interval=>builderRoot+interval);
+  builderNotes = [builderRoot];
   builderStep = 1;
   builderAdvancePending = false;
-  chordTitle.textContent = noteName(root) + (builderQuality === "major" ? " major" : " minor") + " → dominant 7";
-  degreeTitle.textContent = "Build the chord step by step";
   builderQuestion();
+}
+function scheduleBuilderMilestone() {
+  cancelAutoNext();
+  if (!timerEnabled.checked) return;
+  const phase = builderPhase;
+  autoNextTimer = setTimeout(() => {
+    autoNextTimer = null;
+    if (activeMode !== "builder" || !timerEnabled.checked || builderPhase !== phase) return;
+    advanceBuilder();
+  }, 4000);
+}
+function showBuilderMilestone(complete) {
+  stopCountdown();
+  targetMidi = null;
+  builderPhase = complete ? "complete" : "triad";
+  selected.clear();
+  renderPiano();
+  const name = builderName(!complete);
+  chordTitle.textContent = name;
+  degreeTitle.textContent = complete ? "All " + builderNotes.length + " notes completed" : "Triad complete · recognize this sound";
+  trainingPrompt.textContent = complete ? "Completed " + name + "! " + (timerEnabled.checked ? "Next chord starts in 4 seconds." : "Choose Build another chord to continue.")
+    : "You built " + name + ". Next: add a " + builderLesson.seventhName + " to make " + builderName() + ".";
+  builderHint.textContent = builderNoteList() + ". Hear the chord before moving on." + (timerEnabled.checked ? " Listening restarts the 4-second pause." : "");
+  hearBuilder.hidden = false;
+  nextChallenge.hidden = false;
+  nextChallenge.textContent = complete ? "Build another chord" : "Add the seventh";
+  celebrate((complete ? "Chord complete! " : "Triad complete! ") + name);
+  scheduleBuilderMilestone();
 }
 function advanceBuilder() {
   cancelAutoNext();
+  stopBuilderAudio();
   dismissAchievement();
+  if (builderPhase === "complete") { beginBuilder(); return; }
+  if (builderPhase === "triad") { builderQuestion(); return; }
   if (builderAdvancePending) {
     builderNotes.push(builderTargets[builderStep]);
     builderStep++;
     builderAdvancePending = false;
-  }
-  if (builderStep >= builderTargets.length) {
-    targetMidi = null;
-    trainingPrompt.textContent = timerEnabled.checked
-      ? "Chord complete! Another chord starts shortly."
-      : "Chord complete! Choose Build another chord to keep practicing.";
-    degreeTitle.textContent = "All four notes completed";
-    celebrate("Chord completed! " + builderNotes.map(noteName).join(" – "));
-    selected.clear();
-    renderPiano();
-    nextChallenge.textContent = "Build another chord";
-    nextChallenge.hidden = timerEnabled.checked;
-    if (timerEnabled.checked) {
-      autoNextTimer = setTimeout(() => {
-        autoNextTimer = null;
-        if (activeMode === "builder" && timerEnabled.checked) beginBuilder();
-      }, 2500);
-    }
-    return;
+    if (builderStep >= builderTargets.length) { showBuilderMilestone(true); return; }
+    if (builderStep === 3) { showBuilderMilestone(false); return; }
   }
   builderQuestion();
 }
+let builderAudioContext = null;
+let builderVoices = [];
+function stopBuilderAudio() {
+  for (const voice of builderVoices) { try { voice.stop(); } catch (_) {} }
+  builderVoices = [];
+}
+hearBuilder.addEventListener("click", async () => {
+  if (activeMode !== "builder" || builderNotes.length < 3) return;
+  const notes = [...builderNotes];
+  const phase = builderPhase;
+  cancelAutoNext();
+  try {
+    const Audio = window.AudioContext || window.webkitAudioContext;
+    if (!Audio) throw new Error("Audio unavailable");
+    builderAudioContext ||= new Audio();
+    await builderAudioContext.resume();
+    if (activeMode !== "builder" || builderPhase !== phase || notes.join() !== builderNotes.join()) return;
+    stopBuilderAudio();
+    const now = builderAudioContext.currentTime;
+    for (const midi of notes) {
+      const oscillator = builderAudioContext.createOscillator();
+      const gain = builderAudioContext.createGain();
+      oscillator.type = "triangle";
+      oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(.12 / notes.length, now + .03);
+      gain.gain.exponentialRampToValueAtTime(.001, now + 1.1);
+      oscillator.connect(gain);gain.connect(builderAudioContext.destination);
+      oscillator.start(now);oscillator.stop(now + 1.15);
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+      builderVoices.push(oscillator);
+    }
+  } catch (_) {
+    builderHint.textContent = "Audio is unavailable in this browser. You can still continue building.";
+  }
+  if (activeMode === "builder" && (builderPhase === "triad" || builderPhase === "complete")) scheduleBuilderMilestone();
+});
+builderLevel.addEventListener("change", () => { builderDeck = []; if (activeMode === "builder") beginBuilder(); });
 function stopCountdown() {
   if (countdown !== null) clearInterval(countdown);
   countdown = null;
@@ -209,6 +338,11 @@ timerEnabled.addEventListener("change", () => {
   cancelAutoNext();
   nextChallenge.hidden = activeMode === "free" || activeMode === "dictionary" || targetMidi !== null;
   stopCountdown();
+  if (activeMode === "builder" && targetMidi === null) {
+    if (builderPhase === "triad" || builderPhase === "complete") showBuilderMilestone(builderPhase === "complete");
+    else if (timerEnabled.checked) scheduleAutoNext();
+    return;
+  }
   if (timerEnabled.checked && (targetMidi !== null && challengeTimer === null || activeMode === "dictionary" && dictionaryPractice && !checkChordAnswer.disabled)) startCountdown();
 });
 timerDuration.addEventListener("change", () => { if (countdown !== null) startCountdown(); });
@@ -322,6 +456,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  stopBuilderAudio();
   clearWrongKeyFeedback();
   cancelAutoNext();
   stopCountdown();
@@ -418,7 +553,8 @@ function answerKey(midi) {
       incorrect("Not quite — try " + noteName(targetMidi) + ".");
     }
     targetMidi = null;
-    if (correct && builderStep === builderTargets.length - 1) {
+    builderPhase = "answered";
+    if (correct && builderStep >= 2) {
       advanceBuilder();
       return correct;
     }
@@ -452,6 +588,7 @@ function activateMode(mode) {
   document.getElementById("dictionaryControls").hidden = mode !== "dictionary";
   timerControls.hidden = mode === "free";
   semitoneControls.hidden = mode !== "semitones";
+  builderControls.hidden = mode !== "builder";
   selected.clear();
   modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
@@ -658,8 +795,7 @@ document.querySelectorAll(".startMode").forEach(button => button.addEventListene
   setMenu(false);
   activateMode(button.dataset.mode);
 }));
-nextChallenge.addEventListener("click", () => activeMode === "builder" ?
-  (builderStep >= builderTargets.length ? beginBuilder() : advanceBuilder()) : chooseChallenge());
+nextChallenge.addEventListener("click", () => activeMode === "builder" ? advanceBuilder() : chooseChallenge());
 document.addEventListener("keydown", e => {
   if (modeOverlay.hidden) return;
   if (e.key === "Escape") { setMenu(false); return; }

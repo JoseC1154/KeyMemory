@@ -6,8 +6,11 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 
 - `node --check app.js`
 - `node tests/dom-regression.cjs`
+- `node tests/builder-lessons.cjs`
 - `node tests/browser-regression.cjs`
 
 The DOM suite uses a deterministic clock to test answer classes, repeated errors, chord completion, timer toggles, timeouts, navigation, stale animation events, and existing Free Play/Dictionary interactions. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
 
 The browser suite starts a temporary loopback server and tests desktop and mobile-touch Chromium viewports. It checks actual hold/fade opacity and saves screenshots in this directory. It does not publish anything.
+
+The builder suite checks every one of the 12 chord families in all 12 roots (144 lessons), theoretical spelling and piano-key equivalence, triad/seventh milestones, exact-octave answers, timed transitions, practice-level interruption, nonrepeating decks, and user-initiated chord audio.
