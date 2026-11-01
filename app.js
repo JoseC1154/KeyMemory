@@ -140,14 +140,15 @@ function advanceBuilder() {
   }
   if (builderStep >= builderTargets.length) {
     celebrate("Chord completed! " + builderNotes.map(noteName).join(" – "));
-    nextChallenge.hidden = !timerEnabled.checked;
+    selected.clear();
+    renderPiano();
+    nextChallenge.textContent = "Build another chord";
+    nextChallenge.hidden = timerEnabled.checked;
     if (timerEnabled.checked) {
       autoNextTimer = setTimeout(() => {
         autoNextTimer = null;
         if (activeMode === "builder" && timerEnabled.checked) beginBuilder();
       }, 2500);
-    } else {
-      nextChallenge.textContent = "Build another chord";
     }
     return;
   }
@@ -375,6 +376,14 @@ function chooseChallenge() {
     }, 1800);
   }
 }
+// A short red overlay fades back to the key’s original appearance.
+// The animation belongs to this DOM node, so it cannot clear a later answer.
+function flashWrongKey(key) {
+  key.classList.remove("wrongAnswer");
+  void key.offsetWidth;
+  key.classList.add("wrongAnswer");
+  key.addEventListener("animationend", () => key.classList.remove("wrongAnswer"), {once:true});
+}
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
   stopCountdown();
@@ -390,7 +399,7 @@ function answerKey(midi) {
     nextChallenge.hidden = timerEnabled.checked;
     nextChallenge.textContent = correct ? "Continue building" : "Try this step again";
     scheduleAutoNext();
-    return;
+    return correct;
   }
   // Semitone prompts display note names without octave numbers.
   // Accept the correct pitch class in any visible octave, like Find the Note.
@@ -403,8 +412,9 @@ function answerKey(midi) {
   else incorrect("Not quite — the answer was " + answer + ".");
   targetMidi = null;
   chordAnswer = null;
-  nextChallenge.hidden = !(!timerEnabled.checked);
+  nextChallenge.hidden = timerEnabled.checked;
   scheduleAutoNext();
+  return correct;
 }
 function activateMode(mode) {
   dismissAchievement();
@@ -500,7 +510,7 @@ function renderPiano() {
     label.textContent = NAMES[midi % 12];
     button.append(label);
     button.addEventListener("click", () => {
-      // All modes share Free Play's green selected-key feedback.
+      // Only correct training answers use the green selected-key feedback.
       // Ignore answers while a memory target is being shown.
       if (activeMode === "dictionary") {
         if (!dictionaryPractice || dictionaryTimedOut) return;
@@ -518,7 +528,9 @@ function renderPiano() {
         else selected.add(midi);
       } else {
         selected.clear();
-        selected.add(midi);
+        const correct = answerKey(midi);
+        if (correct) selected.add(midi);
+        else flashWrongKey(button);
         piano.querySelectorAll(".key.selected").forEach(key => {
           key.classList.remove("selected");
           key.setAttribute("aria-pressed", "false");
@@ -527,7 +539,6 @@ function renderPiano() {
       button.classList.toggle("selected", selected.has(midi));
       button.setAttribute("aria-pressed", String(selected.has(midi)));
       updateStatus(start, end - 1);
-      if (activeMode !== "free") answerKey(midi);
     });
     return button;
   }
