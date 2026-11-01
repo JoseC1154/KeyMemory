@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const server = http.createServer((req, res) => {
-  const file = path.join(root, req.url === '/' ? 'index.html' : req.url);
+  const file = path.join(root, req.url === '/' ? 'index.html' : new URL(req.url,'http://localhost').pathname);
   res.setHeader('Content-Type', file.endsWith('.css') ? 'text/css' : file.endsWith('.js') ? 'text/javascript' : 'text/html');
   fs.readFile(file, (error, data) => { res.statusCode = error ? 404 : 200; res.end(error ? '' : data); });
 });
@@ -49,7 +49,7 @@ const server = http.createServer((req, res) => {
       for (let chord=0; chord<2; chord++) {
         for (let step=1;step<=3;step++) {
           await press(await page.evaluate(()=>targetMidi));
-          await page.locator('#nextChallenge').click();
+          if(step<3) await page.locator('#nextChallenge').click();
         }
         assert.equal(await page.evaluate(()=>builderStep), 4);
         assert.equal(await page.locator('#nextChallenge').isVisible(), true);

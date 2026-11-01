@@ -7,6 +7,13 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
+const APP_VERSION = "2026.11.01.2";
+const wrongKeyFeedback = new Map();
+const WRONG_KEY_DURATION = 950;
+function clearWrongKeyFeedback() {
+  for (const feedback of wrongKeyFeedback.values()) clearTimeout(feedback.timer);
+  wrongKeyFeedback.clear();
+}
 const achievement = document.getElementById("achievement");
 const achievementText = document.getElementById("achievementText");
 let achievementTimer = null;
@@ -104,6 +111,7 @@ let builderStep = 1;
 let builderAdvancePending = false;
 let builderQuality = "major";
 function builderQuestion() {
+  clearWrongKeyFeedback();
   const last = builderNotes[builderNotes.length - 1];
   const goal = builderTargets[builderStep];
   targetMidi = goal;
@@ -139,6 +147,11 @@ function advanceBuilder() {
     builderAdvancePending = false;
   }
   if (builderStep >= builderTargets.length) {
+    targetMidi = null;
+    trainingPrompt.textContent = timerEnabled.checked
+      ? "Chord complete! Another chord starts shortly."
+      : "Chord complete! Choose Build another chord to keep practicing.";
+    degreeTitle.textContent = "All four notes completed";
     celebrate("Chord completed! " + builderNotes.map(noteName).join(" – "));
     selected.clear();
     renderPiano();
@@ -309,6 +322,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  clearWrongKeyFeedback();
   cancelAutoNext();
   stopCountdown();
   if (challengeTimer !== null) clearTimeout(challengeTimer);
@@ -376,13 +390,21 @@ function chooseChallenge() {
     }, 1800);
   }
 }
-// A short red overlay fades back to the key’s original appearance.
-// The animation belongs to this DOM node, so it cannot clear a later answer.
+// Keep feedback separate from selection so a resize cannot erase the red flash.
+// Each callback owns a feedback record and cannot clear a later question.
 function flashWrongKey(key) {
-  key.classList.remove("wrongAnswer");
-  void key.offsetWidth;
+  const midi = Number(key.dataset.midi);
+  const previous = wrongKeyFeedback.get(midi);
+  if (previous) clearTimeout(previous.timer);
+  const feedback = { started: Date.now(), timer: null };
+  wrongKeyFeedback.set(midi, feedback);
+  key.style.setProperty("--wrong-key-delay", "0ms");
   key.classList.add("wrongAnswer");
-  key.addEventListener("animationend", () => key.classList.remove("wrongAnswer"), {once:true});
+  feedback.timer = setTimeout(() => {
+    if (wrongKeyFeedback.get(midi) !== feedback) return;
+    wrongKeyFeedback.delete(midi);
+    piano.querySelectorAll('[data-midi="' + midi + '"]').forEach(button => button.classList.remove("wrongAnswer"));
+  }, WRONG_KEY_DURATION);
 }
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
@@ -396,6 +418,10 @@ function answerKey(midi) {
       incorrect("Not quite — try " + noteName(targetMidi) + ".");
     }
     targetMidi = null;
+    if (correct && builderStep === builderTargets.length - 1) {
+      advanceBuilder();
+      return correct;
+    }
     nextChallenge.hidden = timerEnabled.checked;
     nextChallenge.textContent = correct ? "Continue building" : "Try this step again";
     scheduleAutoNext();
@@ -502,6 +528,11 @@ function renderPiano() {
     button.setAttribute("aria-label", noteName(midi));
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
+    const feedback = wrongKeyFeedback.get(midi);
+    if (feedback && Date.now() - feedback.started < WRONG_KEY_DURATION) {
+      button.classList.add("wrongAnswer");
+      button.style.setProperty("--wrong-key-delay", -(Date.now() - feedback.started) + "ms");
+    }
     if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) :
       activeMode === "builder" ? builderNotes.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
@@ -538,6 +569,10 @@ function renderPiano() {
       }
       button.classList.toggle("selected", selected.has(midi));
       button.setAttribute("aria-pressed", String(selected.has(midi)));
+      if (!button.isConnected) {
+        // The final builder answer rerenders the completed chord immediately.
+        selected.clear();
+      }
       updateStatus(start, end - 1);
     });
     return button;
@@ -637,3 +672,5 @@ document.addEventListener("keydown", e => {
     if (!e.shiftKey && index === focusable.length - 1) { e.preventDefault(); focusable[0].focus(); }
   }
 });
+
+document.getElementById("buildVersion").textContent = "Build " + APP_VERSION;

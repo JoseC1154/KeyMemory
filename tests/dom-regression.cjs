@@ -16,7 +16,7 @@ win.clearTimeout=id=>timers.delete(id);
 win.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};
 win.clearInterval=id=>timers.delete(id);
 function advance(ms){const end=now+ms;for(;;){const pending=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!pending)break;const [key,timer]=pending;now=timer.time;if(timer.repeat)timer.time+=timer.repeat;else timers.delete(key);timer.fn();}now=end;}
-win.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode; window.testState = () => ({targetMidi,chordAnswer,activeMode,builderStep,builderTargets:[...builderTargets],builderNotes:[...builderNotes],semitoneAnswer});');
+win.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode; window.renderPiano=renderPiano; window.testState = () => ({targetMidi,chordAnswer,activeMode,builderStep,builderTargets:[...builderTargets],builderNotes:[...builderNotes],semitoneAnswer});');
 const state=()=>win.testState();
 const key=m=>win.document.querySelector(`[data-midi="${m}"]`);
 const press=m=>key(m).click();
@@ -31,8 +31,8 @@ for(const mode of ['find','semitones','degrees','remember','builder']){
   assert(key(wrong).classList.contains('wrongAnswer'),`${mode} wrong is red`);
   assert(!key(wrong).classList.contains('selected'),`${mode} wrong is not green`);
   assert.equal(key(wrong).getAttribute('aria-pressed'),'false');
-  key(wrong).dispatchEvent(new win.Event('animationend'));
-  assert(!key(wrong).classList.contains('wrongAnswer'));
+  advance(300);win.renderPiano();assert(key(wrong).classList.contains('wrongAnswer'),`${mode} red survives resize`);
+  advance(650);assert(!key(wrong).classList.contains('wrongAnswer'));
   next.click();if(mode==='remember')advance(1800);
   const answer=mode==='degrees'?[...win.document.querySelectorAll('.key')].map(k=>+k.dataset.midi).find(m=>m%12===state().chordAnswer):state().targetMidi;
   press(answer);assert(key(answer).classList.contains('selected'),`${mode} correct green`);
@@ -55,8 +55,8 @@ for(let attempt=0;attempt<3;attempt++){
  assert.equal(state().builderStep,1);assert.equal(state().targetMidi,target);assert.equal(state().builderNotes.length,1);
 }
 for(let chord=0;chord<5;chord++){
- for(let step=1;step<=3;step++){press(state().targetMidi);next.click();}
- assert.equal(state().builderStep,4);assert.equal(next.hidden,false);assert.equal(next.textContent,'Build another chord');
+ for(let step=1;step<=3;step++){press(state().targetMidi);if(step<3)next.click();}
+ assert.equal(state().builderStep,4);assert.match(win.document.getElementById('trainingPrompt').textContent,/Chord complete/);assert.equal(next.hidden,false);assert.equal(next.textContent,'Build another chord');
  assert.equal(win.document.querySelectorAll('.key.chordTone').length,4);
  next.click();assert.equal(state().builderStep,1);assert.notEqual(state().targetMidi,null);
 }
