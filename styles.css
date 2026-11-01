@@ -246,3 +246,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
  .practicePanel .dictionaryOptions label{flex-direction:row;align-items:center;gap:5px;white-space:nowrap}
  .practicePanel .dictionaryOptions select{min-height:30px;padding:4px;font-size:12px;flex:1}
 }
+
+.phraseActions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.phraseTranspose{display:inline-flex;align-items:center;gap:5px}
+#phraseTransposeValue{font-size:12px;min-width:57px;text-align:center}
+#phraseClock{font-size:12px;font-variant-numeric:tabular-nums;color:#b9ffcf}
+.phraseControls{display:flex;flex-wrap:wrap;gap:10px;padding:10px 0;border-top:1px solid #354c3d}
+.phraseControls p,.phraseControls small{width:100%;margin:0;line-height:1.4;font-size:12px}
+.phraseControls label{flex:1 1 190px}
+.phraseControls input{width:85px;min-height:34px;padding:5px;border:1px solid #55775f;border-radius:6px;background:#24362b;color:white;font-size:14px}
+@media(max-height:500px) and (orientation:landscape){.phraseActions{margin-top:3px;gap:4px}.phraseActions button{min-height:30px;padding:4px 8px}}

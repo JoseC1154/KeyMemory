@@ -7,6 +7,7 @@ w.matchMedia=()=>({matches:false});w.ResizeObserver=class{observe(){}};
 let now=0,id=0;const timers=new Map();
 w.Date.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};w.clearTimeout=id=>timers.delete(id);w.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};w.clearInterval=id=>timers.delete(id);
 function advance(ms){const end=now+ms;for(;;){const t=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!t)break;const [key,timer]=t;now=timer.time;if(timer.repeat)timer.time+=timer.repeat;else timers.delete(key);timer.fn();}now=end;}
+w.eval(fs.readFileSync(path.join(root,'phrase.js'),'utf8'));
 w.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode;window.snapshot=()=>({activeMode,targetMidi,builderPhase,builderStep,notes:[...builderNotes],selected:[...selected],deadline,countdown,prompt:trainingPrompt.textContent,dictionaryPractice,dictionaryVoicing:[...dictionaryVoicing]});');
 const el=id=>d.getElementById(id),s=()=>w.snapshot(),shell=d.querySelector('.shell');
 const change=(id,value)=>{el(id).value=value;el(id).dispatchEvent(new w.Event('change',{bubbles:true}));};
@@ -14,16 +15,16 @@ const keyboard=(key,shiftKey=false)=>d.dispatchEvent(new w.KeyboardEvent('keydow
 const open=(id)=>{el(id).focus();el(id).click();};
 const press=m=>d.querySelector(`[data-midi="${m}"]`).click();
 const ids=[...d.querySelectorAll('[id]')].map(e=>e.id);assert.equal(new Set(ids).size,ids.length,'unique IDs');
-assert.equal(d.querySelectorAll('.startMode').length,7);assert(!el('dictionaryExpand'));
+assert.equal(d.querySelectorAll('.startMode').length,8);assert(!el('dictionaryExpand'));
 for(const id of ['modeOverlay','settingsOverlay','hintOverlay']){assert(!shell.contains(el(id)));assert.equal(el(id).getAttribute('role'),'dialog');assert.equal(el(id).getAttribute('aria-modal'),'true');assert(el(id).hidden);}
 for(const id of ['builderControls','timerControls','semitoneControls','buildVersion'])assert(el('settingsOverlay').contains(el(id)),id+' belongs in settings');
 for(const id of ['hearBuilder','dictionaryActions','dictionaryControls','nextChallenge','trainingPrompt'])assert(shell.contains(el(id)),id+' remains in practice');
 assert.match(el('settingsOverlay').textContent,/Changes apply immediately/);
 // Every compact menu item navigates, closes the modal, clears inert and returns focus.
-for(const mode of ['free','find','remember','semitones','degrees','builder','dictionary']){
+for(const mode of ['free','find','remember','semitones','degrees','builder','dictionary','phrase']){
  open('openModes');assert.equal(el('modeOverlay').hidden,false);assert.equal(shell.inert,true);assert.equal(d.activeElement,el('closeModes'));
  d.querySelector(`.startMode[data-mode="${mode}"]`).click();assert.equal(s().activeMode,mode);assert(el('modeOverlay').hidden);assert.equal(shell.inert,false);assert.equal(d.activeElement,el('openModes'));
- assert.equal(el('timerControls').hidden,mode==='free');assert.equal(el('builderControls').hidden,mode!=='builder');assert.equal(el('dictionaryControls').hidden,mode!=='dictionary');assert.equal(el('semitoneControls').hidden,mode!=='semitones');assert.equal(el('dictionaryActions').hidden,mode!=='dictionary');
+ assert.equal(el('timerControls').hidden,mode==='free'||mode==='phrase');assert.equal(el('builderControls').hidden,mode!=='builder');assert.equal(el('dictionaryControls').hidden,mode!=='dictionary');assert.equal(el('semitoneControls').hidden,mode!=='semitones');assert.equal(el('dictionaryActions').hidden,mode!=='dictionary');
  assert.equal(d.querySelectorAll('.startMode[aria-current="true"]').length,1);assert.equal(d.querySelector('.startMode[aria-current="true"]').dataset.mode,mode);
 }
 // Open/Done/Escape/backdrop are not lesson-reset operations and do not pause clocks.
@@ -58,4 +59,4 @@ change('dictionaryRoot','0');change('dictionaryQuality','major');change('diction
 open('openHint');assert.equal(el('dictionaryNotes').hidden,false);assert.equal(el('builderHint').hidden,true);el('hintOverlay').click();assert.equal(d.activeElement,el('openHint'));
 el('toggleChordNotes').click();assert(el('openHint').hidden,'dictionary practice hides answer hint');press(52);before=s();open('openSettings');el('closeSettings').click();assert.deepEqual(Array.from(s().selected),[52]);assert.equal(s().deadline,before.deadline);
 open('openModes');d.querySelector('[data-mode="free"]').click();assert.equal(shell.inert,false);assert.equal(el('hearBuilder').hidden,false);assert(el('hearBuilder').disabled);assert(el('dictionaryActions').hidden);press(48);advance(20000);assert.equal(s().activeMode,'free');assert.deepEqual(Array.from(s().selected),[48]);
-console.log('PASS: unique IDs; 7 compact modes; contextual settings; immediate changes; modal Done/Escape/backdrop/focus trap/inert/focus return; preserved question/red feedback/notes/deadlines; countdown mirrors and timeout; hint isolation; settings/navigation interruption. DOM only, not visual or touch QA.');w.close();
+console.log('PASS: unique IDs; 8 compact modes; contextual settings; immediate changes; modal Done/Escape/backdrop/focus trap/inert/focus return; preserved question/red feedback/notes/deadlines; countdown mirrors and timeout; hint isolation; settings/navigation interruption. DOM only, not visual or touch QA.');w.close();

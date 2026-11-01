@@ -11,6 +11,8 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 - `node tests/audio-sustain.cjs`
 - `node tests/auto-audio.cjs`
 - `node tests/midi-input.cjs`
+- `node tests/phrase-engine.cjs`
+- `node tests/phrase-integration.cjs`
 - `node tests/browser-regression.cjs`
 
 The DOM suite uses a deterministic clock to test immediate wrong→wrong→correct retries without Next, preserved prompts/targets/phases/deadlines, repeated red feedback, chord completion, timer toggles, timeouts, navigation, stale animation events, Free Play, and Dictionary exact inversions/partial-check retry/success lock. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
@@ -28,3 +30,5 @@ The auto-audio suite checks untimed automatic success progression across answer 
 Duration regression expectations are independent of application constants: Chord Builder sustains every Hear selection for 5 seconds with a .35-second release; other modes sustain single notes for 1 second and groups for 2 seconds, with a .15-second release. Tests check envelopes/oscillator stops and progression waits (ordinary success minimum 1.8 seconds, non-builder group playback 2.3 seconds, builder playback 5.5 seconds).
 
 The midi-input suite simulates Web MIDI permission responses and input ports. It checks explicit opt-in with SysEx disabled, no output access, YC Series Port 1 preference, note-on/off and velocity-zero on 16 channels, layered-note deduplication, held-key/question barriers, stale timestamps/callbacks/permission results, hotplug and selected-device reconnect, errors, all seven app modes, pitch-class versus exact-octave grading, timer fairness, modal/background gates, and MIDI audio-resume/release races. No connected hardware, browser MIDI permission UI, USB driver, or audible sound is verified by this simulated suite.
+
+The phrase-integration suite exercises the app through simulated raw MIDI and UI controls: capture timing/duration/channel/velocity, source/playback BPM, transpose, seconds-to-milliseconds sections, playback callbacks, chords, notes-only and onset-rhythm practice, wrong-key feedback and release/count-in restart without deleting notes, recording confirmation/cancellation, MIDI connection requirements, mode/modal/blur/disconnect cleanup, the 120-second cap, and local reload/delete. It preserves regression coverage for all seven earlier modes and checks the eight-choice mode menu. No physical keyboard, audible playback, or touch-device verification is claimed.

@@ -7,8 +7,10 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.11";
+const APP_VERSION = "2026.11.01.12";
 let midiController = null;
+let phraseEngine = null, phraseSnapshot = null;
+const phraseRawHeld=new Set();
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -371,6 +373,7 @@ function currentHearNotes() {
   return targetMidi===null?[]:[targetMidi];
 }
 function updateHearControl() {
+  if(activeMode==="phrase"){hearBuilder.hidden=true;return;}
   const notes=currentHearNotes();
   hearBuilder.hidden=false;
   hearBuilder.disabled=notes.length===0;
@@ -602,6 +605,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  phraseEngine?.stop();
   midiController?.resetQuestion();
   stopBuilderAudio();
   clearWrongKeyFeedback();
@@ -618,7 +622,7 @@ function cancelChallenge() {
 function chooseChallenge() {
   dismissAchievement();
   cancelChallenge();
-  if (activeMode === "free") return;
+  if (activeMode === "free" || activeMode === "phrase") return;
   if (activeMode === "dictionary") { updateDictionary(); nextChallenge.hidden = true; return; }
   if (activeMode === "builder") { beginBuilder(); return; }
   selected.clear();
@@ -738,16 +742,17 @@ function activateMode(mode) {
   nextChallenge.textContent = "Next";
   dictionaryPractice = false;
   document.getElementById("dictionaryControls").hidden = mode !== "dictionary";
-  timerControls.hidden = mode === "free";
+  timerControls.hidden = mode === "free" || mode === "phrase";
   semitoneControls.hidden = mode !== "semitones";
   builderControls.hidden = mode !== "builder";
   selected.clear();
-  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "phrase" ? "Phrase Trainer" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
-  nextChallenge.hidden = mode === "free" || mode === "dictionary";
+  nextChallenge.hidden = mode === "free" || mode === "dictionary" || mode === "phrase";
   renderPiano();
   if (mode !== "free") chooseChallenge();
   updatePracticeChrome();
+  if(mode==="phrase")refreshPhraseUI();
 }
 
 
@@ -758,7 +763,14 @@ function dictionaryKeyboardRange() {
   const start = 48 + Math.floor((low - 48) / 12) * 12;
   return { start, octaves: Math.max(1, Math.ceil((high - start + 1) / 12)) };
 }
+function phraseKeyboardRange(){
+  const notes=(phraseSnapshot?.notes||[]).map(n=>n.note+(phraseSnapshot?.options.transpose||0));
+  if(!notes.length)return {start:48,octaves:2};
+  const low=Math.min(...notes),high=Math.max(...notes),start=Math.floor(low/12)*12;
+  return {start,octaves:Math.ceil((high-start+1)/12)};
+}
 function visibleOctaves(width) {
+  if(activeMode==="phrase")return phraseKeyboardRange().octaves;
   if (activeMode === "dictionary") return dictionaryKeyboardRange().octaves;
   if (activeMode === "builder" && builderTargets.length) return Math.max(1, Math.ceil((builderTargets[builderTargets.length - 1] - 48 + 1) / 12));
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
@@ -777,6 +789,10 @@ function updateStatusFromPiano() {
 function pressPianoKey(midi,fromMidi=false) {
   if(currentDialog || (fromMidi && document.hidden))return;
   const button=piano.querySelector('[data-midi="'+midi+'"]');
+  if(activeMode==="phrase"){
+    if(phraseSnapshot?.state==="practice"){phraseEngine.input({kind:"on",note:midi,velocity:100,channel:0});phraseEngine.input({kind:"off",note:midi,velocity:0,channel:0});unlockMidiAudio();soundMidiNote(midi);}
+    return;
+  }
   // Only correct training answers use the green selected-key feedback.
   // Ignore answers while a memory target is being shown.
   if (activeMode === "dictionary") {
@@ -825,9 +841,9 @@ function renderPiano() {
   const width = viewportWidth;
   const pad = mobile ? 6 : 10;
   const octaves = visibleOctaves(width);
-  const start = activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
-  const end = start + octaves * 12; // exclusive: whole C-to-B octaves
-  const whiteCount = octaves * 7;
+  const start = activeMode === "phrase" ? phraseKeyboardRange().start : activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
+  const end = activeMode==="phrase"?Math.min(128,start+octaves*12):start + octaves * 12; // exclusive: whole C-to-B octaves
+  const whiteCount = activeMode==="phrase"?Array.from({length:end-start},(_,i)=>start+i).filter(m=>!BLACK.has(m%12)).length:octaves * 7;
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
   // Fit one or two dictionary octaves in portrait; only longer ranges scroll.
@@ -875,7 +891,7 @@ function renderPiano() {
       button.style.setProperty("--wrong-key-delay", -(Date.now() - feedback.started) + "ms");
     }
     if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) :
-      activeMode === "builder" ? builderNotes.includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
+      activeMode === "builder" ? builderNotes.includes(midi) : activeMode==="phrase" ? (phraseSnapshot?.target||[]).includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
     const label = document.createElement("span");
     label.className = "noteLabel";
@@ -938,6 +954,7 @@ function closePracticeDialog() {
   dialogReturnFocus=null;
 }
 function openPracticeDialog(id,buttonId) {
+  if(activeMode==="phrase")phraseEngine?.stop();
   midiController?.resetQuestion();
   if(currentDialog) closePracticeDialog();
   dialogReturnFocus=document.activeElement;
@@ -968,6 +985,8 @@ document.addEventListener("keydown",event=>{
   else if(!event.shiftKey&&(document.activeElement===last||!currentDialog.contains(document.activeElement))){event.preventDefault();first.focus();}
 });
 function updatePracticeChrome() {
+  document.getElementById("phraseActions").hidden=activeMode!=="phrase";
+  document.getElementById("phraseControls").hidden=activeMode!=="phrase";
   const summary=document.getElementById("practiceSummary");
   let text="";
   if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
@@ -1021,5 +1040,97 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
   status:document.getElementById("midiStatus"),select:document.getElementById("midiInput"),
   connect:document.getElementById("connectMidi"),disconnect:document.getElementById("disconnectMidi"),
   onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,
+  onSuspend:()=>{phraseRawHeld.clear();phraseEngine?.stop({releaseHeld:true});if(activeMode==="phrase"){selected.clear();renderPiano();}},
+  onConnection:()=>{if(activeMode==="phrase")refreshPhraseUI();},
+  onRaw:event=>{
+    if(!phraseEngine)return false;
+    const key=event.channel+":"+event.note;
+    if(event.kind==="off"){
+      phraseRawHeld.delete(key);phraseEngine.input(event);
+      if(activeMode==="phrase"&&![...phraseRawHeld].some(k=>Number(k.split(":")[1])===event.note)){selected.delete(event.note);if(!currentDialog)renderPiano();}
+      return activeMode==="phrase";
+    }
+    const duplicate=phraseRawHeld.has(key)||[...phraseRawHeld].some(k=>Number(k.split(":")[1])===event.note);
+    phraseRawHeld.add(key);
+    const accepted=phraseEngine.input(event); // Idle tracking keeps held keys safe across mode changes.
+    if(activeMode!=="phrase")return false;
+    if(currentDialog||document.hidden||!event.focused)return true;
+    if(accepted)selected.add(event.note);
+    if(!duplicate)soundMidiNote(event.note);
+    renderPiano();return true;
+  },
   onNote:note=>{if(currentDialog||document.hidden)return;soundMidiNote(note);pressPianoKey(note,true);}
 });
+
+// Phrase playback has its own cancelable synth; recorded MIDI never leaves this browser.
+let phraseAudioContext=null,phraseSoundGeneration=0;
+const phraseVoices=new Set();
+function silencePhrase(){
+  phraseSoundGeneration++;
+  for(const voice of phraseVoices){try{const t=phraseAudioContext.currentTime;voice.gain.gain.cancelScheduledValues(t);voice.gain.gain.setTargetAtTime(0,t,.02);voice.osc.stop(t+.1);}catch{}}
+  phraseVoices.clear();
+}
+function unlockPhraseAudio(){
+  try{const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;phraseAudioContext ||= new Audio();phraseAudioContext.resume().catch(()=>{});}catch{}
+}
+async function soundPhrase(note,velocity,durationMs){
+  if(!phraseAudioContext)return;
+  const generation=phraseSoundGeneration;
+  try{
+    await phraseAudioContext.resume();if(generation!==phraseSoundGeneration||activeMode!=="phrase")return;
+    if(phraseVoices.size>=64){const old=phraseVoices.values().next().value;old.osc.stop();phraseVoices.delete(old);}
+    const t=phraseAudioContext.currentTime,duration=Math.max(.02,durationMs/1000),osc=phraseAudioContext.createOscillator(),gain=phraseAudioContext.createGain(),amplitude=.07*Math.sqrt(velocity/127);
+    osc.type="triangle";osc.frequency.value=440*2**((note-69)/12);
+    gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(amplitude,t+.01);gain.gain.setValueAtTime(amplitude,t+duration);gain.gain.linearRampToValueAtTime(0,t+duration+.08);
+    osc.connect(gain);gain.connect(phraseAudioContext.destination);osc.start(t);osc.stop(t+duration+.1);
+    const voice={osc,gain};phraseVoices.add(voice);osc.onended=()=>{osc.disconnect();gain.disconnect();phraseVoices.delete(voice);};
+  }catch{}
+}
+const phraseTime=ms=>{const sec=Math.max(0,Math.floor(ms/1000));return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0");};
+function refreshPhraseUI(snapshot=phraseSnapshot){
+  if(snapshot)phraseSnapshot=snapshot;
+  if(!phraseSnapshot)return;
+  const s=phraseSnapshot,o=s.options,active=["recording","playing","countin","practice","wait-release"].includes(s.state),has=s.notes.length>0;
+  document.getElementById("phraseRecord").disabled=s.state==="recording";
+  document.getElementById("phrasePlay").disabled=!has||s.state==="recording";
+  document.getElementById("phrasePractice").disabled=!has||s.state==="recording";
+  document.getElementById("phraseStop").disabled=!active;
+  for(const id of ["phraseDown","phraseUp"])document.getElementById(id).disabled=s.state==="recording";
+  document.getElementById("phraseTransposeValue").textContent=o.transpose?((o.transpose>0?"+":"")+o.transpose+" st"):"Original";
+  document.getElementById("phraseClock").textContent=s.state==="recording"?"REC "+phraseTime(s.elapsed)+" / 2:00":has?phraseTime(s.duration)+" · "+s.notes.length+" notes":"Up to 2:00";
+  const values={phraseSourceBpm:o.sourceBpm,phrasePlayBpm:o.playBpm,phraseRhythm:o.rhythm?"rhythm":"notes",phraseTolerance:o.tolerance,phraseSectionStart:o.sectionStart/1000,phraseSectionEnd:o.sectionEnd/1000};
+  for(const [id,value]of Object.entries(values))document.getElementById(id).value=String(value);
+  document.getElementById("phraseSaved").textContent=(s.error?s.error+" ":"")+(has?(s.saved?"Saved locally on this device":"Kept for this session only")+" · "+s.notes.length+" notes":"No saved phrase");
+  if(activeMode!=="phrase")return;
+  const names=(s.target||[]).map(m=>noteName(m)+(Math.floor(m/12)-1));
+  let prompt=s.state==="recording"?"Recording MIDI — play your phrase. Stop when finished.":s.state==="playing"?"Playing phrase · "+(s.progress+1)+" / "+s.total:
+    s.state==="countin"?"Count in: "+s.countIn+" · release the keys":s.state==="wait-release"?"Release all keys — restarting from the beginning":
+    s.state==="practice"?"Play "+names.join(" + ")+" · "+(s.progress+1)+" / "+s.total:
+    s.state==="complete"?"Phrase complete! Practice again or transpose.":has?"Your phrase is ready. Play it, transpose, or practice.":"Connect MIDI in Settings, then Record your phrase.";
+  if(s.state==="practice"&&o.rhythm&&Number.isFinite(s.targetTime)){const delta=s.targetTime-s.elapsed;prompt+=" · "+(delta>80?"in "+(delta/1000).toFixed(1)+"s":"now");}
+  if(s.error)prompt=s.error;
+  trainingPrompt.textContent=prompt;
+  document.getElementById("practiceSummary").textContent=(o.rhythm?"Notes + rhythm":"Notes only")+" · "+o.playBpm+" BPM";
+  renderPiano();
+}
+if(window.KeyMemoryPhrase){
+  phraseEngine=window.KeyMemoryPhrase.create({onChange:refreshPhraseUI,onSound:soundPhrase,onSilence:silencePhrase,onWrong:(note,message)=>{const key=piano.querySelector('[data-midi="'+note+'"]');if(key)flashWrongKey(key);selected.clear();incorrect(message);}});
+  refreshPhraseUI(phraseEngine.snapshot());
+}
+function phraseAction(action){if(!phraseEngine)return;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio();action();}
+document.getElementById("phraseRecord").addEventListener("click",()=>{
+  if(!midiController?.isConnected()){trainingPrompt.textContent="Connect a MIDI keyboard in Settings before recording.";return;}
+  if(phraseSnapshot?.notes.length&&!window.confirm("Replace the saved phrase with a new recording? An empty recording keeps the previous phrase."))return;
+  phraseAction(()=>{selected.clear();phraseEngine.record();});
+});
+document.getElementById("phrasePlay").addEventListener("click",()=>{if(!window.AudioContext&&!window.webkitAudioContext){incorrect("Audio is unavailable. Your saved phrase is unchanged.");return;}phraseAction(()=>phraseEngine.play());});
+document.getElementById("phrasePractice").addEventListener("click",()=>phraseAction(()=>{selected.clear();phraseEngine.practice();}));
+document.getElementById("phraseStop").addEventListener("click",()=>{selected.clear();phraseEngine?.stop();resetMidiAudio();});
+for(const [id,step]of[["phraseDown",-1],["phraseUp",1]])document.getElementById(id).addEventListener("click",()=>phraseAction(()=>phraseEngine.setOptions({transpose:phraseSnapshot.options.transpose+step})));
+const phraseFields={phraseSourceBpm:["sourceBpm",1],phrasePlayBpm:["playBpm",1],phraseTolerance:["tolerance",1],phraseSectionStart:["sectionStart",1000],phraseSectionEnd:["sectionEnd",1000]};
+for(const [id,[key,multiplier]]of Object.entries(phraseFields))document.getElementById(id).addEventListener("change",event=>phraseEngine?.setOptions({[key]:Number(event.target.value)*multiplier}));
+document.getElementById("phraseRhythm").addEventListener("change",event=>phraseEngine?.setOptions({rhythm:event.target.value==="rhythm"}));
+document.getElementById("phraseFull").addEventListener("click",()=>phraseEngine?.setOptions({sectionStart:0,sectionEnd:phraseSnapshot?.duration||120000}));
+document.getElementById("phraseClear").addEventListener("click",()=>{if(window.confirm("Delete the saved phrase from this browser?")){selected.clear();phraseEngine?.clear();}});
+let phraseTaps=[];
+document.getElementById("phraseTap").addEventListener("click",()=>{const now=Date.now();if(phraseTaps.length&&now-phraseTaps.at(-1)>2000)phraseTaps=[];phraseTaps.push(now);phraseTaps=phraseTaps.slice(-5);if(phraseTaps.length<2)return;const bpm=Math.round(60000*(phraseTaps.length-1)/(phraseTaps.at(-1)-phraseTaps[0]));if(bpm>=30&&bpm<=300)phraseEngine?.setOptions({sourceBpm:bpm,playBpm:bpm});});
