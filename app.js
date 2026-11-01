@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.6";
+const APP_VERSION = "2026.11.01.7";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -301,7 +301,7 @@ function scheduleBuilderMilestone() {
     autoNextTimer = null;
     if (activeMode !== "builder" || !timerEnabled.checked || builderPhase !== phase) return;
     advanceBuilder();
-  }, 4000);
+  }, Math.max(4000, builderAudioUntil - Date.now() + 150));
 }
 function showBuilderMilestone(complete) {
   stopCountdown();
@@ -312,9 +312,9 @@ function showBuilderMilestone(complete) {
   const name = complete ? builderName() : builderStageName();
   chordTitle.textContent = name;
   degreeTitle.textContent = complete ? "All " + builderNotes.length + " notes completed" : builderNotes.length===3 ? "Foundation complete · recognize this sound" : "Stage complete · recognize this sound";
-  trainingPrompt.textContent = complete ? "Completed " + name + "! " + (timerEnabled.checked ? "Next chord starts in 4 seconds." : "Choose Build another chord to continue.")
+  trainingPrompt.textContent = complete ? "Completed " + name + "! " + (timerEnabled.checked ? (builderAudioUntil>Date.now() ? "Next chord starts after playback." : "Next chord starts in 4 seconds.") : "Choose Build another chord to continue.")
     : "You built " + name + ". Next: add the " + builderLesson.roles[builderStep] + " toward " + builderName() + ".";
-  builderHint.textContent = builderNoteList() + ". Hear the chord before moving on." + (timerEnabled.checked ? " Listening restarts the 4-second pause." : "");
+  builderHint.textContent = builderNoteList() + ". Hear the chord before moving on." + (timerEnabled.checked ? " Listening holds this stage until the five-second chord playback finishes." : "");
   hearBuilder.hidden = false;
   nextChallenge.hidden = false;
   nextChallenge.textContent = complete ? "Build another chord" : builderNextLabel();
@@ -339,23 +339,40 @@ function advanceBuilder() {
 }
 let builderAudioContext = null;
 let builderVoices = [];
+let builderAudioUntil = 0;
+let builderAudioRequest = 0;
+const BUILDER_SUSTAIN_SECONDS = 5;
+const BUILDER_RELEASE_SECONDS = .35;
 function stopBuilderAudio() {
-  for (const voice of builderVoices) { try { voice.stop(); } catch (_) {} }
+  builderAudioRequest++;
+  builderAudioUntil=0;
+  const now=builderAudioContext?.currentTime || 0;
+  for (const voice of builderVoices) {
+    try {
+      const envelope=voice.gain.gain;
+      if (typeof envelope.cancelAndHoldAtTime === "function") envelope.cancelAndHoldAtTime(now);
+      else { envelope.cancelScheduledValues?.(now); envelope.setValueAtTime(envelope.value || 0,now); }
+      envelope.linearRampToValueAtTime(0,now+.03);
+      voice.oscillator.stop(now+.04);
+    } catch (_) {}
+  }
   builderVoices = [];
 }
 hearBuilder.addEventListener("click", async () => {
   if (activeMode !== "builder" || builderNotes.length < 3) return;
   const notes = [...builderNotes];
   const phase = builderPhase;
+  stopBuilderAudio();
+  const request=++builderAudioRequest;
   cancelAutoNext();
   try {
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio) throw new Error("Audio unavailable");
     builderAudioContext ||= new Audio();
     await builderAudioContext.resume();
-    if (activeMode !== "builder" || builderPhase !== phase || notes.join() !== builderNotes.join()) return;
-    stopBuilderAudio();
+    if (request!==builderAudioRequest || activeMode !== "builder" || builderPhase !== phase || notes.join() !== builderNotes.join()) return;
     const now = builderAudioContext.currentTime;
+    builderAudioUntil=Date.now()+(BUILDER_SUSTAIN_SECONDS+BUILDER_RELEASE_SECONDS)*1000;
     for (const midi of notes) {
       const oscillator = builderAudioContext.createOscillator();
       const gain = builderAudioContext.createGain();
@@ -363,16 +380,22 @@ hearBuilder.addEventListener("click", async () => {
       oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(.12 / notes.length, now + .03);
-      gain.gain.exponentialRampToValueAtTime(.001, now + 1.1);
+      gain.gain.setValueAtTime(.12 / notes.length, now + BUILDER_SUSTAIN_SECONDS);
+      gain.gain.linearRampToValueAtTime(0, now + BUILDER_SUSTAIN_SECONDS + BUILDER_RELEASE_SECONDS);
       oscillator.connect(gain);gain.connect(builderAudioContext.destination);
-      oscillator.start(now);oscillator.stop(now + 1.15);
+      oscillator.start(now);oscillator.stop(now + BUILDER_SUSTAIN_SECONDS + BUILDER_RELEASE_SECONDS + .02);
       oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
-      builderVoices.push(oscillator);
+      builderVoices.push({oscillator,gain});
     }
   } catch (_) {
+    if(request!==builderAudioRequest)return;
     builderHint.textContent = "Audio is unavailable in this browser. You can still continue building.";
   }
-  if (activeMode === "builder" && (builderPhase === "triad" || builderPhase === "complete")) scheduleBuilderMilestone();
+  if (request!==builderAudioRequest) return;
+  if (activeMode === "builder" && (builderPhase === "triad" || builderPhase === "complete")) {
+    if(timerEnabled.checked && builderPhase==="complete" && builderAudioUntil>Date.now()) trainingPrompt.textContent="Completed "+builderName()+"! Next chord starts after playback.";
+    scheduleBuilderMilestone();
+  }
 });
 builderLevel.addEventListener("change", restartBuilderPreferences);
 function stopCountdown() {

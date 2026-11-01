@@ -17,7 +17,7 @@ Choose **Random** for a shuffled deck or **Choose chord types** for one or sever
 
 Lessons build exact ascending notes. Each question explains distance from the previous note and from the root; chord spelling also gives a piano-key equivalent when needed. Suspensions replace the third. Added and sixth chords do not require a seventh. Extensions build through a seventh foundation. Full eleventh/thirteenth learning stacks can be dense: performance voicings often omit notes. Inversions are not part of these five builder levels.
 
-Use **Hear chord** at each milestone, then continue manually or enable the timer for automatic progression with four-second milestone pauses. Longer keyboards scroll sideways on small screens.
+Use **Hear chord** at each milestone for five seconds of sustained sound plus a short release. Repeated playback replaces the previous chord rather than accumulating voices. Continue manually or enable the timer for automatic progression with four-second milestone pauses; listening extends a milestone until playback finishes. Active-question countdowns keep running. Longer keyboards scroll sideways on small screens.
 
 Wrong keys flash red and can be corrected immediately without restarting the question. Timed attempts keep their original deadline. Dictionary practice retains correctly chosen notes, rejects unrelated keys and lets you complete an incomplete selection before checking again. Free Play and dictionary exploration are not graded.
 
