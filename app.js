@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.4";
+const APP_VERSION = "2026.11.01.5";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -435,6 +435,7 @@ timerEnabled.addEventListener("change", () => {
 timerDuration.addEventListener("change", () => { if (countdown !== null) startCountdown(); });
 semitoneDifficulty.addEventListener("change", () => { if (activeMode === "semitones") chooseChallenge(); });
 function setDictionaryPractice(on) {
+  clearWrongKeyFeedback();
   cancelAutoNext();
   dismissAchievement();
   dictionaryPractice = on;
@@ -457,11 +458,12 @@ checkChordAnswer.addEventListener("click", () => {
   if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled || activeMode !== "dictionary") return;
   const correct = selected.size === dictionaryVoicing.length &&
     dictionaryVoicing.every(midi => selected.has(midi));
-  trainingPrompt.textContent = correct
-    ? "Correct! You remembered every note."
-    : "Not quite. Press Show Notes to review the chord and try again.";
-  if (correct) celebrate("Perfect chord! You got it!");
-  else incorrect("Not quite — review the chord and try again.");
+  if (!correct) {
+    incorrect("Keep going — select the remaining chord notes, then check again.");
+    return; // Incomplete answers retain the chord, selections and original deadline.
+  }
+  trainingPrompt.textContent = "Correct! You remembered every note.";
+  celebrate("Perfect chord! You got it!");
   checkChordAnswer.disabled = true;
   stopCountdown();
   scheduleAutoNext();
@@ -490,6 +492,9 @@ function updateInversionOptions() {
 }
 function updateDictionary() {
   if (activeMode !== "dictionary") return;
+  cancelAutoNext();
+  clearWrongKeyFeedback();
+  dismissAchievement();
   const root = Number(dictionaryRoot.value);
   const quality = dictionaryQuality.value;
   const intervals = CHORD_TYPES[quality];
@@ -620,6 +625,8 @@ function flashWrongKey(key) {
   if (previous) clearTimeout(previous.timer);
   const feedback = { started: Date.now(), timer: null };
   wrongKeyFeedback.set(midi, feedback);
+  key.classList.remove("wrongAnswer");
+  void key.offsetWidth; // Restart the visible hold/fade on rapid repeat mistakes.
   key.style.setProperty("--wrong-key-delay", "0ms");
   key.classList.add("wrongAnswer");
   feedback.timer = setTimeout(() => {
@@ -630,41 +637,39 @@ function flashWrongKey(key) {
 }
 function answerKey(midi) {
   if (targetMidi === null || challengeTimer !== null) return;
-  stopCountdown();
-  if (activeMode === "builder") {
-    const correct = midi === targetMidi;
-    if (correct) {
-      builderAdvancePending = true;
-      celebrate("Correct! " + noteName(midi) + " added.");
-    } else {
-      incorrect("Not quite — try " + noteName(targetMidi) + ".");
-    }
-    targetMidi = null;
-    builderPhase = "answered";
-    if (correct && builderStep >= 2) {
-      advanceBuilder();
-      return correct;
-    }
-    nextChallenge.hidden = timerEnabled.checked;
-    nextChallenge.textContent = correct ? "Continue building" : "Try this step again";
-    scheduleAutoNext();
-    return correct;
-  }
-  // Semitone prompts display note names without octave numbers.
-  // Accept the correct pitch class in any visible octave, like Find the Note.
+  // Mistakes are feedback, not completed questions. Keep the target, prompt,
+  // successful builder notes and original timer deadline for direct retries.
   const correct = activeMode === "degrees" ? midi % 12 === chordAnswer :
     (activeMode === "find" || activeMode === "semitones") ? midi % 12 === targetMidi % 12 :
     midi === targetMidi;
-  const answer = activeMode === "degrees" ? NAMES[chordAnswer] : noteName(targetMidi);
-  trainingPrompt.textContent = correct ? "Correct! Well done." : "Not quite. The answer was " + answer + ".";
-  if (correct) celebrate("Great job! Correct note!");
-  else incorrect("Not quite — the answer was " + answer + ".");
+  if (!correct) {
+    incorrect("Not quite — try another key.");
+    return false;
+  }
+  stopCountdown();
+  if (activeMode === "builder") {
+    builderAdvancePending = true;
+    celebrate("Correct! " + noteName(midi) + " added.");
+    targetMidi = null;
+    builderPhase = "answered";
+    if (builderStep >= 2) {
+      advanceBuilder();
+      return true;
+    }
+    nextChallenge.hidden = timerEnabled.checked;
+    nextChallenge.textContent = "Continue building";
+    scheduleAutoNext();
+    return true;
+  }
+  trainingPrompt.textContent = "Correct! Well done.";
+  celebrate("Great job! Correct note!");
   targetMidi = null;
   chordAnswer = null;
   nextChallenge.hidden = timerEnabled.checked;
   scheduleAutoNext();
-  return correct;
+  return true;
 }
+
 function activateMode(mode) {
   dismissAchievement();
   cancelChallenge();
@@ -768,7 +773,12 @@ function renderPiano() {
       // Only correct training answers use the green selected-key feedback.
       // Ignore answers while a memory target is being shown.
       if (activeMode === "dictionary") {
-        if (!dictionaryPractice || dictionaryTimedOut) return;
+        if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled) return;
+        if (!dictionaryVoicing.includes(midi)) {
+          flashWrongKey(button);
+          incorrect("That key is not in this voicing — try another key.");
+          return;
+        }
         if (selected.has(midi)) selected.delete(midi);
         else selected.add(midi);
         button.classList.toggle("selected", selected.has(midi));

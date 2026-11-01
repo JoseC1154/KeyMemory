@@ -9,7 +9,7 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 - `node tests/builder-lessons.cjs`
 - `node tests/browser-regression.cjs`
 
-The DOM suite uses a deterministic clock to test answer classes, repeated errors, chord completion, timer toggles, timeouts, navigation, stale animation events, and existing Free Play/Dictionary interactions. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
+The DOM suite uses a deterministic clock to test immediate wrong→wrong→correct retries without Next, preserved prompts/targets/phases/deadlines, repeated red feedback, chord completion, timer toggles, timeouts, navigation, stale animation events, Free Play, and Dictionary exact inversions/partial-check retry/success lock. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
 
 The browser suite starts a temporary loopback server and tests desktop and mobile-touch Chromium viewports. It checks actual hold/fade opacity and saves screenshots in this directory. It does not publish anything.
 

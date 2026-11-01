@@ -52,7 +52,7 @@ for(const [id,[intervals,degrees]] of Object.entries(expected))for(let tonic=48;
   assert.match(el('builderHint').textContent,new RegExp('Degree '+degrees[i]+': '+intervals[i]+' semitones above the root'));
   assert.deepEqual(highlights(),intervals.slice(0,i).map(n=>tonic+n));
   const otherOctave=key(get().targetMidi+12)?get().targetMidi+12:get().targetMidi-12;
-  if(key(otherOctave)){const target=get().targetMidi;press(otherOctave);assert(key(otherOctave).classList.contains('wrongAnswer'));assert.equal(get().notes.length,i);next();assert.equal(get().targetMidi,target);}
+  if(key(otherOctave)){const target=get().targetMidi;press(otherOctave);assert(key(otherOctave).classList.contains('wrongAnswer'));assert.equal(get().notes.length,i);assert.equal(get().targetMidi,target);assert.equal(get().builderPhase,'question');assert.equal(el('nextChallenge').hidden,true);}
   press(get().targetMidi);
   if(i===1){assert.equal(get().builderPhase,'answered');next();assert.match(el('trainingPrompt').textContent,/Building .*: add the/);}
   else if(i<intervals.length-1){assert.equal(get().builderPhase,'triad');assert.equal(get().targetMidi,null);assert.match(el('trainingPrompt').textContent,/You built .*Next: add the/);assert.deepEqual(highlights(),intervals.slice(0,i+1).map(n=>tonic+n));next();assert.match(el('trainingPrompt').textContent,/Extend .*: add the/);milestones++;}

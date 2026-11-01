@@ -19,4 +19,6 @@ Lessons build exact ascending notes. Each question explains distance from the pr
 
 Use **Hear chord** at each milestone, then continue manually or enable the timer for automatic progression with four-second milestone pauses. Longer keyboards scroll sideways on small screens.
 
+Wrong keys flash red and can be corrected immediately without restarting the question. Timed attempts keep their original deadline. Dictionary practice retains correctly chosen notes, rejects unrelated keys and lets you complete an incomplete selection before checking again. Free Play and dictionary exploration are not graded.
+
 See [regression checks](tests/README.md) for test commands and coverage.

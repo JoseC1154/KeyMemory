@@ -26,6 +26,7 @@ const server = http.createServer((req, res) => {
         await page.evaluate(mode => activateMode(mode), mode);
         if (mode === 'remember') await page.waitForTimeout(1900);
         const wrong = await page.evaluate(() => [...piano.querySelectorAll('.key')].map(k=>+k.dataset.midi).find(m => activeMode === 'degrees' ? m%12 !== chordAnswer : m%12 !== targetMidi%12));
+        const before = await page.evaluate(()=>({target:targetMidi,prompt:trainingPrompt.textContent}));
         await press(wrong);
         const key = page.locator(`[data-midi="${wrong}"]`);
         assert.equal(await key.evaluate(k=>k.classList.contains('wrongAnswer')), true, `${mode}: red feedback`);
@@ -39,9 +40,11 @@ const server = http.createServer((req, res) => {
         assert(fading > 0 && fading < held, `${mode}: red fades`);
         await page.waitForTimeout(400);
         assert.equal(await key.evaluate(k=>k.classList.contains('wrongAnswer')), false, `${mode}: red clears`);
-        await page.locator('#nextChallenge').click();
+        assert.equal(await page.locator('#nextChallenge').isVisible(), false, `${mode}: no retry gate`);
+        assert.deepEqual(await page.evaluate(()=>({target:targetMidi,prompt:trainingPrompt.textContent})),before);
+        await press(wrong);await press(wrong); // immediate repeat restarts feedback, never needs Next
+        assert.equal(await key.evaluate(k=>k.classList.contains('wrongAnswer')),true);
         const answer = await page.evaluate(() => activeMode==='degrees' ? [...piano.querySelectorAll('.key')].map(k=>+k.dataset.midi).find(m=>m%12===chordAnswer) : targetMidi);
-        if (mode === 'remember') await page.waitForTimeout(1900);
         await press(answer);
         assert.equal(await page.locator(`[data-midi="${answer}"]`).evaluate(k=>k.classList.contains('selected')), true, `${mode}: correct is green`);
       }
@@ -90,9 +93,26 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('.key.selected').count(),2);
       await page.evaluate(()=>activateMode('dictionary'));
       assert.equal(await page.locator('.key.chordTone').count(),3);
+      await page.locator('#dictionaryInversion').selectOption('1');
+      assert.deepEqual(await page.evaluate(()=>dictionaryVoicing),[52,55,60]);
+      await page.locator('#toggleChordNotes').click();
+      await page.locator('#timerEnabled').check();
+      const deadlineBefore=await page.evaluate(()=>deadline);
+      await press(52);await press(49);await press(49);
+      assert.equal(await page.locator('[data-midi="49"]').evaluate(k=>k.classList.contains('wrongAnswer')),true);
+      assert.deepEqual(await page.evaluate(()=>[...selected]),[52]);
+      await page.locator('#checkChordAnswer').click();
+      assert.equal(await page.locator('#checkChordAnswer').isDisabled(),false);
+      assert.equal(await page.evaluate(()=>deadline),deadlineBefore);
+      await press(55);await press(60);await page.locator('#checkChordAnswer').click();
+      assert.equal(await page.locator('#checkChordAnswer').isDisabled(),true);
+      await press(52);assert.deepEqual(await page.evaluate(()=>[...selected]),[52,55,60]);
+      await page.locator('#timerEnabled').uncheck();
+      await page.waitForTimeout(1100);
+      assert.equal(await page.locator('[data-midi="49"]').evaluate(k=>k.classList.contains('wrongAnswer')),false);
       assert.deepEqual(errors, []);
       await page.screenshot({path:path.join(root, `tests/${mobile?'mobile':'desktop'}-verified.png`)});
-      console.log(`PASS ${mobile?'mobile touch':'desktop'}: red hold/fade, correct green, five training modes, two complete chords, timed advance/toggle, stale feedback, Free Play/dictionary, no console errors`);
+      console.log(`PASS ${mobile?'mobile touch':'desktop'}: red hold/fade/repeat, immediate retries, correct green, five training modes, two complete chords, timed advance/toggle, stale feedback, Free Play/dictionary inversion partial retry/success lock, no console errors`);
       await context.close();
     }
   } finally { await browser.close(); server.close(); }
