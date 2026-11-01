@@ -16,8 +16,8 @@ const press=m=>d.querySelector(`[data-midi="${m}"]`).click();
 const ids=[...d.querySelectorAll('[id]')].map(e=>e.id);assert.equal(new Set(ids).size,ids.length,'unique IDs');
 assert.equal(d.querySelectorAll('.startMode').length,7);assert(!el('dictionaryExpand'));
 for(const id of ['modeOverlay','settingsOverlay','hintOverlay']){assert(!shell.contains(el(id)));assert.equal(el(id).getAttribute('role'),'dialog');assert.equal(el(id).getAttribute('aria-modal'),'true');assert(el(id).hidden);}
-for(const id of ['builderControls','timerControls','semitoneControls','dictionaryControls','buildVersion'])assert(el('settingsOverlay').contains(el(id)),id+' belongs in settings');
-for(const id of ['hearBuilder','dictionaryActions','nextChallenge','trainingPrompt'])assert(shell.contains(el(id)),id+' remains in practice');
+for(const id of ['builderControls','timerControls','semitoneControls','buildVersion'])assert(el('settingsOverlay').contains(el(id)),id+' belongs in settings');
+for(const id of ['hearBuilder','dictionaryActions','dictionaryControls','nextChallenge','trainingPrompt'])assert(shell.contains(el(id)),id+' remains in practice');
 assert.match(el('settingsOverlay').textContent,/Changes apply immediately/);
 // Every compact menu item navigates, closes the modal, clears inert and returns focus.
 for(const mode of ['free','find','remember','semitones','degrees','builder','dictionary']){
@@ -51,7 +51,10 @@ w.activateMode('find');before=s();open('openSettings');advance(1000);const mirro
 // Explicit navigation cancels prior callbacks; simply inspecting modes does not.
 w.activateMode('builder');before=s();open('openModes');advance(100);keyboard('Escape');assert.equal(s().targetMidi,before.targetMidi);assert.equal(s().deadline,before.deadline);
 open('openModes');d.querySelector('[data-mode="dictionary"]').click();advance(2000);assert.equal(s().activeMode,'dictionary');
-open('openSettings');change('dictionaryInversion','1');el('closeSettings').click();assert.deepEqual(Array.from(s().dictionaryVoicing),[52,55,60]);assert(!el('openHint').hidden);
+assert(!el('settingsOverlay').contains(el('dictionaryControls')));assert(el('settingsOverlay').hidden);
+for(const id of ['timerControls','midiInput'])assert(el('settingsOverlay').contains(el(id)));
+change('dictionaryRoot','2');change('dictionaryQuality','minor');assert.deepEqual(Array.from(s().dictionaryVoicing),[50,53,57]);assert(el('settingsOverlay').hidden);assert.equal(el('practiceSummary').textContent,'');
+change('dictionaryRoot','0');change('dictionaryQuality','major');change('dictionaryInversion','1');assert.deepEqual(Array.from(s().dictionaryVoicing),[52,55,60]);assert(!el('openHint').hidden);
 open('openHint');assert.equal(el('dictionaryNotes').hidden,false);assert.equal(el('builderHint').hidden,true);el('hintOverlay').click();assert.equal(d.activeElement,el('openHint'));
 el('toggleChordNotes').click();assert(el('openHint').hidden,'dictionary practice hides answer hint');press(52);before=s();open('openSettings');el('closeSettings').click();assert.deepEqual(Array.from(s().selected),[52]);assert.equal(s().deadline,before.deadline);
 open('openModes');d.querySelector('[data-mode="free"]').click();assert.equal(shell.inert,false);assert.equal(el('hearBuilder').hidden,false);assert(el('hearBuilder').disabled);assert(el('dictionaryActions').hidden);press(48);advance(20000);assert.equal(s().activeMode,'free');assert.deepEqual(Array.from(s().selected),[48]);

@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.10";
+const APP_VERSION = "2026.11.01.11";
 let midiController = null;
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
@@ -972,7 +972,7 @@ function updatePracticeChrome() {
   let text="";
   if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
   if(activeMode==="semitones") text=semitoneDifficulty.selectedOptions[0].textContent;
-  if(activeMode==="dictionary") text=dictionaryRoot.selectedOptions[0]?.textContent+" · "+dictionaryQuality.selectedOptions[0]?.textContent+" · "+dictionaryInversion.selectedOptions[0]?.textContent;
+  // Dictionary choices are already visible inline; avoid repeating them in the summary.
   summary.textContent=text;
   document.getElementById("dictionaryActions").hidden=activeMode!=="dictionary";
   document.getElementById("openHint").hidden=activeMode!=="builder"&&(activeMode!=="dictionary"||dictionaryPractice);

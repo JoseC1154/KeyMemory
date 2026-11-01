@@ -235,3 +235,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .midiControls select{min-width:0;max-width:100%;flex:1}
 .midiControls p{margin:8px 0;font-size:.85rem;overflow-wrap:anywhere}
 .midiControls small{display:block;line-height:1.4}
+
+/* Dictionary choices belong with the chord, not behind Settings. */
+.practicePanel .dictionaryControls{padding:0;margin:6px 0;border:0}
+.practicePanel .dictionaryOptions{display:grid;grid-template-columns:minmax(54px,.55fr) minmax(0,1.3fr) minmax(0,1fr);gap:6px}
+.practicePanel .dictionaryOptions label{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:11px;color:var(--muted)}
+.practicePanel .dictionaryOptions select{width:100%;min-width:0;min-height:36px;padding:6px 4px;border-radius:7px;border:1px solid #55775f;background:#24362b;color:white;font-size:14px}
+@media (max-height:500px) and (orientation:landscape){
+ .practicePanel .dictionaryControls{margin:3px 0}
+ .practicePanel .dictionaryOptions label{flex-direction:row;align-items:center;gap:5px;white-space:nowrap}
+ .practicePanel .dictionaryOptions select{min-height:30px;padding:4px;font-size:12px;flex:1}
+}
