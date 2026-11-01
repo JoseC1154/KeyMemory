@@ -9,6 +9,7 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 - `node tests/builder-lessons.cjs`
 - `node tests/layout-controls.cjs`
 - `node tests/audio-sustain.cjs`
+- `node tests/auto-audio.cjs`
 - `node tests/browser-regression.cjs`
 
 The DOM suite uses a deterministic clock to test immediate wrong→wrong→correct retries without Next, preserved prompts/targets/phases/deadlines, repeated red feedback, chord completion, timer toggles, timeouts, navigation, stale animation events, Free Play, and Dictionary exact inversions/partial-check retry/success lock. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
@@ -20,3 +21,5 @@ The builder suite independently checks intervals and diatonic degrees for all 34
 The layout-controls suite verifies unique IDs, all seven compact mode choices, context-specific settings, immediate-apply behavior, modal Done/Escape/backdrop dismissal, focus trapping/return and inert state, live timer mirrors, unchanged prompts/notes/deadlines when inspecting settings or hints, dictionary answer isolation, and navigation cleanup. It tests DOM behavior, not rendered geometry, native focus/inert implementation, or touch usability.
 
 The audio-sustain suite uses a controllable fake AudioContext and clock to verify five-second gain sustain, release scheduling, repeated Hear cancellation, stale/rejected resume handling, navigation/manual-next cleanup, timed playback holds, and unchanged active-question deadlines. It also statically checks safe-area padding in the redesigned base/mobile/landscape cascade. These checks do not establish audible output, perceived loudness, actual device notches, or corner clipping.
+
+The auto-audio suite checks untimed automatic success progression across answer modes, all 34 builder lessons without Next clicks, dictionary exact-set automatic completion and duplicate locking, same-chord practice restarts, contextual Hear notes/frequencies across all seven modes, empty selection, and success/timeout/audio-resume races. Timer changes and inspecting settings cannot cancel pending success. Like audio-sustain, this uses a fake AudioContext and deterministic clock rather than audible hardware output.

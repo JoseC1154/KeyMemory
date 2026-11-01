@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.7";
+const APP_VERSION = "2026.11.01.8";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -64,26 +64,31 @@ const checkChordAnswer = document.getElementById("checkChordAnswer");
 let dictionaryPractice = false;
 let dictionaryTimedOut = false;
 let autoNextTimer = null;
-function cancelAutoNext() {
+let pendingAdvance = null;
+let lastCorrectNotes = [];
+let referenceNotes = [];
+function cancelAutoNext(clearPending=true) {
   if (autoNextTimer !== null) clearTimeout(autoNextTimer);
   autoNextTimer = null;
+  if(clearPending)pendingAdvance=null;
 }
-function scheduleAutoNext() {
+function scheduleAutoNext(reason="success") {
   cancelAutoNext();
-  if (!timerEnabled.checked || activeMode === "free") return;
-  const modeAtAnswer = activeMode;
-  nextChallenge.hidden = true;
+  if (activeMode === "free" || (reason==="timeout"&&!timerEnabled.checked)) return;
+  const pending={mode:activeMode,reason};
+  pendingAdvance=pending;
+  nextChallenge.hidden=reason!=="milestone";
+  if(audioResumePending)return; // Resume completion reschedules without cutting sound short.
+  const pause=reason==="milestone"?4000:1800;
   autoNextTimer = setTimeout(() => {
     autoNextTimer = null;
-    if (!timerEnabled.checked || activeMode !== modeAtAnswer) return;
-    if (activeMode === "dictionary") {
-      setDictionaryPractice(true);
-    } else if (activeMode === "builder") {
-      advanceBuilder();
-    } else {
-      chooseChallenge();
-    }
-  }, 1800);
+    if(pendingAdvance!==pending || activeMode!==pending.mode)return;
+    pendingAdvance=null;
+    if(reason==="timeout"&&!timerEnabled.checked)return;
+    if(activeMode==="dictionary")setDictionaryPractice(true);
+    else if(activeMode==="builder")advanceBuilder();
+    else chooseChallenge();
+  }, Math.max(pause,builderAudioUntil-Date.now()+150));
 }
 const timerControls = document.getElementById("timerControls");
 const timerEnabled = document.getElementById("timerEnabled");
@@ -252,7 +257,7 @@ function builderQuestion() {
     {text:distance + " semitone" + (distance === 1 ? "" : "s") + " UP",strong:true}]);
   const effect=builderLesson.effect || (builderStep>=3 ? foundation+" gains a "+part+" to become "+builderName()+"." : "The third and fifth define the "+builderTriad().name+" triad.");
   builderHint.textContent = "Degree "+builderLesson.degrees[builderStep]+": "+builderLesson.intervals[builderStep]+" semitones above the root. "+effect+" Use the exact ascending key, not its other octave.";
-  hearBuilder.hidden = builderNotes.length < 3;
+  updateHearControl();
   nextChallenge.hidden = true;
   startCountdown();
 }
@@ -282,7 +287,7 @@ function beginBuilder() {
     clearWrongKeyFeedback();builderPhase="empty";builderTargets=[];builderNotes=[];targetMidi=null;selected.clear();builderAdvancePending=false;
     chordTitle.textContent="Choose chord types";degreeTitle.textContent="No types selected in this level";
     trainingPrompt.textContent="Select at least one chord type, choose Select all, or switch to Random to begin.";
-    builderHint.textContent="Your selections in other levels are kept.";hearBuilder.hidden=true;nextChallenge.hidden=true;renderPiano();return;
+    builderHint.textContent="Your selections in other levels are kept.";hearBuilder.hidden=false;hearBuilder.disabled=true;nextChallenge.hidden=true;renderPiano();return;
   }
   const roots = Array.from({length:12},(_,i)=>48+i).filter(root=>root!==lastBuilderRoot);
   builderRoot = roots[Math.floor(Math.random()*roots.length)];
@@ -293,16 +298,7 @@ function beginBuilder() {
   builderAdvancePending = false;
   builderQuestion();
 }
-function scheduleBuilderMilestone() {
-  cancelAutoNext();
-  if (!timerEnabled.checked) return;
-  const phase = builderPhase;
-  autoNextTimer = setTimeout(() => {
-    autoNextTimer = null;
-    if (activeMode !== "builder" || !timerEnabled.checked || builderPhase !== phase) return;
-    advanceBuilder();
-  }, Math.max(4000, builderAudioUntil - Date.now() + 150));
-}
+function scheduleBuilderMilestone() { scheduleAutoNext("milestone"); }
 function showBuilderMilestone(complete) {
   stopCountdown();
   targetMidi = null;
@@ -312,18 +308,18 @@ function showBuilderMilestone(complete) {
   const name = complete ? builderName() : builderStageName();
   chordTitle.textContent = name;
   degreeTitle.textContent = complete ? "All " + builderNotes.length + " notes completed" : builderNotes.length===3 ? "Foundation complete · recognize this sound" : "Stage complete · recognize this sound";
-  trainingPrompt.textContent = complete ? "Completed " + name + "! " + (timerEnabled.checked ? (builderAudioUntil>Date.now() ? "Next chord starts after playback." : "Next chord starts in 4 seconds.") : "Choose Build another chord to continue.")
+  trainingPrompt.textContent = complete ? "Completed " + name + "! " + (builderAudioUntil>Date.now() ? "Next chord starts after playback." : "Next chord starts in 4 seconds.")
     : "You built " + name + ". Next: add the " + builderLesson.roles[builderStep] + " toward " + builderName() + ".";
-  builderHint.textContent = builderNoteList() + ". Hear the chord before moving on." + (timerEnabled.checked ? " Listening holds this stage until the five-second chord playback finishes." : "");
-  hearBuilder.hidden = false;
+  builderHint.textContent = builderNoteList() + ". Hear the chord before moving on. Listening holds this stage until the five-second chord playback finishes.";
+  updateHearControl();
   nextChallenge.hidden = false;
   nextChallenge.textContent = complete ? "Build another chord" : builderNextLabel();
   celebrate((complete ? "Chord complete! " : "Stage complete! ") + name);
   scheduleBuilderMilestone();
 }
-function advanceBuilder() {
+function advanceBuilder(preservePlayback=false) {
   cancelAutoNext();
-  stopBuilderAudio();
+  if(!preservePlayback)stopBuilderAudio();
   dismissAchievement();
   if (builderPhase === "empty") return;
   if (builderPhase === "complete") { beginBuilder(); return; }
@@ -341,10 +337,12 @@ let builderAudioContext = null;
 let builderVoices = [];
 let builderAudioUntil = 0;
 let builderAudioRequest = 0;
+let audioResumePending = false;
 const BUILDER_SUSTAIN_SECONDS = 5;
 const BUILDER_RELEASE_SECONDS = .35;
 function stopBuilderAudio() {
   builderAudioRequest++;
+  audioResumePending=false;
   builderAudioUntil=0;
   const now=builderAudioContext?.currentTime || 0;
   for (const voice of builderVoices) {
@@ -358,19 +356,45 @@ function stopBuilderAudio() {
   }
   builderVoices = [];
 }
+function currentHearNotes() {
+  if(activeMode==="free")return [...selected].sort((a,b)=>a-b);
+  if(activeMode==="dictionary")return dictionaryPractice?[...selected].sort((a,b)=>a-b):[...dictionaryVoicing];
+  if(activeMode==="builder")return builderAdvancePending?[...builderNotes,builderTargets[builderStep]]:[...builderNotes];
+  if(lastCorrectNotes.length)return [...lastCorrectNotes];
+  if(activeMode==="semitones")return semitoneStart===null?[]:[semitoneStart];
+  if(activeMode==="degrees")return [...referenceNotes];
+  return targetMidi===null?[]:[targetMidi];
+}
+function updateHearControl() {
+  const notes=currentHearNotes();
+  hearBuilder.hidden=false;
+  hearBuilder.disabled=notes.length===0;
+  const chord=activeMode==="degrees"&&notes.length>=3 || activeMode==="builder"&&notes.length>=3 || activeMode==="dictionary"&&!dictionaryPractice;
+  hearBuilder.textContent=activeMode==="semitones"&&!lastCorrectNotes.length?"Hear start note":chord?"Hear chord":notes.length===1?"Hear note":"Hear notes";
+  let description=activeMode==="semitones"&&!lastCorrectNotes.length?"Hear the starting note":
+    activeMode==="find"||activeMode==="remember"?"Hear the target note as an audio hint":
+    activeMode==="degrees"&&!lastCorrectNotes.length?"Hear the reference chord":
+    activeMode==="dictionary"&&dictionaryPractice?"Hear your selected notes":
+    activeMode==="builder"?"Hear the notes built so far":"Hear the current notes";
+  if(!notes.length)description="Select notes to hear them";
+  hearBuilder.title=description;
+  hearBuilder.setAttribute("aria-label",hearBuilder.textContent+" — "+description);
+}
 hearBuilder.addEventListener("click", async () => {
-  if (activeMode !== "builder" || builderNotes.length < 3) return;
-  const notes = [...builderNotes];
-  const phase = builderPhase;
+  const notes=currentHearNotes();
+  if(!notes.length)return;
+  const mode=activeMode;
   stopBuilderAudio();
   const request=++builderAudioRequest;
-  cancelAutoNext();
+  audioResumePending=true;
+  cancelAutoNext(false);
   try {
     const Audio = window.AudioContext || window.webkitAudioContext;
     if (!Audio) throw new Error("Audio unavailable");
     builderAudioContext ||= new Audio();
     await builderAudioContext.resume();
-    if (request!==builderAudioRequest || activeMode !== "builder" || builderPhase !== phase || notes.join() !== builderNotes.join()) return;
+    if(request!==builderAudioRequest || activeMode!==mode)return;
+    audioResumePending=false;
     const now = builderAudioContext.currentTime;
     builderAudioUntil=Date.now()+(BUILDER_SUSTAIN_SECONDS+BUILDER_RELEASE_SECONDS)*1000;
     for (const midi of notes) {
@@ -389,13 +413,12 @@ hearBuilder.addEventListener("click", async () => {
     }
   } catch (_) {
     if(request!==builderAudioRequest)return;
-    builderHint.textContent = "Audio is unavailable in this browser. You can still continue building.";
+    audioResumePending=false;
+    showFeedback(false,"Audio is unavailable. You can keep practicing.");
   }
   if (request!==builderAudioRequest) return;
-  if (activeMode === "builder" && (builderPhase === "triad" || builderPhase === "complete")) {
-    if(timerEnabled.checked && builderPhase==="complete" && builderAudioUntil>Date.now()) trainingPrompt.textContent="Completed "+builderName()+"! Next chord starts after playback.";
-    scheduleBuilderMilestone();
-  }
+  if(activeMode==="builder"&&builderPhase==="complete"&&builderAudioUntil>Date.now())trainingPrompt.textContent="Completed "+builderName()+"! Next chord starts after playback.";
+  if(pendingAdvance?.mode===activeMode)scheduleAutoNext(pendingAdvance.reason);
 });
 builderLevel.addEventListener("change", restartBuilderPreferences);
 function stopCountdown() {
@@ -432,27 +455,29 @@ function startCountdown() {
         trainingPrompt.textContent = "Time is up! Correct answer: " + answer;
       }
       incorrect("Time is up!");
-      scheduleAutoNext();
+      updateHearControl();
+      scheduleAutoNext("timeout");
     }
   }
   tick();
   countdown = setInterval(tick, 100);
 }
-timerEnabled.addEventListener("change", () => {
-  cancelAutoNext();
-  nextChallenge.hidden = activeMode === "free" || activeMode === "dictionary" || targetMidi !== null;
+timerEnabled.addEventListener("change",()=>{
   stopCountdown();
-  if (activeMode === "builder" && targetMidi === null) {
-    if (builderPhase === "empty") { nextChallenge.hidden=true;return; }
-    if (builderPhase === "triad" || builderPhase === "complete") showBuilderMilestone(builderPhase === "complete");
-    else if (timerEnabled.checked) scheduleAutoNext();
+  // Success progression is independent of the challenge-clock setting.
+  if(pendingAdvance && pendingAdvance.reason!=="timeout")return;
+  if(pendingAdvance?.reason==="timeout") {
+    if(timerEnabled.checked)scheduleAutoNext("timeout");
+    else {cancelAutoNext();nextChallenge.hidden=activeMode==="dictionary";}
     return;
   }
-  if (timerEnabled.checked && (targetMidi !== null && challengeTimer === null || activeMode === "dictionary" && dictionaryPractice && !checkChordAnswer.disabled)) startCountdown();
+  if(timerEnabled.checked && (targetMidi!==null&&challengeTimer===null || activeMode==="dictionary"&&dictionaryPractice&&!checkChordAnswer.disabled))startCountdown();
 });
 timerDuration.addEventListener("change", () => { if (countdown !== null) startCountdown(); });
 semitoneDifficulty.addEventListener("change", () => { if (activeMode === "semitones") chooseChallenge(); });
 function setDictionaryPractice(on) {
+  stopBuilderAudio();
+  lastCorrectNotes=[];
   clearWrongKeyFeedback();
   cancelAutoNext();
   dismissAchievement();
@@ -461,32 +486,31 @@ function setDictionaryPractice(on) {
   selected.clear();
   toggleChordNotes.textContent = on ? "Show Notes" : "Hide Notes & Practice";
   toggleChordNotes.setAttribute("aria-pressed", String(on));
-  checkChordAnswer.hidden = !on;
+  checkChordAnswer.hidden = true;
   checkChordAnswer.disabled = false;
   checkChordAnswer.textContent = "Check Answer";
   document.getElementById("dictionaryNotes").hidden = on;
   renderPiano();
   if (activeMode === "dictionary") {
-    trainingPrompt.textContent = on ? "Select the chord notes from memory, then check your answer." : "Blue keys show the selected chord inversion.";
+    trainingPrompt.textContent = on ? "Select every chord note from memory. Correct chords continue automatically." : "Blue keys show the selected chord inversion.";
     if (on) startCountdown(); else stopCountdown();
     updatePracticeChrome();
   }
 }
 toggleChordNotes.addEventListener("click", () => setDictionaryPractice(!dictionaryPractice));
-checkChordAnswer.addEventListener("click", () => {
-  if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled || activeMode !== "dictionary") return;
-  const correct = selected.size === dictionaryVoicing.length &&
-    dictionaryVoicing.every(midi => selected.has(midi));
-  if (!correct) {
-    incorrect("Keep going — select the remaining chord notes, then check again.");
-    return; // Incomplete answers retain the chord, selections and original deadline.
-  }
-  trainingPrompt.textContent = "Correct! You remembered every note.";
+function completeDictionaryAnswer() {
+  if(!dictionaryPractice||dictionaryTimedOut||checkChordAnswer.disabled||activeMode!=="dictionary")return;
+  if(selected.size!==dictionaryVoicing.length||!dictionaryVoicing.every(midi=>selected.has(midi)))return;
+  trainingPrompt.textContent="Correct! You remembered every note. Next practice starts automatically.";
   celebrate("Perfect chord! You got it!");
-  checkChordAnswer.disabled = true;
+  checkChordAnswer.disabled=true; // Locks this completed attempt against duplicate events.
+  lastCorrectNotes=[...dictionaryVoicing];
   stopCountdown();
+  updateHearControl();
   scheduleAutoNext();
-});
+}
+// Retain a hidden compatibility control; completion no longer requires submission.
+checkChordAnswer.addEventListener("click",completeDictionaryAnswer);
 function showChordOnPiano() {
   piano.querySelectorAll(".key").forEach(key => {
     const midi = Number(key.dataset.midi);
@@ -512,6 +536,8 @@ function updateInversionOptions() {
 function updateDictionary() {
   if (activeMode !== "dictionary") return;
   cancelAutoNext();
+  stopBuilderAudio();
+  lastCorrectNotes=[];
   clearWrongKeyFeedback();
   dismissAchievement();
   const root = Number(dictionaryRoot.value);
@@ -576,6 +602,7 @@ function cancelChallenge() {
   challengeTimer = null;
   targetMidi = null;
   chordAnswer = null;
+  lastCorrectNotes=[];referenceNotes=[];
   displayedChord = [];
   dictionaryVoicing = [];
 }
@@ -597,12 +624,14 @@ function chooseChallenge() {
     const semitones = degree === 1 ? 0 : degree === 3 ? (minor ? 3 : 4) : 7;
     chordAnswer = (root + semitones) % 12;
     displayedChord = [0, minor ? 3 : 4, 7].map(step => (root + step) % 12);
+    referenceNotes=[0,minor?3:4,7].map(step=>48+root+step);
     showChordOnPiano();
     const degreeName = degree === 1 ? "root (1st)" : degree === 3 ? "3rd" : "5th";
     chordTitle.textContent = NAMES[root] + (minor ? " minor" : " major");
     degreeTitle.textContent = "Find the " + degreeName;
     displayQuestion([{text:"Find the "}, {text:degreeName, strong:true}, {text:" of " + chordTitle.textContent}]);
     startCountdown();
+    updateHearControl();
     return;
   }
   if (activeMode === "find") {
@@ -636,6 +665,7 @@ function chooseChallenge() {
       startCountdown();
     }, 1800);
   }
+  updateHearControl();
 }
 // Keep feedback separate from selection so a resize cannot erase the red flash.
 // Each callback owns a feedback record and cannot clear a later question.
@@ -667,13 +697,14 @@ function answerKey(midi) {
     return false;
   }
   stopCountdown();
+  lastCorrectNotes=[midi];
   if (activeMode === "builder") {
     builderAdvancePending = true;
     celebrate("Correct! " + noteName(midi) + " added.");
     targetMidi = null;
     builderPhase = "answered";
     if (builderStep >= 2) {
-      advanceBuilder();
+      advanceBuilder(true);
       return true;
     }
     nextChallenge.hidden = timerEnabled.checked;
@@ -727,6 +758,7 @@ function updateStatus(start, end) {
   rangeText.textContent = visibleOctaves(piano.parentElement.clientWidth) + " octaves";
   const notes = [...selected].sort((a,b) => a-b).map(noteName);
   noteText.textContent = notes.length ? "Selected: " + notes.join(", ") : "Tap a key to highlight it";
+  updateHearControl();
 }
 function renderPiano() {
   const container = piano.parentElement;
@@ -805,12 +837,13 @@ function renderPiano() {
         else selected.add(midi);
         button.classList.toggle("selected", selected.has(midi));
         button.setAttribute("aria-pressed", String(selected.has(midi)));
-        checkChordAnswer.disabled = false;
+        completeDictionaryAnswer();
         updateStatus(start, end - 1);
         return;
       }
       if (activeMode !== "free" && (targetMidi === null || challengeTimer !== null)) return;
       if (activeMode === "free") {
+        stopBuilderAudio();
         if (selected.has(midi)) selected.delete(midi);
         else selected.add(midi);
       } else {
@@ -862,6 +895,8 @@ dictionaryQuality.addEventListener("change", () => {
 dictionaryInversion.addEventListener("change", updateDictionary);
 updateInversionOptions();
 document.getElementById("clearNotes").addEventListener("click", () => {
+  if(activeMode==="dictionary"&&dictionaryPractice&&checkChordAnswer.disabled)return;
+  if(activeMode==="free"||activeMode==="dictionary")stopBuilderAudio();
   selected.clear();
   renderPiano();
 });
@@ -924,7 +959,7 @@ function updatePracticeChrome() {
   document.getElementById("openHint").hidden=activeMode!=="builder"&&(activeMode!=="dictionary"||dictionaryPractice);
   builderHint.hidden=activeMode!=="builder";
   document.getElementById("dictionaryNotes").hidden=activeMode!=="dictionary"||dictionaryPractice;
-  if(activeMode!=="builder")hearBuilder.hidden=true;
+  updateHearControl();
   document.querySelectorAll(".startMode").forEach(button=>button.setAttribute("aria-current",button.dataset.mode===activeMode?"true":"false"));
 }
 document.getElementById("settingsOverlay").addEventListener("change",updatePracticeChrome);

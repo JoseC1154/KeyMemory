@@ -72,7 +72,7 @@ for(const id of Object.keys(expected)){
  assert.equal(get().builderPhase,'complete');advance(3999);assert.equal(get().builderPhase,'complete');advance(1);assert.equal(get().builderPhase,'question');timed(false);
 }
 // Toggle and navigation cancel old callbacks, not just the visible prompt.
-api.start('dominant13',48);press(get().targetMidi);next();press(get().targetMidi);timed(true);advance(4000);assert.equal(get().targetMidi,58);press(58);timed(false);advance(5000);assert.equal(get().builderPhase,'triad');next();assert.equal(get().targetMidi,62);
+api.start('dominant13',48);press(get().targetMidi);next();press(get().targetMidi);timed(true);advance(4000);assert.equal(get().targetMidi,58);press(58);timed(false);advance(4000);assert.equal(get().builderPhase,'question');assert.equal(get().targetMidi,62);
 api.start('major13',48);timed(true);press(get().targetMidi);advance(1800);press(get().targetMidi);change('builderLevel','triads');const saved=get().targets.join();advance(4000);assert.equal(get().targets.join(),saved);win.activateMode('free');advance(20000);assert.equal(el('activeModeName').textContent,'Free Play');timed(false);
 // Each random deck covers exactly its level, with no immediately repeated type/root.
 const totals={triads:4,colors:7,sevenths:8,extended:9,altered:6,mixed:34};
@@ -85,7 +85,7 @@ for(const [value,total] of Object.entries(totals)){
 let persistence;
 for(const [value,total] of Object.entries(totals)){
  change('builderLevel',value);change('builderSelection','custom');el('builderClear').click();
- assert.equal(get().builderPhase,'empty');assert.equal(get().targetMidi,null);assert.equal(get().notes.length,0);assert.equal(el('nextChallenge').hidden,true);assert.equal(el('hearBuilder').hidden,true);assert.match(el('trainingPrompt').textContent,/Select at least one/);
+ assert.equal(get().builderPhase,'empty');assert.equal(get().targetMidi,null);assert.equal(get().notes.length,0);assert.equal(el('nextChallenge').hidden,true);assert.equal(el('hearBuilder').hidden,false);assert.equal(el('hearBuilder').disabled,true);assert.match(el('trainingPrompt').textContent,/Select at least one/);
  timed(true);advance(25000);assert.equal(get().builderPhase,'empty');assert.equal(el('nextChallenge').hidden,true);timed(false);
  const choices=Array.from(doc.querySelectorAll('#builderTypeOptions input'),e=>e.value);assert.equal(choices.length,total);
  doc.querySelector(`#builderTypeOptions input[value="${choices[0]}"]`).click();

@@ -54,7 +54,7 @@ const server = http.createServer((req, res) => {
       for (let chord=0; chord<2; chord++) {
         for (let step=1;step<=3;step++) {
           await press(await page.evaluate(()=>targetMidi));
-          if(step<3) await page.locator('#nextChallenge').click();
+          if(step<3) await page.waitForTimeout(step===1?1900:4100);
         }
         assert.equal(await page.evaluate(()=>builderStep), 4);
         assert.equal(await page.locator('#nextChallenge').isVisible(), true);
@@ -102,10 +102,10 @@ const server = http.createServer((req, res) => {
       await press(52);await press(49);await press(49);
       assert.equal(await page.locator('[data-midi="49"]').evaluate(k=>k.classList.contains('wrongAnswer')),true);
       assert.deepEqual(await page.evaluate(()=>[...selected]),[52]);
-      await page.locator('#checkChordAnswer').click();
+      assert.equal(await page.locator('#checkChordAnswer').isVisible(),false);
       assert.equal(await page.locator('#checkChordAnswer').isDisabled(),false);
       assert.equal(await page.evaluate(()=>deadline),deadlineBefore);
-      await press(55);await press(60);await page.locator('#checkChordAnswer').click();
+      await press(55);await press(60);
       assert.equal(await page.locator('#checkChordAnswer').isDisabled(),true);
       await press(52);assert.deepEqual(await page.evaluate(()=>[...selected]),[52,55,60]);
       await settings(()=>page.locator('#timerEnabled').uncheck());

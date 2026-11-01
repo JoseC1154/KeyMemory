@@ -38,14 +38,14 @@ const near=(a,b)=>assert(Math.abs(a-b)<1e-8,`${a} != ${b}`);
  h=setup();h.api.start();h.hear();h.hear();await h.resolve(1);assert.equal(h.oscillators.length,3);await h.resolve(0);assert.equal(h.oscillators.length,3);h.close();
  h=setup();h.api.start();h.hear();h.hear();await h.resolve(1);await h.reject(0);assert.equal(h.oscillators.length,3);assert(!h.el('builderHint').textContent.includes('unavailable'));h.close();
  // Rejected current resume preserves usable timed progression without silent deadlock.
- h=setup();h.api.start();h.timed(true);h.hear();await h.reject();assert.equal(h.oscillators.length,0);assert.match(h.el('builderHint').textContent,/unavailable/);h.advance(4000);assert.equal(h.get().phase,'question');h.close();
+ h=setup();h.api.start();h.timed(true);h.hear();await h.reject();assert.equal(h.oscillators.length,0);assert.match(h.el('achievementText').textContent,/unavailable/);h.advance(4000);assert.equal(h.get().phase,'question');h.close();
  // A delayed resume after navigation/next cannot start an obsolete chord.
  for(const action of ['mode','next']){h=setup();h.api.start();h.hear();if(action==='mode')h.api.mode('free');else h.next();await h.resolve();assert.equal(h.oscillators.length,0);h.close();}
  // Explicit navigation and manual next cancel sustained voices promptly, not five seconds later.
  for(const action of ['mode','next']){h=setup();h.api.start();h.hear();await h.resolve();h.advance(250);if(action==='mode')h.api.mode('free');else h.next();for(const o of h.oscillators)near(o.stops.at(-1),.29);for(const g of h.gains)assert.deepEqual(g.events.slice(-2),[['hold',.25],['ramp',0,.28]]);assert.equal(h.get().audioUntil,0);h.close();}
- // Timer toggles respect the remaining sustain; switching off leaves a manual continuation.
- h=setup();h.api.start();h.timed(true);h.hear();await h.resolve();h.advance(1000);h.timed(false);h.advance(1000);h.timed(true);h.advance(3999);assert.equal(h.get().phase,'triad');h.advance(1);assert.equal(h.get().phase,'question');h.close();
- h=setup();h.api.start();h.timed(true);h.hear();await h.resolve();h.timed(false);h.advance(8000);assert.equal(h.get().phase,'triad');assert.equal(h.el('nextChallenge').hidden,false);h.next();assert.equal(h.get().phase,'question');h.close();
+ // Timer toggles respect the remaining sustain; switching off does not cancel success progression.
+ h=setup();h.api.start();h.timed(true);h.hear();await h.resolve();h.advance(1000);h.timed(false);h.advance(1000);h.timed(true);h.advance(3499);assert.equal(h.get().phase,'triad');h.advance(1);assert.equal(h.get().phase,'question');h.close();
+ h=setup();h.api.start();h.timed(true);h.hear();await h.resolve();h.timed(false);h.advance(5499);assert.equal(h.get().phase,'triad');h.advance(1);assert.equal(h.get().phase,'question');h.close();
  // Final-chord playback holds completion as well, and reports after-playback progression.
  h=setup();h.api.start();h.next();h.press(58);h.timed(true);h.hear();await h.resolve();assert.equal(h.oscillators.length,4);assert.match(h.el('trainingPrompt').textContent,/after playback/);h.timed(false);h.timed(true);assert.match(h.el('trainingPrompt').textContent,/after playback/);h.advance(5499);assert.equal(h.get().phase,'complete');h.advance(1);assert.equal(h.get().phase,'question');h.close();
  // Hear during a live question must not grant extra answering time.
