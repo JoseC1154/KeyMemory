@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.01.8";
+const APP_VERSION = "2026.11.01.9";
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -340,6 +340,9 @@ let builderAudioRequest = 0;
 let audioResumePending = false;
 const BUILDER_SUSTAIN_SECONDS = 5;
 const BUILDER_RELEASE_SECONDS = .35;
+function hearDuration(mode,notes) {
+  return mode==="builder" ? {sustain:BUILDER_SUSTAIN_SECONDS,release:BUILDER_RELEASE_SECONDS} : {sustain:notes.length===1?1:2,release:.15};
+}
 function stopBuilderAudio() {
   builderAudioRequest++;
   audioResumePending=false;
@@ -384,6 +387,7 @@ hearBuilder.addEventListener("click", async () => {
   const notes=currentHearNotes();
   if(!notes.length)return;
   const mode=activeMode;
+  const duration=hearDuration(mode,notes);
   stopBuilderAudio();
   const request=++builderAudioRequest;
   audioResumePending=true;
@@ -396,7 +400,7 @@ hearBuilder.addEventListener("click", async () => {
     if(request!==builderAudioRequest || activeMode!==mode)return;
     audioResumePending=false;
     const now = builderAudioContext.currentTime;
-    builderAudioUntil=Date.now()+(BUILDER_SUSTAIN_SECONDS+BUILDER_RELEASE_SECONDS)*1000;
+    builderAudioUntil=Date.now()+(duration.sustain+duration.release)*1000;
     for (const midi of notes) {
       const oscillator = builderAudioContext.createOscillator();
       const gain = builderAudioContext.createGain();
@@ -404,10 +408,10 @@ hearBuilder.addEventListener("click", async () => {
       oscillator.frequency.value = 440 * 2 ** ((midi - 69) / 12);
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(.12 / notes.length, now + .03);
-      gain.gain.setValueAtTime(.12 / notes.length, now + BUILDER_SUSTAIN_SECONDS);
-      gain.gain.linearRampToValueAtTime(0, now + BUILDER_SUSTAIN_SECONDS + BUILDER_RELEASE_SECONDS);
+      gain.gain.setValueAtTime(.12 / notes.length, now + duration.sustain);
+      gain.gain.linearRampToValueAtTime(0, now + duration.sustain + duration.release);
       oscillator.connect(gain);gain.connect(builderAudioContext.destination);
-      oscillator.start(now);oscillator.stop(now + BUILDER_SUSTAIN_SECONDS + BUILDER_RELEASE_SECONDS + .02);
+      oscillator.start(now);oscillator.stop(now + duration.sustain + duration.release + .02);
       oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
       builderVoices.push({oscillator,gain});
     }

@@ -31,7 +31,7 @@ Sheets support Escape, backdrop dismissal, focus return and contained keyboard f
 
 ## Hear in every mode
 
-One contextual button plays five seconds of sustained sound without adding visual answer highlights:
+One contextual button plays sound without adding visual answer highlights. Chord Builder sustains for five seconds; other modes play individual notes for about one second or chords/groups for about two seconds, each with a short release:
 
 | Mode | Before answering | After success |
 | --- | --- | --- |
