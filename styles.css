@@ -300,3 +300,14 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .rollHeading select{font-size:10px;padding:2px;max-width:64px;background:#24362b;color:white;border:1px solid #55775f;border-radius:4px}.rollHeading label{white-space:nowrap}
 
 .phraseViewControls[data-view-error]::after{content:attr(data-view-error);color:#ffd8a6;font-size:11px}
+
+/* Scale Builder: degree badges identify only exact completed physical keys. */
+.scaleDegree{position:absolute;top:calc(var(--black-h) + 4px);left:50%;transform:translateX(-50%);min-width:20px;height:20px;padding:2px 3px;border-radius:99px;display:grid;place-items:center;background:#174d31;color:#fff;font-size:11px;font-weight:900;line-height:1;pointer-events:none;z-index:3;}
+.key.black .scaleDegree{top:auto;bottom:5px;min-width:17px;height:17px;font-size:10px;background:#e8ffe9;color:#113d26;}
+.key.white .scaleDegree{top:auto;bottom:29px;}
+.scaleControls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;}
+.scaleControls[hidden]{display:none;}
+.scaleControls label{display:flex;gap:6px;align-items:center;}
+.scaleControls select{min-height:34px;color:#fff;background:#203029;border:1px solid #53715a;border-radius:8px;padding:5px;}
+.scaleControls small{flex-basis:100%;line-height:1.4;}
+@media(max-width:600px){.scaleControls{gap:8px}.scaleControls label{flex:1 1 115px;min-width:0}.scaleControls select{max-width:100%;min-width:0}.scaleDegree{font-size:10px}}
