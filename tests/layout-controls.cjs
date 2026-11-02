@@ -20,6 +20,17 @@ for(const id of ['modeOverlay','settingsOverlay','hintOverlay']){assert(!shell.c
 for(const id of ['builderControls','timerControls','semitoneControls','buildVersion'])assert(el('settingsOverlay').contains(el(id)),id+' belongs in settings');
 for(const id of ['hearBuilder','dictionaryActions','dictionaryControls','nextChallenge','trainingPrompt'])assert(shell.contains(el(id)),id+' remains in practice');
 assert.match(el('settingsOverlay').textContent,/Changes apply immediately/);
+// CSS contract: only the pre-run dialog overrides the narrow-screen bottom sheet.
+// Actual viewport geometry is independently checked in a real browser.
+const css=fs.readFileSync(path.join(root,'styles.css'),'utf8');
+const runOverlayRule=css.match(/#scaleRunOverlay,#scaleDegreeOverlay\{([^}]+)\}/)[1];
+assert.match(runOverlayRule,/align-items:center/);assert.match(runOverlayRule,/justify-content:center/);
+assert.match(runOverlayRule,/height:100%;height:100dvh/);assert.match(runOverlayRule,/bottom:auto/);
+assert.match(runOverlayRule,/box-sizing:border-box/);
+assert.match(css,/#scaleRunOverlay \.scaleRunPanel,#scaleDegreeOverlay \.scaleRunPanel\{min-height:0;max-height:100%;overflow-y:auto\}/);
+assert.match(css,/\.modalOverlay \{ align-items:flex-end; padding:max\(6px,env\(safe-area-inset-top\)\)/);
+assert.equal(el('scaleRunOverlay').getAttribute('role'),'dialog');
+assert(el('scaleRunOverlay').querySelector('.scaleRunPanel'));
 // Every compact menu item navigates, closes the modal, clears inert and returns focus.
 for(const mode of ['free','find','remember','semitones','degrees','builder','dictionary','phrase']){
  open('openModes');assert.equal(el('modeOverlay').hidden,false);assert.equal(shell.inert,true);assert.equal(d.activeElement,el('closeModes'));

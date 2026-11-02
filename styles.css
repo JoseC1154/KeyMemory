@@ -338,6 +338,11 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 @media(max-width:600px){.scaleQuestion{padding:8px;gap:4px}#scaleQuestionTitle{font-size:28px}#scaleQuestionDetail{font-size:12px}}
 @media(max-height:500px) and (orientation:landscape){.scaleQuestion{padding:4px 8px;margin:3px 0;gap:2px}#scaleQuestionTitle{font-size:25px}#scaleQuestionDetail{font-size:11px}.scalePractice .scaleStatus{margin-top:2px;font-size:10px}.scalePractice #timerRemaining{font-size:18px}}
 
+/* The pre-run question is a centered dialog, never the mobile Settings sheet.
+   Dynamic viewport height follows mobile browser chrome; safe-area padding and
+   the panel's internal overflow keep controls reachable on very short screens. */
+#scaleRunOverlay,#scaleDegreeOverlay{align-items:center;justify-content:center;bottom:auto;height:100%;height:100dvh;box-sizing:border-box}
+#scaleRunOverlay .scaleRunPanel,#scaleDegreeOverlay .scaleRunPanel{min-height:0;max-height:100%;overflow-y:auto}
 .scaleRunPanel{width:min(580px,100%);text-align:center;border:2px solid #75c994}
 .scaleRunPanel .modalTop{text-align:left}.scaleRunPanel .modalTop h2{font-size:26px;font-weight:900}
 #scaleRunScale{display:block;font-size:clamp(22px,3vw,32px);font-weight:900;margin:12px 0;color:#fff}
@@ -346,3 +351,5 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 #confirmScaleRun{font-size:19px;font-weight:900;min-height:48px;padding:10px 28px;margin-top:8px;background:#226d3d;border-color:#75c994;color:#fff}
 .scalePractice[data-scale-phase="degree-success"] .scaleQuestion{border-color:#8beba9;background:#174b2a}
 @media(max-height:500px) and (orientation:landscape){.scaleRunPanel{padding:10px}#scaleRunScale{font-size:23px;margin:7px 0}#scaleRunInstructions{font-size:15px;margin:7px 0}.scaleRunHint{margin:6px 0}#confirmScaleRun{min-height:38px;padding:6px 24px;margin-top:4px}}
+
+#scaleDegreeTitle{font-size:clamp(28px,5vw,44px);font-weight:900}#scaleDegreeRange{display:block;font-size:20px;font-weight:800}#scaleDegreeInstructions{font-size:16px;line-height:1.4}
