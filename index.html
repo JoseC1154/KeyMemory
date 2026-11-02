@@ -7,11 +7,11 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="#121212" name="theme-color"/>
 <title>KeyMemory — Piano</title>
-<link href="./styles.css?v=20261102-22" rel="stylesheet"/>
-<script defer="" src="./midi.js?v=20261102-22"></script>
-<script defer="" src="./phrase.js?v=20261102-22"></script>
-<script defer="" src="./phrase-view.js?v=20261102-22"></script>
-<script defer="" src="./app.js?v=20261102-22"></script>
+<link href="./styles.css?v=20261102-23" rel="stylesheet"/>
+<script defer="" src="./midi.js?v=20261102-23"></script>
+<script defer="" src="./phrase.js?v=20261102-23"></script>
+<script defer="" src="./phrase-view.js?v=20261102-23"></script>
+<script defer="" src="./app.js?v=20261102-23"></script>
 </head>
 <body>
 <main class="shell">
@@ -80,7 +80,7 @@
 <label>Seconds <select id="timerDuration"><option>5</option><option selected="">10</option><option>15</option><option>30</option><option>60</option></select></label>
 
 
-</section><section class="semitoneControls" hidden="" id="semitoneControls"><label>Difficulty <select id="semitoneDifficulty"><option value="easy">Beginner (1–3)</option><option value="medium">Intermediate (1–7)</option><option value="hard">Advanced (1–12)</option></select></label></section><section class="scaleControls" hidden id="scaleControls" aria-label="Scale Builder settings"><label>Root <select id="scaleRoot"></select></label><label>Scale <select id="scaleType"><option value="major">Major</option><option value="naturalMinor">Natural minor</option><option value="harmonicMinor">Harmonic minor</option><option value="melodicMinor">Melodic minor (ascending)</option><option value="majorPent">Major pentatonic</option><option value="minorPent">Minor pentatonic</option><option value="blues">Minor blues</option><option value="dorian">Dorian</option><option value="phrygian">Phrygian</option><option value="lydian">Lydian</option><option value="mixolydian">Mixolydian</option><option value="locrian">Locrian</option></select></label><small>Complete four consecutive full-scale runs, including the root, within 5 seconds each. Between runs, a 1.5-second ready pause prepares you. After four successes, a 2.5-second Level up pause leads to 30 degree questions, each within 3 seconds. Any wrong note or missed deadline restarts the full preview and all four runs. Press Start when ready. Match the labeled octaves; C4 is middle C.</small></section><section class="builderControls" hidden="" id="builderControls">
+</section><section class="semitoneControls" hidden="" id="semitoneControls"><label>Difficulty <select id="semitoneDifficulty"><option value="easy">Beginner (1–3)</option><option value="medium">Intermediate (1–7)</option><option value="hard">Advanced (1–12)</option></select></label></section><section class="scaleControls" hidden id="scaleControls" aria-label="Scale Builder settings"><label>Root <select id="scaleRoot"></select></label><label>Scale <select id="scaleType"><option value="major">Major</option><option value="naturalMinor">Natural minor</option><option value="harmonicMinor">Harmonic minor</option><option value="melodicMinor">Melodic minor (ascending)</option><option value="majorPent">Major pentatonic</option><option value="minorPent">Minor pentatonic</option><option value="blues">Minor blues</option><option value="dorian">Dorian</option><option value="phrygian">Phrygian</option><option value="lydian">Lydian</option><option value="mixolydian">Mixolydian</option><option value="locrian">Locrian</option></select></label><small>Complete four consecutive full-scale runs, including the root, within 10 seconds each. Between runs, a 1.5-second ready pause prepares you. After four successes, a 2.5-second Level up pause leads to 30 degree questions, each within 3 seconds. Any wrong note or missed deadline restarts the full preview and all four runs. Press Start when ready. Match the labeled octaves; C4 is middle C.</small></section><section class="builderControls" hidden="" id="builderControls">
 <label>Practice <select id="builderLevel"><option value="triads">1 · Triads</option><option value="colors">2 · Suspended / added / sixths</option><option value="sevenths">3 · Sevenths</option><option value="extended">4 · Ninths / elevenths / thirteenths</option><option value="altered">5 · Altered dominants</option><option value="mixed">Mixed · All levels</option></select></label>
 <label>Selection <select id="builderSelection"><option value="random">Random</option><option value="custom">Choose chord types</option></select></label>
 <details hidden="" id="builderTypes"><summary>Chord types <span id="builderSelectionCount"></span></summary><div class="builderTypeActions"><button id="builderSelectAll" type="button">Select all</button><button id="builderClear" type="button">Clear</button><small>Applies to this level. One type isolates it; several mix only your choices.</small></div><div id="builderTypeOptions"></div></details>

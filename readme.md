@@ -116,9 +116,9 @@ Use **Inspect** to examine a saved phrase without playing it, and **Window** to 
 
 **Show example** displays a labeled C-major chord with a C3 bass and a separate C5 note, including a pedal-tail example. It is view-only: never saved, graded, played automatically, or substituted for your recording. **Back to my phrase** exits it; starting any transport exits it automatically.
 
-## Scale Builder (Build 22)
+## Scale Builder (Build 23)
 
-Choose one of the existing 12 scale types and a root in Settings. The study preview repeats until you press **Start scale race**. Complete **four consecutive ascending scale runs**, including the root and upper tonic, with **five seconds for each run**. After each of the first three successes, a 1.5-second ready pause leads to the next run automatically. After the fourth, a prominent **Level up** card pauses for 2.5 seconds before degree testing starts. Transition time does not consume an exercise deadline.
+Choose one of the existing 12 scale types and a root in Settings. The study preview repeats until you press **Start scale race**. Complete **four consecutive ascending scale runs**, including the root and upper tonic, with **ten seconds for each run**. After each of the first three successes, a 1.5-second ready pause leads to the next run automatically. After the fourth, a prominent **Level up** card pauses for 2.5 seconds before degree testing starts. Transition time does not consume an exercise deadline.
 
 Every degree question accepts an immediate answer and allows **three seconds maximum**. Thirty consecutive correct answers master that key. A wrong note or missed deadline clears both the four-run progress and degree streak, returning to the full study preview; press Start to rebuild all four runs. Previously mastered keys remain saved locally. Completion shows **30/30**, then selects the next unmastered root and waits in preview until Start. After all 12 keys are mastered, Review starts a fresh four-run sequence without erasing mastery.
 

@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.22";
+const APP_VERSION = "2026.11.02.23";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -136,7 +136,7 @@ let scaleNotes=[],scaleIndex=0,scaleFeedbackTimer=null,scaleRestarting=false;
 const scaleStart=document.getElementById("scaleStart");
 let scalePhase="preview",scalePreviewIndex=0,scalePreviewInterval=null,scaleRaceInterval=null;
 let scaleRaceDeadline=0,scaleStreak=0,scaleAskedAt=0,scaleTarget=0,scaleRuns=0;
-const SCALE_RACE_MS=5000,SCALE_DEGREE_MS=3000,SCALE_READY_MS=1500,SCALE_LEVELUP_MS=2500;
+const SCALE_RACE_MS=10000,SCALE_DEGREE_MS=3000,SCALE_READY_MS=1500,SCALE_LEVELUP_MS=2500;
 let scaleDegreeDeadline=0,scaleDegreeTimer=null,scaleDegreeInterval=null,scaleGeneration=0,scaleQuestionId=0;
 const scaleNoteName=midi=>noteName(midi)+(Math.floor(midi/12)-1);
 const scaleStatus=document.getElementById("scaleStatus");
@@ -194,7 +194,7 @@ function scaleBuildNotes(){
 }
 function scalePrompt(){
   const next=scaleNotes[scaleIndex],previous=scaleNotes[scaleIndex-1];targetMidi=next;
-  setScaleQuestion("DEGREE "+SCALE_DEGREES[scaleType.value][scaleIndex],scaleIndex===0?"Play the root "+scaleNoteName(next)+" · 5 seconds for the whole run":"From "+scaleNoteName(previous)+" move "+(next-previous)+" semitone"+(next-previous===1?"":"s")+" UP");
+  setScaleQuestion("DEGREE "+SCALE_DEGREES[scaleType.value][scaleIndex],scaleIndex===0?"Play the root "+scaleNoteName(next)+" · 10 seconds for the whole run":"From "+scaleNoteName(previous)+" move "+(next-previous)+" semitone"+(next-previous===1?"":"s")+" UP");
 }
 function completeScaleRun(){
   clearScaleDelay();stopCountdown();dismissAchievement();scaleRuns++;targetMidi=null;selected.clear();
@@ -215,7 +215,7 @@ function startScalePreview(){
   scalePhase="preview";scaleIndex=0;scaleStreak=0;scaleRuns=0;targetMidi=null;selected.clear();
   scaleStart.hidden=false;scaleStart.textContent="Start scale race";
   nextChallenge.hidden=true;timerRemaining.textContent="";
-  setScaleQuestion("Study the scale",scaleNoteName(scaleNotes[0])+"–"+scaleNoteName(scaleNotes.at(-1))+" · Four complete runs, 5 seconds each. Press Start when ready.");
+  setScaleQuestion("Study the scale",scaleNoteName(scaleNotes[0])+"–"+scaleNoteName(scaleNotes.at(-1))+" · Four complete runs, 10 seconds each. Press Start when ready.");
   const generation=scaleGeneration;
   function showDegree(){
     if(activeMode!=="scale"||scalePhase!=="preview"||scaleGeneration!==generation)return;
@@ -232,7 +232,7 @@ function scaleRaceTick(generation=scaleGeneration){
   const remaining=Math.max(0,scaleRaceDeadline-performance.now());
   timerRemaining.textContent=(remaining/1000).toFixed(1)+"s";
   document.querySelectorAll(".countdownMirror").forEach(el=>el.textContent=timerRemaining.textContent);
-  if(remaining<=0)failScaleAttempt("5 seconds elapsed — restart all four scale runs.");
+  if(remaining<=0)failScaleAttempt("10 seconds elapsed — restart all four scale runs.");
 }
 
 function startScaleRace(){
@@ -299,7 +299,7 @@ function finishScaleAttempt(){
 function answerScaleKey(midi){
   if(targetMidi===null||scaleRestarting||!["race","degrees"].includes(scalePhase))return null;
   if(scalePhase==="race"){
-    if(performance.now()>=scaleRaceDeadline){failScaleAttempt("5 seconds elapsed — restart all four scale runs.");return null;}
+    if(performance.now()>=scaleRaceDeadline){failScaleAttempt("10 seconds elapsed — restart all four scale runs.");return null;}
     if(midi!==targetMidi){failScaleAttempt("Wrong note — restart all four scale runs.");return false;}
     selected.add(midi);scaleIndex++;
     if(scaleIndex===scaleNotes.length)completeScaleRun();
@@ -1248,7 +1248,7 @@ function updatePracticeChrome() {
   if(activeMode==="phrase"&&phraseSnapshot)text=(phraseSnapshot.options.rhythm?"Notes + rhythm":"Notes only")+" · "+(["record-countin","recording"].includes(phraseSnapshot.state)?phraseSnapshot.options.sourceBpm:phraseSnapshot.options.playBpm)+" BPM";
   if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
   if(activeMode==="semitones") text=semitoneDifficulty.selectedOptions[0].textContent;
-  if(activeMode==="scale") text=scaleRoot.selectedOptions[0].textContent+" "+scaleType.selectedOptions[0].textContent+" · "+(scalePhase==="degrees" ? scaleStreak+"/30" : scalePhase==="race" ? "5-second run" : scalePhase==="passed" ? "Passed" : "Preview");
+  if(activeMode==="scale") text=scaleRoot.selectedOptions[0].textContent+" "+scaleType.selectedOptions[0].textContent+" · "+(scalePhase==="degrees" ? scaleStreak+"/30" : scalePhase==="race" ? "10-second run" : scalePhase==="passed" ? "Passed" : "Preview");
   updateScaleStatus();
   // Dictionary choices are already visible inline; avoid repeating them in the summary.
   summary.textContent=text;
