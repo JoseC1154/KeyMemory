@@ -231,7 +231,7 @@ function answerScaleKey(midi){
     const elapsed=performance.now()-scaleAskedAt;
     if(elapsed<1000){
       trainingPrompt.textContent="Take at least 1 second per selection · "+scaleStreak+"/30";
-      return false;
+      return null;
     }
     const correct=midi===scaleTarget;
     if(!correct){
@@ -961,8 +961,8 @@ function pressPianoKey(midi,fromMidi=false) {
   }
   if(activeMode==="scale"){
     const correct=answerScaleKey(midi);
-    if(!correct&&button)flashWrongKey(button);
-    if(correct){renderPiano();updateStatusFromPiano();}
+    if(correct===false&&button)flashWrongKey(button);
+    if(correct===true){renderPiano();updateStatusFromPiano();}
     return;
   }
   // Only correct training answers use the green selected-key feedback.
