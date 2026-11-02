@@ -7,12 +7,12 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.16";
+const APP_VERSION = "2026.11.02.17";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
 let phraseSeenLow=21,phraseSeenHigh=108;
-let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false;
+let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false,phrasePianoScroll=0;
 let phraseViewModel=null,phraseViewSignature="",phraseViewTick=null,phraseViewStamp=0;
 try{const prefs=JSON.parse(localStorage.getItem("keymemory.phrase.view")||"{}");if(["auto","show","hide"].includes(prefs.visibility))phraseViewVisibility=prefs.visibility;if(prefs.spelling==="flat")phraseViewSpelling="flat";if(prefs.names===false)phraseViewNames=false;}catch{}
 const wrongKeyFeedback = new Map();
@@ -1260,7 +1260,10 @@ function renderPhraseViewContent(){
   const show=enabled&&(phraseViewVisibility==="show"||(phraseViewVisibility==="auto"&&(!small||phraseSmallScore)));
   panel.hidden=!show;
   const hidePiano=show&&small;
+  const wasPianoHidden=piano.parentElement.hidden;
+  if(hidePiano&&!wasPianoHidden)phrasePianoScroll=piano.parentElement.scrollLeft;
   piano.parentElement.hidden=hidePiano;
+  if(!hidePiano&&wasPianoHidden){renderPiano();piano.parentElement.scrollLeft=activeMode==="phrase"?phrasePianoScroll:0;}
   document.querySelector(".pianoHint").hidden=hidePiano;
   document.querySelector(".info").hidden=hidePiano;
   const toggle=document.getElementById("phraseViewSwitch");toggle.hidden=!small;toggle.textContent=show?"Show piano":"Show score";toggle.setAttribute("aria-expanded",String(show));

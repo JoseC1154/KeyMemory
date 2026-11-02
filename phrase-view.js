@@ -43,10 +43,10 @@
   for(const p of pitches){body+=`<g class="staffPitch" data-midi="${p.midi}" data-clef="${p.clef}" data-diatonic="${p.diatonic}"><title>${esc(p.name+', '+p.clef+' staff')}</title>`;
    for(const y of p.ledger)body+=`<line class="ledger" x1="${p.x-10}" x2="${p.x+10}" y1="${y}" y2="${y}" stroke="currentColor"/>`;
    body+=accidentalSVG(p.accidental,p.x-17,p.y)+`<ellipse cx="${p.x}" cy="${p.y}" rx="6" ry="4" transform="rotate(-15 ${p.x} ${p.y})" fill="currentColor"/>`;
-   if(names)body+=`<text x="${p.x+11}" y="${p.y+3}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${esc(p.name)}</text>`;
+   if(names)body+=`<text x="${p.x+11}" y="${p.y+3}" font-size="12" font-family="system-ui,sans-serif" fill="currentColor">${esc(p.name)}</text>`;
    body+='</g>';
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseStaffSVG" style="min-height:${height}px" viewBox="0 ${minY} ${width} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseStaffSVG" style="min-height:${height>195?height:0}px" viewBox="0 ${minY} ${width} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
  }
  function prepareTimeline(source={},options={}){
   const transpose=options.transpose??0;if(!Number.isInteger(transpose))throw new RangeError('Transpose must be whole semitones.');

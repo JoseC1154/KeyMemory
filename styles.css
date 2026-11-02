@@ -281,13 +281,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .key.phrasePlaying{outline:3px solid #1683bd;outline-offset:-3px;background:#89d7ff!important}.key.phrasePlaying::before{content:"▶";position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:11px;color:#102a35}
 @media(max-width:1049px),(max-height:549px){
  .phraseScore{padding:5px}.phraseViewControls{margin:3px 0;gap:6px}.phraseViewScope{display:none}
- .phraseStaff svg{height:135px}.phraseStaff{max-height:145px}.phraseRoll svg{height:110px}
+ .phraseStaff svg{height:145px}.phraseStaff{max-height:150px}.phraseRoll svg{height:110px}
  .scoreOptions{gap:6px;font-size:11px}.scoreOptions select{padding:3px;min-height:27px}.scoreCaveat{font-size:10px;margin:3px 0}
  .phrasePitchText,.phraseControllerText{font-size:10px}.rollHeading{font-size:10px;gap:4px}
 }
 @media(max-height:500px) and (orientation:landscape){
  .phraseScore{display:grid;grid-template-columns:1fr 1fr;gap:2px 9px}.phraseScore[hidden]{display:none}
- .scoreOptions,.scoreCaveat{grid-column:1/-1}.phraseStaff{grid-column:1;grid-row:3/7}.phraseStaff svg{height:140px}
+ .scoreOptions,.scoreCaveat{grid-column:1/-1}.phraseStaff{grid-column:1;grid-row:3/7}.phraseStaff svg{height:145px}
  .phrasePitchText{grid-column:1;grid-row:7}.rollHeading,.phraseRoll,.scoreSeek,.phraseControllerText{grid-column:2}
  .phraseRoll svg{height:85px}.scoreCaveat{margin:1px 0}
 }
