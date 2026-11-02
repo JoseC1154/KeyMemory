@@ -14,6 +14,7 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 - `node tests/phrase-engine.cjs`
 - `node tests/phrase-integration.cjs`
 - `node tests/phrase-audio.cjs`
+- `node tests/phrase-keyboard.cjs`
 - `node tests/browser-regression.cjs`
 
 The DOM suite uses a deterministic clock to test immediate wrong→wrong→correct retries without Next, preserved prompts/targets/phases/deadlines, repeated red feedback, chord completion, timer toggles, timeouts, navigation, stale animation events, Free Play, and Dictionary exact inversions/partial-check retry/success lock. It advances a simulated clock, including a keyboard rerender during wrong-key feedback. It cannot verify rendered animation timing or touch layout.
@@ -37,3 +38,5 @@ The phrase-integration suite exercises the app through simulated raw MIDI and UI
 The phrase-audio suite uses fake WebAudio and MIDI to check velocity-sensitive live note sustain until release, per-channel polyphony, unchanged tap envelopes in the seven earlier modes, lifecycle/deferred-resume cancellation, audible-click scheduling for ascending 1–2–3 Record/Play count-ins, exclusion of metronome/count-in notes from recording, shared-clock lookahead, and recorded-duration playback. Phrase integration explicitly advances count-ins and checks the full 120-second recording window starts afterward. This validates scheduling, not actual perceived sound, device latency, or physical pedal behavior.
 
 Controller regressions cover only CC64 (raw values retained; threshold 64, not a half-pedal model), CC7 and CC11. Simulated MIDI verifies other controller numbers are ignored. Phrase integration checks v2 controller capture, initial channel state, physical-key versus pedal-audible durations, transposition/tempo/section reconstruction, and old v1 loading. Fake WebAudio checks pedal-latched reattacks, channel isolation, velocity × volume × expression, pedal-up releasing only released keys, default reset on disconnect, controller automation on the shared playback clock, metronome bypass, and Stop cleanup. Physical pedal/audio validation remains separate.
+
+The phrase-keyboard suite simulates available widths at desktop1180/1280/1440 and narrow400/843 viewports. It checks the A0–C8 baseline (88 keys;52 white/36 black), partial-octave black-key anchors, fit versus intended horizontal scrolling, compact visual labels and exact octave/MIDI accessibility labels, 0–127-safe live/loaded/transposed expansion, reset behavior, preserved scroll position across timer rerenders, and earlier-mode ranges. These are DOM/math assertions, not actual browser layout, touch, or physical-keyboard validation.

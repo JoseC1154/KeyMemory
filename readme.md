@@ -97,3 +97,9 @@ Volume and expression scale velocity-sensitive audio per channel and affect note
 Old saved phrases still load with default controller state. New saved phrases use a validated versioned format, with at most 20,000 controller changes per recording (repeated unchanged values are omitted) in addition to 10,000 notes. Stop cancels voices; losing the device/focus resets observed controller state safely. For reliable setup after reconnecting, release the pedal and move volume/expression to the values you want before recording. No performance data is uploaded.
 
 Pitch bend, modulation, aftertouch, program/bank selection, other pedals, 14-bit controller extensions and MIDI clock remain unsupported. The app synth does not reproduce the YC61’s patches/effects or record its audio.
+
+## Full desktop piano in Phrase Trainer (Build 2026.11.02.15)
+
+Phrase Trainer shows the complete **88-key A0–C8 piano** across the available desktop width. Compact white-key labels and C-octave markers keep it readable; narrow black keys retain their exact note/octave in accessible labels and hover text. On smaller screens the same keyboard scrolls sideways with usable key widths. Other modes keep their existing compact ranges.
+
+MIDI remains supported across 0–127: saved/transposed or newly played Phrase notes outside the standard piano range extend the display instead of being rejected. The range stays stable during live input; deleting the saved phrase resets this extra displayed range. Rendering updates preserve horizontal scroll position rather than recentering the piano.

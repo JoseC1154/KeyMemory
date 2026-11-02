@@ -7,10 +7,11 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.14";
+const APP_VERSION = "2026.11.02.15";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
+let phraseSeenLow=21,phraseSeenHigh=108;
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -738,6 +739,7 @@ function activateMode(mode) {
   dismissAchievement();
   cancelChallenge();
   activeMode = mode;
+  document.querySelector(".shell").classList.toggle("phraseWorkspace",mode==="phrase");
   chordQuestion.hidden = mode !== "degrees" && mode !== "builder";
   nextChallenge.textContent = "Next";
   dictionaryPractice = false;
@@ -765,9 +767,11 @@ function dictionaryKeyboardRange() {
 }
 function phraseKeyboardRange(){
   const notes=(phraseSnapshot?.notes||[]).map(n=>n.note+(phraseSnapshot?.options.transpose||0));
-  if(!notes.length)return {start:48,octaves:2};
-  const low=Math.min(...notes),high=Math.max(...notes),start=Math.floor(low/12)*12;
-  return {start,octaves:Math.ceil((high-start+1)/12)};
+  const low=Math.max(0,Math.min(21,phraseSeenLow,...notes)),high=Math.min(127,Math.max(108,phraseSeenHigh,...notes));
+  // A standard piano starts on A, not C. Only extend when real MIDI needs it.
+  const start=low<21?Math.floor(low/12)*12:21;
+  const end=high>108?Math.min(128,Math.ceil((high+1)/12)*12):109;
+  return {start,end,octaves:Math.ceil((end-start)/12)};
 }
 function visibleOctaves(width) {
   if(activeMode==="phrase")return phraseKeyboardRange().octaves;
@@ -776,7 +780,7 @@ function visibleOctaves(width) {
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
-  rangeText.textContent = visibleOctaves(piano.parentElement.clientWidth) + " octaves";
+  rangeText.textContent = activeMode==="phrase"?(start===21&&end===108?"88 keys · A0–C8":"Extended MIDI "+start+"–"+end):visibleOctaves(piano.parentElement.clientWidth) + " octaves";
   const notes = [...selected].sort((a,b) => a-b).map(noteName);
   noteText.textContent = notes.length ? "Selected: " + notes.join(", ") : "Tap a key to highlight it";
   updateHearControl();
@@ -842,7 +846,7 @@ function renderPiano() {
   const pad = mobile ? 6 : 10;
   const octaves = visibleOctaves(width);
   const start = activeMode === "phrase" ? phraseKeyboardRange().start : activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
-  const end = activeMode==="phrase"?Math.min(128,start+octaves*12):start + octaves * 12; // exclusive: whole C-to-B octaves
+  const end = activeMode==="phrase"?phraseKeyboardRange().end:start + octaves * 12; // exclusive upper MIDI boundary
   const whiteCount = activeMode==="phrase"?Array.from({length:end-start},(_,i)=>start+i).filter(m=>!BLACK.has(m%12)).length:octaves * 7;
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
@@ -853,11 +857,17 @@ function renderPiano() {
   // Cap desktop key width so a short keyboard never stretches into giant keys.
   // Use the keyboard's own natural width and center it when space remains.
   const desktopWhiteWidth = (usable - (whiteCount - 1) * gap) / whiteCount;
-  const whiteW = mobile
+  const whiteW = activeMode==="phrase"&&width<1050?Math.max(26,mobile?mobileWhiteWidth:26):mobile
     ? Math.max(activeMode === "dictionary" ? 22 : 26, mobileWhiteWidth)
     : Math.max(18, Math.min(54, desktopWhiteWidth));
   const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
   piano.style.width = keyboardWidth + "px";
+  const phrase=activeMode==="phrase";
+  piano.classList.toggle("phrasePiano",phrase);
+  piano.classList.toggle("compactBlackLabels",phrase&&whiteW*.65<20);
+  const hint=document.querySelector(".pianoHint");
+  if(phrase)hint.textContent=(start===21&&end===109?"88 keys · A0–C8":"Extended MIDI "+start+"–"+(end-1))+(keyboardWidth>width+1?" · Scroll sideways ↔":"");
+  else{hint.textContent="Swipe sideways for more keys ";const arrow=document.createElement("span");arrow.setAttribute("aria-hidden","true");arrow.textContent="↔";hint.append(arrow);}
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
   const shortLandscape = matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
   const whiteH = shortLandscape ? 118 : mobile
@@ -882,7 +892,9 @@ function renderPiano() {
     button.type = "button";
     button.className = "key " + color;
     button.dataset.midi = String(midi);
-    button.setAttribute("aria-label", noteName(midi));
+    const exactName=noteName(midi)+(Math.floor(midi/12)-1);
+    button.setAttribute("aria-label",activeMode==="phrase"?exactName+" · MIDI "+midi:noteName(midi));
+    if(activeMode==="phrase")button.title=exactName+" · MIDI "+midi;
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
     const feedback = wrongKeyFeedback.get(midi);
@@ -895,7 +907,7 @@ function renderPiano() {
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
     const label = document.createElement("span");
     label.className = "noteLabel";
-    label.textContent = NAMES[midi % 12];
+    label.textContent = NAMES[midi % 12]+(activeMode==="phrase"&&(midi%12===0||midi===21)?Math.floor(midi/12)-1:"");
     button.append(label);
     button.addEventListener("click", () => pressPianoKey(midi));
     return button;
@@ -1103,6 +1115,7 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
     const accepted=phraseEngine.input(event); // Idle tracking keeps held keys safe across mode changes.
     if(activeMode!=="phrase")return false;
     if(currentDialog||document.hidden||!event.focused)return true;
+    phraseSeenLow=Math.min(phraseSeenLow,event.note);phraseSeenHigh=Math.max(phraseSeenHigh,event.note);
     if(accepted)selected.add(event.note);
     if(!duplicate)soundPhraseMonitor(event.note,event.velocity,event.channel);
     renderPiano();return true;
@@ -1221,6 +1234,6 @@ const phraseFields={phraseSourceBpm:["sourceBpm",1],phrasePlayBpm:["playBpm",1],
 for(const [id,[key,multiplier]]of Object.entries(phraseFields))document.getElementById(id).addEventListener("change",event=>phraseEngine?.setOptions({[key]:Number(event.target.value)*multiplier}));
 document.getElementById("phraseRhythm").addEventListener("change",event=>phraseEngine?.setOptions({rhythm:event.target.value==="rhythm"}));
 document.getElementById("phraseFull").addEventListener("click",()=>phraseEngine?.setOptions({sectionStart:0,sectionEnd:phraseSnapshot?.duration||120000}));
-document.getElementById("phraseClear").addEventListener("click",()=>{if(window.confirm("Delete the saved phrase from this browser?")){selected.clear();phraseEngine?.clear();}});
+document.getElementById("phraseClear").addEventListener("click",()=>{if(window.confirm("Delete the saved phrase from this browser?")){selected.clear();phraseSeenLow=21;phraseSeenHigh=108;phraseEngine?.clear();}});
 let phraseTaps=[];
 document.getElementById("phraseTap").addEventListener("click",()=>{const now=Date.now();if(phraseTaps.length&&now-phraseTaps.at(-1)>2000)phraseTaps=[];phraseTaps.push(now);phraseTaps=phraseTaps.slice(-5);if(phraseTaps.length<2)return;const bpm=Math.round(60000*(phraseTaps.length-1)/(phraseTaps.at(-1)-phraseTaps[0]));if(bpm>=30&&bpm<=300)phraseEngine?.setOptions({sourceBpm:bpm,playBpm:bpm});});

@@ -256,3 +256,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .phraseControls label{flex:1 1 190px}
 .phraseControls input{width:85px;min-height:34px;padding:5px;border:1px solid #55775f;border-radius:6px;background:#24362b;color:white;font-size:14px}
 @media(max-height:500px) and (orientation:landscape){.phraseActions{margin-top:3px;gap:4px}.phraseActions button{min-height:30px;padding:4px 8px}}
+
+/* Phrase Trainer uses the Mac desktop width for a complete A0–C8 piano. */
+.shell.phraseWorkspace{max-width:none}
+.phrasePiano .noteLabel{font-size:10px;letter-spacing:0;white-space:nowrap}
+.phrasePiano.compactBlackLabels .black .noteLabel{visibility:hidden}
+@media(max-width:600px){.phrasePiano .noteLabel{font-size:11px}}
