@@ -233,14 +233,15 @@ function answerScaleKey(midi){
       trainingPrompt.textContent="Take at least 1 second per selection · "+scaleStreak+"/30";
       return false;
     }
-    if(midi!==scaleTarget){
+    const correct=midi===scaleTarget;
+    if(!correct){
       scaleStreak=0;incorrect("Incorrect degree — streak reset to zero.");
     } else {
       scaleStreak++;
       if(scaleStreak===30){finishScaleAttempt();return true;}
     }
     nextScaleDegree();
-    return midi===scaleTarget;
+    return correct;
   }
   return false;
 }
