@@ -45,3 +45,7 @@ The phrase-keyboard suite simulates available widths at desktop1180/1280/1440 an
 - `node tests/phrase-view-integration.cjs`
 
 The pure view suite checks sharp/flat spelling, diatonic staff coordinates and ledger notes, exact fractional timing, channel-specific pedal tails, unchanged source data, transposition, and bounded dense-window rendering. The view integration suite uses synthetic stored phrases and MIDI with deterministic time to check read-only controls, tempo/section cursor mapping, held-key versus pedal-tail highlights, live recording projection, local preferences, responsive Score/Piano switching, and unchanged transport. These tests are not physical MIDI or audible/engraved-notation verification.
+
+- `node tests/scale-builder.cjs`
+
+The Scale Builder suite independently checks all 12 interval/degree formulas in all 12 roots (144 complete races and 4,320 immediate degree answers), tonic-first completion, exact octaves, one-second deadline boundaries and stalled timer delivery, wrong/timeout full resets, 30/30 status, next-key/all-key mastery and persistence. It also checks cancelled callbacks, settings and mode interruptions, ignored preview input, and simulated MIDI held-note/legato behavior. These deterministic DOM/MIDI tests do not establish physical YC61 latency, browser rendering, or audible sound.

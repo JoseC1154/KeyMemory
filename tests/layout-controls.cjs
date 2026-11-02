@@ -15,7 +15,7 @@ const keyboard=(key,shiftKey=false)=>d.dispatchEvent(new w.KeyboardEvent('keydow
 const open=(id)=>{el(id).focus();el(id).click();};
 const press=m=>d.querySelector(`[data-midi="${m}"]`).click();
 const ids=[...d.querySelectorAll('[id]')].map(e=>e.id);assert.equal(new Set(ids).size,ids.length,'unique IDs');
-assert.equal(d.querySelectorAll('.startMode').length,8);assert(!el('dictionaryExpand'));
+assert.equal(d.querySelectorAll('.startMode').length,9);assert(!el('dictionaryExpand'));
 for(const id of ['modeOverlay','settingsOverlay','hintOverlay']){assert(!shell.contains(el(id)));assert.equal(el(id).getAttribute('role'),'dialog');assert.equal(el(id).getAttribute('aria-modal'),'true');assert(el(id).hidden);}
 for(const id of ['builderControls','timerControls','semitoneControls','buildVersion'])assert(el('settingsOverlay').contains(el(id)),id+' belongs in settings');
 for(const id of ['hearBuilder','dictionaryActions','dictionaryControls','nextChallenge','trainingPrompt'])assert(shell.contains(el(id)),id+' remains in practice');
@@ -59,4 +59,4 @@ change('dictionaryRoot','0');change('dictionaryQuality','major');change('diction
 open('openHint');assert.equal(el('dictionaryNotes').hidden,false);assert.equal(el('builderHint').hidden,true);el('hintOverlay').click();assert.equal(d.activeElement,el('openHint'));
 el('toggleChordNotes').click();assert(el('openHint').hidden,'dictionary practice hides answer hint');press(52);before=s();open('openSettings');el('closeSettings').click();assert.deepEqual(Array.from(s().selected),[52]);assert.equal(s().deadline,before.deadline);
 open('openModes');d.querySelector('[data-mode="free"]').click();assert.equal(shell.inert,false);assert.equal(el('hearBuilder').hidden,false);assert(el('hearBuilder').disabled);assert(el('dictionaryActions').hidden);press(48);advance(20000);assert.equal(s().activeMode,'free');assert.deepEqual(Array.from(s().selected),[48]);
-console.log('PASS: unique IDs; 8 compact modes; contextual settings; immediate changes; modal Done/Escape/backdrop/focus trap/inert/focus return; preserved question/red feedback/notes/deadlines; countdown mirrors and timeout; hint isolation; settings/navigation interruption. DOM only, not visual or touch QA.');w.close();
+console.log('PASS: unique IDs; 9 compact modes; contextual settings; immediate changes; modal Done/Escape/backdrop/focus trap/inert/focus return; preserved question/red feedback/notes/deadlines; countdown mirrors and timeout; hint isolation; settings/navigation interruption. DOM only, not visual or touch QA.');w.close();

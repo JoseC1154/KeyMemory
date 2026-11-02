@@ -115,3 +115,11 @@ Use **Inspect** to examine a saved phrase without playing it, and **Window** to 
 **Auto / Show / Hide** controls the view. Desktop shows staff, roll and the full piano together. Narrow or short windows switch between **Show score / Show piano** to keep the workspace usable. View preferences are local; changing these controls does not restart recording, playback or practice. No notation library, network service or uploaded recording is involved.
 
 **Show example** displays a labeled C-major chord with a C3 bass and a separate C5 note, including a pedal-tail example. It is view-only: never saved, graded, played automatically, or substituted for your recording. **Back to my phrase** exits it; starting any transport exits it automatically.
+
+## Scale Builder (Build 21)
+
+Choose one of the existing 12 scale types and a root in Settings. The study preview repeats until you press **Start scale race**. Play the whole ascending scale, including its root and upper tonic, within seven seconds. The labels show exact octaves; **C4 is middle C**. This mode checks exact MIDI notes, not merely pitch classes.
+
+Finishing the race immediately starts a randomized degree exam. Every prompt accepts an immediate answer and has a **one-second maximum deadline**, not a minimum waiting period. Thirty consecutive correct answers master that key. A wrong note or missed deadline cancels the attempt and returns to the full study preview; press Start to rebuild the entire scale before trying the degree exam again. The completion display reads **30/30** before automatically selecting the next unmastered root. The next root remains in preview until Start. Mastery is saved locally per scale type across all 12 roots.
+
+Settings sheets do not pause active deadlines. Changing the root/type or leaving the mode cancels the old attempt and its callbacks. Preview presses are not graded. New MIDI notes can be played legato; duplicate note-on messages for an already-held pitch do not count as another answer. The normal MIDI boundary guard remains at race start, so release previously held keys before beginning.
