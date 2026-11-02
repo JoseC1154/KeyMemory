@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.17";
+const APP_VERSION = "2026.11.02.18";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -92,7 +92,8 @@ function scheduleAutoNext(reason="success") {
     if(pendingAdvance!==pending || activeMode!==pending.mode)return;
     pendingAdvance=null;
     if(reason==="timeout"&&!timerEnabled.checked)return;
-    if(activeMode==="dictionary")setDictionaryPractice(true);
+    if(activeMode==="scale")startScaleRace();
+    else if(activeMode==="dictionary")setDictionaryPractice(true);
     else if(activeMode==="builder")advanceBuilder();
     else chooseChallenge();
   }, Math.max(pause,builderAudioUntil-Date.now()+150));
@@ -104,6 +105,81 @@ const timerRemaining = document.getElementById("timerRemaining");
 const timerProgress = document.getElementById("timerProgress");
 const semitoneControls = document.getElementById("semitoneControls");
 const semitoneDifficulty = document.getElementById("semitoneDifficulty");
+const scaleControls = document.getElementById("scaleControls");
+const scaleRoot = document.getElementById("scaleRoot");
+const scaleType = document.getElementById("scaleType");
+const SCALE_PATTERNS = {
+  major:[0,2,4,5,7,9,11,12], naturalMinor:[0,2,3,5,7,8,10,12],
+  harmonicMinor:[0,2,3,5,7,8,11,12], melodicMinor:[0,2,3,5,7,9,11,12],
+  majorPent:[0,2,4,7,9,12], minorPent:[0,3,5,7,10,12],
+  blues:[0,3,5,6,7,10,12], dorian:[0,2,3,5,7,9,10,12],
+  phrygian:[0,1,3,5,7,8,10,12], lydian:[0,2,4,6,7,9,11,12],
+  mixolydian:[0,2,4,5,7,9,10,12], locrian:[0,1,3,5,6,8,10,12]
+};
+const SCALE_DEGREES = {
+  major:["1","2","3","4","5","6","7","8"],
+  naturalMinor:["1","2","♭3","4","5","♭6","♭7","8"],
+  harmonicMinor:["1","2","♭3","4","5","♭6","7","8"],
+  melodicMinor:["1","2","♭3","4","5","6","7","8"],
+  majorPent:["1","2","3","5","6","8"],
+  minorPent:["1","♭3","4","5","♭7","8"],
+  blues:["1","♭3","4","♭5","5","♭7","8"],
+  dorian:["1","2","♭3","4","5","6","♭7","8"],
+  phrygian:["1","♭2","♭3","4","5","♭6","♭7","8"],
+  lydian:["1","2","3","♯4","5","6","7","8"],
+  mixolydian:["1","2","3","4","5","6","♭7","8"],
+  locrian:["1","♭2","♭3","4","♭5","♭6","♭7","8"]
+};
+const SCALE_ROOT_NAMES=["C","D♭","D","E♭","E","F","F♯","G","A♭","A","B♭","B"];
+SCALE_ROOT_NAMES.forEach((name,pc)=>{const option=document.createElement("option");option.value=String(pc);option.textContent=name;scaleRoot.append(option);});
+let scaleNotes=[],scaleIndex=0,scaleFeedbackTimer=null,scaleRestarting=false;
+function clearScaleDelay(){if(scaleFeedbackTimer!==null)clearTimeout(scaleFeedbackTimer);scaleFeedbackTimer=null;scaleRestarting=false;}
+function scalePrompt(){
+  const next=scaleNotes[scaleIndex];
+  const previous=scaleNotes[scaleIndex-1];
+  targetMidi=next;
+  displayQuestion([{text:"Degree "},{text:SCALE_DEGREES[scaleType.value][scaleIndex],strong:true},
+    {text:" · "+(scaleIndex===1?"From "+noteName(previous)+", move ":"Move ")},
+    {text:(next-previous)+" semitone"+(next-previous===1?"":"s")+" UP",strong:true}]);
+}
+function startScaleRace(){
+  clearScaleDelay();stopCountdown();dismissAchievement();selected.clear();
+  const root=48+Number(scaleRoot.value);
+  scaleNotes=SCALE_PATTERNS[scaleType.value].map(offset=>root+offset);
+  scaleIndex=1;scaleRestarting=false;
+  renderPiano();
+  scalePrompt();
+  nextChallenge.hidden=true;
+  startCountdown();
+  updatePracticeChrome();
+}
+function finishScaleAttempt(){
+  stopCountdown();targetMidi=null;
+  celebrate("Scale complete! All "+scaleNotes.length+" degrees!");
+  nextChallenge.textContent="New scale";
+  nextChallenge.hidden=timerEnabled.checked;
+  if(timerEnabled.checked)scheduleAutoNext("success");
+}
+function answerScaleKey(midi){
+  if(scaleRestarting||targetMidi===null)return false;
+  if(midi!==targetMidi){
+    stopCountdown();
+    incorrect("Wrong key — scale resets!");
+    scaleRestarting=true;targetMidi=null;
+    selected.clear();
+    renderPiano();
+    scaleFeedbackTimer=setTimeout(()=>{scaleFeedbackTimer=null;if(activeMode==="scale")startScaleRace();},1400);
+    return false;
+  }
+  selected.add(midi);
+  scaleIndex++;
+  if(scaleIndex===scaleNotes.length)finishScaleAttempt();
+  else {scalePrompt();renderPiano();}
+  return true;
+}
+scaleRoot.addEventListener("change",()=>{if(activeMode==="scale")startScaleRace();});
+scaleType.addEventListener("change",()=>{if(activeMode==="scale")startScaleRace();});
+
 let countdown = null;
 let deadline = 0;
 let secondsLeft = 0;
@@ -455,6 +531,13 @@ function startCountdown() {
     timerProgress.value = remaining / (seconds * 1000) * 100;
     if (remaining <= 0) {
       stopCountdown();
+      if (activeMode === "scale") {
+        if(targetMidi===null)return;
+        incorrect("Time is up — scale resets!");
+        targetMidi=null;
+        scheduleAutoNext("timeout");
+        return;
+      }
       if (activeMode === "dictionary") {
         if (!dictionaryPractice || checkChordAnswer.disabled) return;
         dictionaryTimedOut = true;
@@ -613,6 +696,7 @@ function cancelChallenge() {
   midiController?.resetQuestion();
   stopBuilderAudio();
   clearWrongKeyFeedback();
+  clearScaleDelay();
   cancelAutoNext();
   stopCountdown();
   if (challengeTimer !== null) clearTimeout(challengeTimer);
@@ -629,6 +713,7 @@ function chooseChallenge() {
   if (activeMode === "free" || activeMode === "phrase") return;
   if (activeMode === "dictionary") { updateDictionary(); nextChallenge.hidden = true; return; }
   if (activeMode === "builder") { beginBuilder(); return; }
+  if (activeMode === "scale") { startScaleRace(); return; }
   selected.clear();
   renderPiano();
   const notes = keyRange();
@@ -750,8 +835,9 @@ function activateMode(mode) {
   timerControls.hidden = mode === "free" || mode === "phrase";
   semitoneControls.hidden = mode !== "semitones";
   builderControls.hidden = mode !== "builder";
+  scaleControls.hidden = mode !== "scale";
   selected.clear();
-  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "phrase" ? "Phrase Trainer" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
+  modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "scale" ? "Scale Builder" : mode === "phrase" ? "Phrase Trainer" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
   nextChallenge.hidden = mode === "free" || mode === "dictionary" || mode === "phrase";
   renderPiano();
@@ -781,6 +867,7 @@ function visibleOctaves(width) {
   if(activeMode==="phrase")return phraseKeyboardRange().octaves;
   if (activeMode === "dictionary") return dictionaryKeyboardRange().octaves;
   if (activeMode === "builder" && builderTargets.length) return Math.max(1, Math.ceil((builderTargets[builderTargets.length - 1] - 48 + 1) / 12));
+  if (activeMode === "scale") return 3;
   return width < 600 ? 2 : width < 1050 ? 3 : 4;
 }
 function updateStatus(start, end) {
@@ -799,6 +886,12 @@ function pressPianoKey(midi,fromMidi=false) {
   const button=piano.querySelector('[data-midi="'+midi+'"]');
   if(activeMode==="phrase"){
     if(phraseSnapshot?.state==="practice"){phraseEngine.input({kind:"on",note:midi,velocity:100,channel:0});phraseEngine.input({kind:"off",note:midi,velocity:0,channel:0});unlockMidiAudio();soundMidiNote(midi);}
+    return;
+  }
+  if(activeMode==="scale"){
+    const correct=answerScaleKey(midi);
+    if(!correct&&button)flashWrongKey(button);
+    if(correct){renderPiano();updateStatusFromPiano();}
     return;
   }
   // Only correct training answers use the green selected-key feedback.
@@ -909,6 +1002,12 @@ function renderPiano() {
     if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) :
       activeMode === "builder" ? builderNotes.includes(midi) : activeMode==="phrase" ? (phraseSnapshot?.target||[]).includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
+    if(activeMode==="scale"){
+      const index=scaleNotes.indexOf(midi);
+      if(index>=0&&index<scaleIndex){button.classList.add("chordTone");
+        const degree=document.createElement("span");degree.className="scaleDegree";degree.textContent=SCALE_DEGREES[scaleType.value][index];button.append(degree);
+        if(index===scaleIndex-1)button.classList.add("builderNewest");}
+    }
     const label = document.createElement("span");
     label.className = "noteLabel";
     label.textContent = activeMode==="phrase"?phraseDisplayName(midi,midi%12===0||midi===21):NAMES[midi % 12];
@@ -1009,6 +1108,7 @@ function updatePracticeChrome() {
   if(activeMode==="phrase"&&phraseSnapshot)text=(phraseSnapshot.options.rhythm?"Notes + rhythm":"Notes only")+" · "+(["record-countin","recording"].includes(phraseSnapshot.state)?phraseSnapshot.options.sourceBpm:phraseSnapshot.options.playBpm)+" BPM";
   if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
   if(activeMode==="semitones") text=semitoneDifficulty.selectedOptions[0].textContent;
+  if(activeMode==="scale") text=scaleRoot.selectedOptions[0].textContent+" "+scaleType.selectedOptions[0].textContent+" · "+scaleIndex+"/"+Math.max(1,scaleNotes.length-1);
   // Dictionary choices are already visible inline; avoid repeating them in the summary.
   summary.textContent=text;
   document.getElementById("dictionaryActions").hidden=activeMode!=="dictionary";
