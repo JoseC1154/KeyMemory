@@ -49,7 +49,7 @@ Repeated Hear replaces previous playback. Pending automatic advancement waits fo
 
 On HTTPS in a current Chrome or Edge browser, open **Settings → Connect MIDI** and decide whether to grant the browser’s MIDI permission. Nothing is requested on page load. Connect your YC61’s USB TO HOST port to the Mac, then select its input; **YC Series Port 1** is preferred when available. No driver installation or device configuration is performed by this app. Consult [Yamaha’s connection guide](https://yamahasynth.com/learn/yc-series/mastering-yc-connecting-the-yc-series-to-a-computer-or-ios-device/) if the operating system does not detect the keyboard.
 
-Input is note-on/note-off only, on any channel. KeyMemory requests no sysex and sends no MIDI output. Clock, controllers and sustain-pedal messages are ignored. The keyboard’s own local sound may coexist with the app’s short key sounds; the app changes no keyboard settings. Contextual **Hear** durations are unchanged (Builder five seconds; other modes one-second notes/two-second groups).
+Exercise input uses note-on/note-off on any channel. Phrase Trainer also captures CC64, CC7 and CC11. KeyMemory requests no sysex and sends no MIDI output. Clock and unsupported controllers are ignored; Phrase Trainer supports sustain pedal, channel volume and expression. The keyboard’s own local sound may coexist with the app’s short key sounds; the app changes no keyboard settings. Contextual **Hear** durations are unchanged (Builder five seconds; other modes one-second notes/two-second groups).
 
 External notes use the same questions, immediate red retries and automatic progression as screen keys. Find/Semitones/Degrees match pitch class as before; Remember/Builder/Dictionary practice require the exact displayed octave. The screen begins at MIDI48 (C below middle C), and middle C is MIDI60; octave names on hardware may differ. Notes outside the visible keyboard still grade correctly, but have no on-screen key to flash. Dictionary exploration plays notes without grading. Free Play adds selected notes for Hear; release stops the short voice but does not erase that selection—use Clear or screen keys to edit it.
 
@@ -63,7 +63,7 @@ Chord Dictionary shows **Root note**, **Chord quality** and **Inversion** direct
 
 ## Phrase Trainer (Build 2026.11.01.12)
 
-**Record · Transpose · Repeat** is the eighth mode. Connect MIDI in Settings, close the sheet, and choose Record. A visible counter runs to **2:00**, then recording stops automatically; Stop finishes sooner. Each MIDI note retains its onset, duration, velocity and channel, including overlapping chord notes. MIDI receive timestamps reduce dispatch-latency distortion. This records MIDI performance data, **not the YC61’s audio**. Sustain pedal/CC messages are not recorded. The safety limit is 10,000 note events.
+**Record · Transpose · Repeat** is the eighth mode. Connect MIDI in Settings, close the sheet, and choose Record. A visible counter runs to **2:00**, then recording stops automatically; Stop finishes sooner. Each MIDI note retains its onset, duration, velocity and channel, including overlapping chord notes. MIDI receive timestamps reduce dispatch-latency distortion. This records MIDI performance data, **not the YC61’s audio**. Sustain pedal (CC64), volume (CC7) and expression (CC11) are recorded alongside notes. The safety limit is 10,000 note events.
 
 One phrase and its settings are saved locally in this browser when storage is available; no performance data is sent to GitHub or another server. A new recording asks before replacing it, an empty recording keeps the old phrase, and Delete saved phrase requires confirmation. Storage failures leave the phrase available for the current session. Clearing browser data removes the saved phrase.
 
@@ -77,3 +77,23 @@ One phrase and its settings are saved locally in this browser when storage is av
 MIDI is the primary recording input. Screen keys can answer practice notes but do not record simulated note durations. General countdown challenges do not control Phrase Trainer. Its extra settings stay in Settings, while Record/Play/Practice/Stop/Transpose, the current target, progress and piano stay on the practice screen.
 
 Engine and integration tests use synthetic MIDI and deterministic clocks. They do not establish actual YC61 hardware latency, driver behavior, physical touch usability or audible fidelity.
+
+### Phrase timing and held-key monitoring (Build 2026.11.02.14)
+
+Record and Play phrase now begin with a visible **1–2–3** and an audible three-beat count-in. The tempo click continues throughout recording (Recorded BPM) and playback (Playback BPM), including rests. The two-minute recording allowance begins **after** the count-in. Play only when the recording prompt appears; notes started before that boundary are not recorded. Practice retains its separate four-beat count-in.
+
+Phrase Trainer's live monitoring now holds each note's sound until its MIDI note-off, with velocity-sensitive gain and independent channel/note releases. Other modes retain their short key-tap sound. Previously the monitor faded in about 0.7 seconds even while a key was held; that was separate from the stored MIDI duration and the Phrase playback envelope. The controller support described below additionally preserves pedal, expression and volume.
+
+Playback and clicks use an anchored, short-lookahead Web Audio schedule rather than starting every sound at JavaScript callback arrival. Recorded timestamps, overlapping notes and durations are not quantized. Playback retains the full selected interval, including trailing rests. Stop, navigation, losing focus or MIDI disconnection cancels count-in, queued clicks and voices; an interrupted recording is finalized safely. A canceled or failed audio startup does not overwrite the saved phrase.
+
+The app's synth is not the YC61 sound engine: patches, effects and keyboard audio are not reproduced. Actual hardware latency and audible output still require verification with the connected instrument.
+
+### Sustain, volume and expression
+
+Phrase Trainer captures raw **CC64, CC7 and CC11** values, channels and timestamps. The app retains all CC64 values but interprets pedal values 0–63 as off and 64–127 as on; it does not model true half-pedal acoustics. Key-held durations remain unchanged in the saved notes and practice grading. Playback and live monitoring hold released notes while the pedal is down, including repeated strikes of the same pitch and channel-specific pedals. Pedal-up releases only notes whose keys are already up.
+
+Volume and expression scale velocity-sensitive audio per channel and affect notes already sounding. The app starts with volume 100, expression 127 and pedal 0 until it observes changes; it does not query or change the keyboard’s settings. Controller movements during count-in establish the recording’s initial state. A selected section reconstructs controller state and pedal-held notes from before its start. Tempo changes scale note and controller timestamps together. Metronome clicks are independent of channel volume/expression and are not recorded.
+
+Old saved phrases still load with default controller state. New saved phrases use a validated versioned format, with at most 20,000 controller changes per recording (repeated unchanged values are omitted) in addition to 10,000 notes. Stop cancels voices; losing the device/focus resets observed controller state safely. For reliable setup after reconnecting, release the pedal and move volume/expression to the values you want before recording. No performance data is uploaded.
+
+Pitch bend, modulation, aftertouch, program/bank selection, other pedals, 14-bit controller extensions and MIDI clock remain unsupported. The app synth does not reproduce the YC61’s patches/effects or record its audio.

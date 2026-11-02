@@ -27,10 +27,12 @@ window.KeyMemoryMidi = {
         const data=event.data;
         if(!data||data.length!==3)return;
         const [command,note,velocity]=data,kind=command&0xf0,channel=command&0xf;
-        if((kind!==0x80&&kind!==0x90)||note>127||velocity>127)return;
-        const key=channel+":"+note;
+        if(note>127||velocity>127)return;
         const stamp=event.timeStamp,clock=performance.now();
         const time=Number.isFinite(stamp)&&stamp>0&&stamp<=clock+1000?Date.now()-Math.max(0,clock-stamp):Date.now();
+        if(kind===0xb0){if([64,7,11].includes(note))onRaw({kind:"control",controller:note,value:velocity,channel,focused,time});return;}
+        if(kind!==0x80&&kind!==0x90)return;
+        const key=channel+":"+note;
         const intercepted=onRaw({kind:kind===0x80||velocity===0?"off":"on",note,velocity,channel,focused,time});
         if(kind===0x80||velocity===0){
           held.delete(key);

@@ -7,7 +7,7 @@ function setup({app=false,audio=false,secure=true,supported=true,ports=[port('ot
  const html=app?fs.readFileSync(path.join(root,'index.html'),'utf8'):'<button id="connectMidi">Connect</button><button id="disconnectMidi">Disconnect</button><select id="midiInput"></select><span id="midiStatus"></span>';
  const w=new JSDOM(html,{pretendToBeVisual:true,runScripts:'outside-only',url:'https://keymemory.test/'}).window,d=w.document;
  w.matchMedia=()=>({matches:false});w.ResizeObserver=class{observe(){}};Object.defineProperty(w,'isSecureContext',{value:secure});
- let now=10,id=0;const timers=new Map(),requests=[],notes=[],releases=[];let resets=0;
+ let now=10,id=0;const timers=new Map(),requests=[],notes=[],releases=[],raw=[];let resets=0;
  w.Date.now=()=>now;w.performance.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};w.clearTimeout=id=>timers.delete(id);w.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};w.clearInterval=id=>timers.delete(id);
  function advance(ms){const end=now+ms;for(;;){const t=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!t)break;const[k,v]=t;now=v.time;if(v.repeat)v.time+=v.repeat;else timers.delete(k);v.fn();}now=end;}
  const access={inputs:new Map(ports.map(p=>[p.id,p])),onstatechange:null,get outputs(){throw Error('MIDI outputs must never be inspected');}};
@@ -16,12 +16,12 @@ function setup({app=false,audio=false,secure=true,supported=true,ports=[port('ot
  if(audio)w.AudioContext=class{get currentTime(){return now/1000;}destination={};resume(){return new Promise((resolve,reject)=>audioResumes.push({resolve,reject}));}createOscillator(){const o={frequency:{value:0},stops:[],connect(){},disconnect(){},start(){},stop(time){this.stops.push(time);}};audioOscillators.push(o);return o;}createGain(){return{gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){},cancelScheduledValues(){},setTargetAtTime(){}},connect(){},disconnect(){}};}};
  w.eval(adapter);const el=id=>d.getElementById(id);let controller;
  if(app){w.eval(fs.readFileSync(path.join(root,'phrase.js'),'utf8'));w.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.midiTest={mode:activateMode,get:()=>({mode:activeMode,target:targetMidi,chordAnswer,step:builderStep,phase:builderPhase,notes:[...builderNotes],selected:[...selected],deadline,countdown,dictionaryVoicing:[...dictionaryVoicing],dictionaryPractice}),controller:midiController};');controller=w.midiTest.controller;}
- else controller=w.KeyMemoryMidi.create({onNote:(...args)=>notes.push(args),onRelease:(...args)=>releases.push(args),onReset:()=>resets++,status:el('midiStatus'),select:el('midiInput'),connect:el('connectMidi'),disconnect:el('disconnectMidi')});
+ else controller=w.KeyMemoryMidi.create({onRaw:event=>{raw.push(event);return false;},onNote:(...args)=>notes.push(args),onRelease:(...args)=>releases.push(args),onReset:()=>resets++,status:el('midiStatus'),select:el('midiInput'),connect:el('connectMidi'),disconnect:el('disconnectMidi')});
  async function connect(){el('connectMidi').click();requests.at(-1).resolve(access);await flush();}
  function send(p,note,velocity=100,channel=0,kind=0x90,timeStamp=now){p.onmidimessage?.({data:new Uint8Array([kind|channel,note,velocity]),timeStamp});}
  function off(p,note,channel=0){send(p,note,0,channel,0x80);}
  function change(value){el('midiInput').value=value;el('midiInput').dispatchEvent(new w.Event('change'));}
- return{w,d,el,access,ports,requests,notes,releases,audioResumes,audioOscillators,controller,connect,send,off,change,advance,get:()=>w.midiTest.get(),mode:mode=>w.midiTest.mode(mode),close:()=>w.close()};
+ return{w,d,el,access,ports,requests,notes,releases,raw,audioResumes,audioOscillators,controller,connect,send,off,change,advance,get:()=>w.midiTest.get(),mode:mode=>w.midiTest.mode(mode),close:()=>w.close()};
 }
 (async()=>{
  // No permission prompt on page load; every request explicitly disables SysEx.
@@ -29,6 +29,11 @@ function setup({app=false,audio=false,secure=true,supported=true,ports=[port('ot
  for(let ch=0;ch<16;ch++){h.send(yc,48+ch,100,ch);h.off(yc,48+ch,ch);}assert.equal(h.notes.length,16);
  h.send(yc,72);h.send(yc,72);h.send(yc,72,100,1);assert.equal(h.notes.length,17,'duplicate and layered same pitch ignored');h.off(yc,72);h.off(yc,72,1);h.send(yc,72);assert.equal(h.notes.length,18);h.send(yc,72,0);h.send(yc,72);assert.equal(h.notes.length,19,'velocity-zero releases');h.off(yc,72);
  const count=h.notes.length;yc.onmidimessage({data:[0xb0,64,127],timeStamp:100});yc.onmidimessage({data:[0x90,128,100],timeStamp:100});yc.onmidimessage({data:[0x90,60],timeStamp:100});assert.equal(h.notes.length,count);
+ // Only approved CC64 pedal, CC7 volume and CC11 expression are forwarded, never graded as notes.
+ const rawBefore=h.raw.length,noteBeforeCC=h.notes.length;
+ for(let ch=0;ch<16;ch++)for(const [cc,value]of[[64,63],[64,64],[7,85],[11,50]])h.send(yc,cc,value,ch,0xb0);
+ const controls=h.raw.slice(rawBefore).filter(e=>e.kind==='control');assert.equal(controls.length,64);for(let ch=0;ch<16;ch++){const events=controls.filter(e=>e.channel===ch);assert.deepEqual(events.map(e=>[e.controller,e.value]),[[64,63],[64,64],[7,85],[11,50]]);assert(events.every(e=>Number.isFinite(e.time)));}
+ assert.equal(h.notes.length,noteBeforeCC);const approvedCount=h.raw.length;for(const cc of [1,2,10,66,67,120,123])h.send(yc,cc,100,0,0xb0);assert.equal(h.raw.length,approvedCount,'unrelated controllers ignored');
  // All-held barrier spans question boundaries and ignores late chord stragglers until release.
  h.send(yc,60);h.controller.resetQuestion();h.send(yc,64);h.off(yc,60);h.send(yc,67);assert.equal(h.notes.length,count+1);h.off(yc,64);h.off(yc,67);h.send(yc,67);assert.equal(h.notes.length,count+2);h.off(yc,67);
  h.advance(100);h.controller.resetQuestion();h.send(yc,69,100,0,0x90,1);assert.equal(h.notes.length,count+2,'old timestamp ignored');h.off(yc,69);h.send(yc,69);assert.equal(h.notes.length,count+3);h.off(yc,69);
