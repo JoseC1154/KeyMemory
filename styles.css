@@ -324,3 +324,16 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 /* Keep exact octave names separate from scale-degree badges on narrow black keys. */
 .scalePiano .black .noteLabel{font-size:9px;letter-spacing:-.2px}
 .scalePiano .black .scaleDegree{bottom:29px}
+
+/* A focused question card, not an overlay: the piano stays playable. */
+.scaleQuestion{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center;border:2px solid #75c994;border-radius:10px;background:#112b1c;padding:10px 12px;margin:5px 0;min-width:0}
+#scaleQuestionTitle{font-size:clamp(26px,3.2vw,42px);font-weight:900;line-height:1.05;letter-spacing:.4px;color:#fff;overflow-wrap:anywhere}
+#scaleQuestionDetail{font-size:13px;line-height:1.3;color:#dbf6e4}
+.scalePractice #practiceSummary{display:none}
+.scalePractice #timerRemaining{font-size:22px;line-height:1;font-weight:900;margin-left:auto}
+.scalePractice .scaleStatus{font-size:11px;margin-top:5px;line-height:1.25}
+.scalePractice[data-scale-phase="levelup"] .scaleQuestion{border-color:#ffd972;background:#373014}
+.scalePractice[data-scale-phase="ready"] .scaleQuestion{border-color:#a2d3f3}
+.scalePractice[data-scale-phase="degrees"] .achievement,.scalePractice[data-scale-phase="race"] .achievement{display:none}
+@media(max-width:600px){.scaleQuestion{padding:8px;gap:4px}#scaleQuestionTitle{font-size:28px}#scaleQuestionDetail{font-size:12px}}
+@media(max-height:500px) and (orientation:landscape){.scaleQuestion{padding:4px 8px;margin:3px 0;gap:2px}#scaleQuestionTitle{font-size:25px}#scaleQuestionDetail{font-size:11px}.scalePractice .scaleStatus{margin-top:2px;font-size:10px}.scalePractice #timerRemaining{font-size:18px}}
