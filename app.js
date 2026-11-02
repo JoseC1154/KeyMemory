@@ -163,8 +163,9 @@ function finishScaleAttempt(){
 function answerScaleKey(midi){
   if(scaleRestarting||targetMidi===null)return false;
   if(midi!==targetMidi){
+    incorrect(timerEnabled.checked ? "Wrong key — scale resets!" : "Try this degree again.");
+    if (!timerEnabled.checked) return false;
     stopCountdown();
-    incorrect("Wrong key — scale resets!");
     scaleRestarting=true;targetMidi=null;
     selected.clear();
     renderPiano();
