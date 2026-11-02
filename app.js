@@ -282,14 +282,23 @@ function answerScaleKey(midi){
     }
     const correct=midi===scaleTarget;
     if(!correct){
-      scaleStreak=0;incorrect("Incorrect degree — streak reset to zero.");
-    } else {
-      scaleStreak++;
-      if(scaleStreak===30){finishScaleAttempt();return true;}
+      scaleStreak=0;
+      scalePhase="failed";
+      targetMidi=null;
+      selected.clear();
+      incorrect("Wrong degree — restart from the scale preview and 7-second race.");
+      updateScaleStatus();
+      scaleFeedbackTimer=setTimeout(()=>{
+        scaleFeedbackTimer=null;
+        if(activeMode==="scale")startScalePreview();
+      },1500);
+      return false;
     }
+    scaleStreak++;
+    if(scaleStreak===30){finishScaleAttempt();return true;}
     nextScaleDegree();
     updateScaleStatus();
-    return correct;
+    return true;
   }
   return false;
 }
