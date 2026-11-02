@@ -7,10 +7,11 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="#121212" name="theme-color"/>
 <title>KeyMemory — Piano</title>
-<link href="./styles.css?v=20261102-15" rel="stylesheet"/>
-<script defer="" src="./midi.js?v=20261102-15"></script>
-<script defer="" src="./phrase.js?v=20261102-15"></script>
-<script defer="" src="./app.js?v=20261102-15"></script>
+<link href="./styles.css?v=20261102-16" rel="stylesheet"/>
+<script defer="" src="./midi.js?v=20261102-16"></script>
+<script defer="" src="./phrase.js?v=20261102-16"></script>
+<script defer="" src="./phrase-view.js?v=20261102-16"></script>
+<script defer="" src="./app.js?v=20261102-16"></script>
 </head>
 <body>
 <main class="shell">
@@ -51,6 +52,18 @@
 
 
 
+<section id="phraseViewControls" class="phraseViewControls" hidden aria-label="Phrase display">
+<label>Score <select id="phraseViewVisibility"><option value="auto">Auto</option><option value="show">Show</option><option value="hide">Hide</option></select></label>
+<button id="phraseViewSwitch" type="button" aria-controls="phraseScore">Show score</button><button id="phraseViewExample" type="button">Show example</button><span class="phraseViewScope">Pitch reading · exact timing</span>
+</section>
+<section id="phraseScore" class="phraseScore" hidden aria-label="Live Score and exact performance timing">
+<div class="scoreOptions"><strong>Live Score</strong><label>Spelling <select id="phraseSpelling"><option value="sharp">Sharps ♯</option><option value="flat">Flats ♭</option></select></label><label><input type="checkbox" id="phraseNoteNames" checked/> Note names</label></div>
+<p class="scoreCaveat">Pitch reading, not full rhythmic notation. Staff split is not a hand assignment; spelling is your preference, not a guessed key.</p>
+<div id="phraseStaff" class="phraseStaff"></div><p id="phrasePitchText" class="phrasePitchText" aria-live="off"></p>
+<div class="rollHeading"><strong>Exact timing</strong><label>Window <select id="phraseViewWindow"><option value="250">0.25 s</option><option value="1000">1 s</option><option value="3000">3 s</option><option value="6000" selected>6 s</option><option value="12000">12 s</option></select></label><span>Solid = key held · dashed tail = pedal sustain</span></div><div id="phraseRoll" class="phraseRoll"></div>
+<label class="scoreSeek">Inspect <input id="phraseViewTime" type="range" min="0" max="1" step="0.01" value="0" aria-label="Inspect phrase time in seconds"/><output id="phraseViewTimeLabel">0.00 s</output></label>
+<p id="phraseControllerText" class="phraseControllerText"></p>
+</section>
 <div class="pianoHint">Swipe sideways for more keys <span aria-hidden="true">↔</span></div>
 <section aria-label="Interactive piano" class="pianoContainer">
 <div aria-label="Piano keys" class="piano" id="piano"></div>

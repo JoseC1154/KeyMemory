@@ -7,11 +7,14 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.15";
+const APP_VERSION = "2026.11.02.16";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
 let phraseSeenLow=21,phraseSeenHigh=108;
+let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false;
+let phraseViewModel=null,phraseViewSignature="",phraseViewTick=null,phraseViewStamp=0;
+try{const prefs=JSON.parse(localStorage.getItem("keymemory.phrase.view")||"{}");if(["auto","show","hide"].includes(prefs.visibility))phraseViewVisibility=prefs.visibility;if(prefs.spelling==="flat")phraseViewSpelling="flat";if(prefs.names===false)phraseViewNames=false;}catch{}
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
@@ -755,6 +758,7 @@ function activateMode(mode) {
   if (mode !== "free") chooseChallenge();
   updatePracticeChrome();
   if(mode==="phrase")refreshPhraseUI();
+  renderPhraseView();
 }
 
 
@@ -892,7 +896,7 @@ function renderPiano() {
     button.type = "button";
     button.className = "key " + color;
     button.dataset.midi = String(midi);
-    const exactName=noteName(midi)+(Math.floor(midi/12)-1);
+    const exactName=activeMode==="phrase"?phraseDisplayName(midi):noteName(midi)+(Math.floor(midi/12)-1);
     button.setAttribute("aria-label",activeMode==="phrase"?exactName+" · MIDI "+midi:noteName(midi));
     if(activeMode==="phrase")button.title=exactName+" · MIDI "+midi;
     button.setAttribute("aria-pressed", String(selected.has(midi)));
@@ -907,7 +911,7 @@ function renderPiano() {
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
     const label = document.createElement("span");
     label.className = "noteLabel";
-    label.textContent = NAMES[midi % 12]+(activeMode==="phrase"&&(midi%12===0||midi===21)?Math.floor(midi/12)-1:"");
+    label.textContent = activeMode==="phrase"?phraseDisplayName(midi,midi%12===0||midi===21):NAMES[midi % 12];
     button.append(label);
     button.addEventListener("click", () => pressPianoKey(midi));
     return button;
@@ -926,6 +930,7 @@ function renderPiano() {
     piano.append(black);
   }
   updateStatus(start, end - 1);
+  renderPhraseView();
 }
 NAMES.forEach((name, pc) => {
   const option = document.createElement("option");
@@ -1107,7 +1112,7 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
     const key=event.channel+":"+event.note;
     if(event.kind==="off"){
       phraseRawHeld.delete(key);releasePhraseMonitor(event.note,event.channel);phraseEngine.input(event);
-      if(activeMode==="phrase"&&![...phraseRawHeld].some(k=>Number(k.split(":")[1])===event.note)){selected.delete(event.note);if(!currentDialog)renderPiano();}
+      if(activeMode==="phrase"&&![...phraseRawHeld].some(k=>Number(k.split(":")[1])===event.note)){selected.delete(event.note);if(!currentDialog){if(activeMode==="phrase"){phraseSnapshot=phraseEngine.snapshot();phraseViewStamp=Date.now();}renderPiano();}}
       return activeMode==="phrase";
     }
     const duplicate=phraseRawHeld.has(key);
@@ -1191,7 +1196,7 @@ async function startPhraseTransport(action){
 
 const phraseTime=ms=>{const sec=Math.max(0,Math.floor(ms/1000));return Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0");};
 function refreshPhraseUI(snapshot=phraseSnapshot){
-  if(snapshot)phraseSnapshot=snapshot;
+  if(snapshot){if(snapshot!==phraseSnapshot)phraseViewStamp=Date.now();phraseSnapshot=snapshot;}
   if(!phraseSnapshot)return;
   const s=phraseSnapshot,o=s.options,active=phraseTransportPending||["record-countin","play-countin","recording","playing","countin","practice","wait-release"].includes(s.state),has=s.notes.length>0;
   document.getElementById("phraseRecord").disabled=phraseTransportPending||s.state==="recording"||s.state==="record-countin";
@@ -1205,7 +1210,7 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   for(const [id,value]of Object.entries(values))document.getElementById(id).value=String(value);
   document.getElementById("phraseSaved").textContent=(s.error?s.error+" ":"")+(has?(s.saved?"Saved locally on this device":"Kept for this session only")+" · "+s.notes.length+" notes":"No saved phrase");
   if(activeMode!=="phrase")return;
-  const names=(s.target||[]).map(m=>noteName(m)+(Math.floor(m/12)-1));
+  const names=(s.target||[]).map(m=>phraseDisplayName(m));
   let prompt=phraseTransportPending?"Preparing audio…":s.state==="record-countin"?"Record count-in: "+s.countIn+" · start after 3":s.state==="play-countin"?"Playback count-in: "+s.countIn+" · starts after 3":s.state==="recording"?"Recording MIDI — play your phrase. Stop when finished.":s.state==="playing"?"Playing phrase · "+(s.progress+1)+" / "+s.total:
     s.state==="countin"?"Count in: "+s.countIn+" · release the keys":s.state==="wait-release"?"Release all keys — restarting from the beginning":
     s.state==="practice"?"Play "+names.join(" + ")+" · "+(s.progress+1)+" / "+s.total:
@@ -1217,10 +1222,10 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   renderPiano();
 }
 if(window.KeyMemoryPhrase){
-  phraseEngine=window.KeyMemoryPhrase.create({onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onWrong:(note,message)=>{const key=piano.querySelector('[data-midi="'+note+'"]');if(key)flashWrongKey(key);selected.clear();resetMidiAudio();incorrect(message);}});
+  phraseEngine=window.KeyMemoryPhrase.create({viewProjection:true,onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onWrong:(note,message)=>{const key=piano.querySelector('[data-midi="'+note+'"]');if(key)flashWrongKey(key);selected.clear();resetMidiAudio();incorrect(message);}});
   refreshPhraseUI(phraseEngine.snapshot());
 }
-function phraseAction(action){if(!phraseEngine)return;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
+function phraseAction(action){if(!phraseEngine)return;phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
 document.getElementById("phraseRecord").addEventListener("click",()=>{
   if(!midiController?.isConnected()){trainingPrompt.textContent="Connect a MIDI keyboard in Settings before recording.";return;}
   if(phraseSnapshot?.notes.length&&!window.confirm("Replace the saved phrase with a new recording? An empty recording keeps the previous phrase."))return;
@@ -1234,6 +1239,77 @@ const phraseFields={phraseSourceBpm:["sourceBpm",1],phrasePlayBpm:["playBpm",1],
 for(const [id,[key,multiplier]]of Object.entries(phraseFields))document.getElementById(id).addEventListener("change",event=>phraseEngine?.setOptions({[key]:Number(event.target.value)*multiplier}));
 document.getElementById("phraseRhythm").addEventListener("change",event=>phraseEngine?.setOptions({rhythm:event.target.value==="rhythm"}));
 document.getElementById("phraseFull").addEventListener("click",()=>phraseEngine?.setOptions({sectionStart:0,sectionEnd:phraseSnapshot?.duration||120000}));
-document.getElementById("phraseClear").addEventListener("click",()=>{if(window.confirm("Delete the saved phrase from this browser?")){selected.clear();phraseSeenLow=21;phraseSeenHigh=108;phraseEngine?.clear();}});
+document.getElementById("phraseClear").addEventListener("click",()=>{if(window.confirm("Delete the saved phrase from this browser?")){selected.clear();phraseSeenLow=21;phraseSeenHigh=108;phraseViewExample=false;phraseEngine?.clear();}});
 let phraseTaps=[];
 document.getElementById("phraseTap").addEventListener("click",()=>{const now=Date.now();if(phraseTaps.length&&now-phraseTaps.at(-1)>2000)phraseTaps=[];phraseTaps.push(now);phraseTaps=phraseTaps.slice(-5);if(phraseTaps.length<2)return;const bpm=Math.round(60000*(phraseTaps.length-1)/(phraseTaps.at(-1)-phraseTaps[0]));if(bpm>=30&&bpm<=300)phraseEngine?.setOptions({sourceBpm:bpm,playBpm:bpm});});
+
+// Read-only pitch/timing projection. No view control changes transport, grading or audio.
+function savePhraseViewPreferences(){try{localStorage.setItem("keymemory.phrase.view",JSON.stringify({visibility:phraseViewVisibility,spelling:phraseViewSpelling,names:phraseViewNames}));}catch{}}
+function renderPhraseView(){
+  // A view failure must never interrupt MIDI recording or an audio scheduler callback.
+  try{renderPhraseViewContent();document.getElementById("phraseViewControls")?.removeAttribute("data-view-error");}
+  catch(error){if(phraseViewTick!==null){clearTimeout(phraseViewTick);phraseViewTick=null;}const panel=document.getElementById("phraseScore");if(panel)panel.hidden=true;piano.parentElement.hidden=false;document.querySelector(".pianoHint").hidden=false;document.querySelector(".info").hidden=false;document.getElementById("phraseViewControls")?.setAttribute("data-view-error","Score unavailable; your recording and controls are unchanged.");console.error("Phrase display could not render",error);}
+}
+function renderPhraseViewContent(){
+  const controls=document.getElementById("phraseViewControls"),panel=document.getElementById("phraseScore");
+  if(!controls||!panel)return;
+  if(phraseViewTick!==null){clearTimeout(phraseViewTick);phraseViewTick=null;}
+  const enabled=activeMode==="phrase"&&!!window.KeyMemoryPhraseView&&!!phraseSnapshot;
+  controls.hidden=!enabled;
+  const small=window.innerWidth<1050||window.innerHeight<550;
+  const show=enabled&&(phraseViewVisibility==="show"||(phraseViewVisibility==="auto"&&(!small||phraseSmallScore)));
+  panel.hidden=!show;
+  const hidePiano=show&&small;
+  piano.parentElement.hidden=hidePiano;
+  document.querySelector(".pianoHint").hidden=hidePiano;
+  document.querySelector(".info").hidden=hidePiano;
+  const toggle=document.getElementById("phraseViewSwitch");toggle.hidden=!small;toggle.textContent=show?"Show piano":"Show score";toggle.setAttribute("aria-expanded",String(show));
+  document.getElementById("phraseViewVisibility").value=phraseViewVisibility;
+  document.getElementById("phraseSpelling").value=phraseViewSpelling;
+  document.getElementById("phraseNoteNames").checked=phraseViewNames;
+  if(!enabled)return;
+  const s=phraseSnapshot,view=window.KeyMemoryPhraseView,recording=s.state==="recording",playing=s.state==="playing";
+  const exampleAllowed=["idle","complete"].includes(s.state)&&!phraseTransportPending;
+  if(!exampleAllowed)phraseViewExample=false;
+  const exampleButton=document.getElementById("phraseViewExample");exampleButton.disabled=!exampleAllowed;exampleButton.textContent=phraseViewExample?"Back to my phrase":"Show example";
+  const source=phraseViewExample?{duration:3000,notes:[48,60,64,67].map(note=>({note,channel:0,velocity:90,start:0,duration:600})).concat([{note:72,channel:0,velocity:90,start:2000,duration:500}]),controllers:[{controller:64,value:127,channel:0,time:200},{controller:64,value:0,channel:0,time:1500}],initialControllers:[]}:{notes:recording?(s.viewNotes||[]):s.notes,controllers:recording?(s.viewControllers||[]):s.controllers,initialControllers:recording?(s.viewInitialControllers||[]):s.initialControllers,duration:recording?s.viewDuration:s.duration};
+  const signature=[phraseViewExample,s.state,source.notes.length,source.controllers?.length,source.duration,s.options.transpose,source.notes[0]?.note,source.notes.at(-1)?.note].join(":");
+  if(signature!==phraseViewSignature||!phraseViewModel){phraseViewModel=view.prepareTimeline(source,{transpose:recording||phraseViewExample?0:s.options.transpose});phraseViewSignature=signature;}
+  const model=phraseViewModel,elapsed=s.elapsed+(playing?Math.max(0,Date.now()-phraseViewStamp):0);
+  const time=recording?source.duration:playing?Math.min(source.duration,s.options.sectionEnd,s.options.sectionStart+elapsed*s.options.playBpm/s.options.sourceBpm):Math.min(source.duration,phraseInspectTime);
+  const held=playing&&time>=Math.min(source.duration,s.options.sectionEnd)?[]:model.notes.filter(n=>n.start<=time&&n.keyEnd>time);
+  const live=[...new Set([...phraseRawHeld].map(k=>Number(k.split(":")[1])))];
+  const showingLive=!phraseViewExample&&(recording||!source.notes.length||(!playing&&live.length>0));
+  const practicing=s.state==="practice"||s.state==="countin";
+  const pitches=showingLive?live:practicing?s.target:held.map(n=>n.midi);
+  // Same physical pitches on staff, roll and keyboard; pedal tails are deliberately not held keys.
+  const highlighted=new Set(playing?held.map(n=>n.midi):showingLive?live:[]);
+  for(const key of piano.querySelectorAll(".key")){const on=highlighted.has(Number(key.dataset.midi));key.classList.toggle("phrasePlaying",on);if(on)key.setAttribute("aria-label",key.title+(playing?" · playing, key held":" · live key held"));else if(key.title)key.setAttribute("aria-label",key.title);}
+  if(show){
+    document.getElementById("phraseStaff").innerHTML=view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
+    const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
+    document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":"At cursor: ")+(names.join(" · ")||"No keys held")+". C4 = middle C.";
+    const width=Math.max(320,panel.clientWidth||800),start=Math.max(0,time-phraseViewWindow/4),end=Math.min(Math.max(source.duration,phraseViewWindow),start+phraseViewWindow);
+    document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,names:phraseViewNames,spelling:phraseViewSpelling});
+    const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=playing||recording||!source.notes.length;
+    document.getElementById("phraseViewTimeLabel").textContent=(time/1000).toFixed(2)+" s";
+    const cc=new Map((source.initialControllers||[]).map(c=>[c.channel+":"+c.controller,c.value]));
+    for(const c of source.controllers||[])if(c.time<=time)cc.set(c.channel+":"+c.controller,c.value);
+    const channels=[...new Set(model.notes.filter(n=>n.start<=time&&n.soundEnd>time).map(n=>n.channel))];
+    const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; playback stops at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
+    document.getElementById("phraseControllerText").textContent=sectionContext+(channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
+  }
+  if(playing&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
+}
+for(const [id,apply]of[
+  ["phraseViewVisibility",event=>{phraseViewVisibility=event.target.value;phraseSmallScore=phraseViewVisibility==="show";}],
+  ["phraseSpelling",event=>{phraseViewSpelling=event.target.value;}],
+  ["phraseNoteNames",event=>{phraseViewNames=event.target.checked;}]
+])document.getElementById(id).addEventListener("change",event=>{apply(event);savePhraseViewPreferences();refreshPhraseUI();});
+document.getElementById("phraseViewSwitch").addEventListener("click",()=>{const showing=!document.getElementById("phraseScore").hidden;phraseSmallScore=!showing;phraseViewVisibility="auto";savePhraseViewPreferences();renderPhraseView();});
+document.getElementById("phraseViewTime").addEventListener("input",event=>{phraseInspectTime=Number(event.target.value)*1000;renderPhraseView();});
+
+function phraseDisplayName(midi,withOctave=true){const name=window.KeyMemoryPhraseView?window.KeyMemoryPhraseView.pitch(midi,phraseViewSpelling).name.replace("#","♯").replace(/([A-G])b/,"$1♭"):noteName(midi)+(Math.floor(midi/12)-1);return withOctave?name:name.replace(/-?\d+$/,"");}
+document.getElementById("phraseViewWindow").addEventListener("change",event=>{phraseViewWindow=Number(event.target.value);renderPhraseView();});
+
+document.getElementById("phraseViewExample").addEventListener("click",()=>{phraseViewExample=!phraseViewExample;phraseInspectTime=0;phraseViewVisibility="show";phraseSmallScore=true;renderPhraseView();});

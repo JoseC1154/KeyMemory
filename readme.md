@@ -103,3 +103,15 @@ Pitch bend, modulation, aftertouch, program/bank selection, other pedals, 14-bit
 Phrase Trainer shows the complete **88-key A0–C8 piano** across the available desktop width. Compact white-key labels and C-octave markers keep it readable; narrow black keys retain their exact note/octave in accessible labels and hover text. On smaller screens the same keyboard scrolls sideways with usable key widths. Other modes keep their existing compact ranges.
 
 MIDI remains supported across 0–127: saved/transposed or newly played Phrase notes outside the standard piano range extend the display instead of being rejected. The range stays stable during live input; deleting the saved phrase resets this extra displayed range. Rendering updates preserve horizontal scroll position rather than recentering the piano.
+
+## Phrase Live Score and exact timing (Build 16)
+
+Phrase Trainer includes a **pitch-reading grand staff**, not an engraved rhythmic transcription. It shows exact MIDI pitches after transposition, with explicit sharp/flat spelling preference and optional note names. Treble/bass is a display split, **not a left/right-hand assignment**. C4 is middle C; ledger notes and out-of-piano MIDI pitches remain accessible. Accidentals are explicit per displayed pitch; no key signature, time signature, note values, voices or hand assignments are inferred.
+
+The adjacent **exact-time piano roll** uses unquantized source milliseconds: solid bars show physical key-on/key-off durations, dashed tails show CC64 pedal sustain. Channel, onset, release and audible end are available in each bar's description; current controller values are shown below. The cursor follows playback at the selected BPM, while the horizontal labels remain original/source seconds. Original recording data is unchanged by display/transposition. Practice staff shows target pitches or currently held live keys; it does not pretend to transcribe rhythmic notation.
+
+Use **Inspect** to examine a saved phrase without playing it, and **Window** to zoom the timing view from 0.25 to 12 seconds. Dense windows are capped at 400 rendered note events with an explicit omitted-count notice; zoom and inspect to examine smaller sections. The data itself is not dropped or quantized. The live recording view is a separate projection and never overwrites the prior saved phrase before recording finishes.
+
+**Auto / Show / Hide** controls the view. Desktop shows staff, roll and the full piano together. Narrow or short windows switch between **Show score / Show piano** to keep the workspace usable. View preferences are local; changing these controls does not restart recording, playback or practice. No notation library, network service or uploaded recording is involved.
+
+**Show example** displays a labeled C-major chord with a C3 bass and a separate C5 note, including a pedal-tail example. It is view-only: never saved, graded, played automatically, or substituted for your recording. **Back to my phrase** exits it; starting any transport exits it automatically.
