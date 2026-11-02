@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.19";
+const APP_VERSION = "2026.11.02.20";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -136,6 +136,34 @@ let scaleNotes=[],scaleIndex=0,scaleFeedbackTimer=null,scaleRestarting=false;
 const scaleStart=document.getElementById("scaleStart");
 let scalePhase="preview",scalePreviewIndex=0,scalePreviewInterval=null,scaleRaceInterval=null;
 let scaleRaceDeadline=0,scaleStreak=0,scaleAskedAt=0,scaleTarget=0;
+const scaleStatus=document.getElementById("scaleStatus");
+const scaleMasteryKey="keymemory.scale.mastery.v1";
+let scaleMastery={};
+try {
+  const saved=JSON.parse(localStorage.getItem(scaleMasteryKey)||"{}");
+  if(saved && typeof saved==="object" && !Array.isArray(saved)) scaleMastery=saved;
+} catch(_) {}
+function masteredRoots(){
+  const stored=scaleMastery[scaleType.value];
+  return Array.isArray(stored) ? new Set(stored.filter(n=>Number.isInteger(n)&&n>=0&&n<12)) : new Set();
+}
+function updateScaleStatus(){
+  scaleStatus.hidden=activeMode!=="scale";
+  if(activeMode!=="scale")return;
+  const count=masteredRoots().size;
+  const phaseLabel={preview:"Study preview",race:"7-second scale race",degrees:"Degree exam",passed:"Key mastered",failed:"Retry preview"}[scalePhase]||"Scale Builder";
+  const score=scalePhase==="degrees" ? " · "+scaleStreak+"/30 consecutive" : "";
+  scaleStatus.textContent=phaseLabel+" · Key "+scaleRoot.selectedOptions[0].textContent+" · "+count+"/12 keys mastered"+score;
+}
+function selectNextScaleRoot(){
+  const mastered=masteredRoots();
+  const current=Number(scaleRoot.value);
+  for(let n=1;n<=12;n++){
+    const next=(current+n)%12;
+    if(!mastered.has(next)){scaleRoot.value=String(next);return true;}
+  }
+  return false;
+}
 function clearScaleDelay(){
   if(scaleFeedbackTimer!==null)clearTimeout(scaleFeedbackTimer);
   if(scalePreviewInterval!==null)clearInterval(scalePreviewInterval);
@@ -167,7 +195,7 @@ function startScalePreview(){
   }
   scalePreviewIndex=0;showDegree();
   scalePreviewInterval=setInterval(showDegree,650);
-  updatePracticeChrome();
+  updatePracticeChrome();updateScaleStatus();
 }
 function scaleRaceTick(){
   const remaining=Math.max(0,scaleRaceDeadline-performance.now());
@@ -186,13 +214,14 @@ function startScaleRace(){
   renderPiano();scalePrompt();
   scaleRaceDeadline=performance.now()+7000;
   scaleRaceTick();scaleRaceInterval=setInterval(scaleRaceTick,80);
-  updatePracticeChrome();
+  updatePracticeChrome();updateScaleStatus();
 }
 function startScaleDegreeTest(){
   clearScaleDelay();stopCountdown();scalePhase="degrees";scaleStreak=0;
   scaleStart.hidden=true;selected.clear();nextChallenge.hidden=true;
-  celebrate("Under 7 seconds! Degree challenge unlocked.");
+  celebrate("Race passed! Degree exam unlocked: 30 correct in a row.");
   nextScaleDegree();
+  updateScaleStatus();
 }
 function nextScaleDegree(){
   if(scalePhase!=="degrees")return;
@@ -203,13 +232,31 @@ function nextScaleDegree(){
   scaleAskedAt=performance.now();
   displayQuestion([{text:"Find scale degree "},{text:SCALE_DEGREES[scaleType.value][index],strong:true},
     {text:" · "+scaleStreak+"/30 consecutive"}]);
-  renderPiano();updatePracticeChrome();
+  renderPiano();updatePracticeChrome();updateScaleStatus();
 }
 function finishScaleAttempt(){
   clearScaleDelay();targetMidi=null;scalePhase="passed";
-  celebrate("Passed! 30 consecutive scale degrees.");
-  scaleStart.hidden=false;scaleStart.textContent="Practice another scale";
-  nextChallenge.hidden=true;
+  const mastered=masteredRoots();
+  mastered.add(Number(scaleRoot.value));
+  scaleMastery[scaleType.value]=[...mastered].sort((a,b)=>a-b);
+  try {localStorage.setItem(scaleMasteryKey,JSON.stringify(scaleMastery));} catch(_) {}
+  const complete=mastered.size===12;
+  celebrate(complete ? "All 12 keys mastered for this scale!" : "Key mastered! Moving to the next key.");
+  scaleStart.hidden=true;nextChallenge.hidden=true;
+  updateScaleStatus();
+  scaleFeedbackTimer=setTimeout(()=>{
+    scaleFeedbackTimer=null;
+    if(activeMode!=="scale")return;
+    if(complete){
+      scalePhase="passed";
+      trainingPrompt.textContent="All 12 keys mastered! Choose another scale type to continue.";
+      scaleStart.hidden=false;scaleStart.textContent="Review this scale";
+      updateScaleStatus();
+      return;
+    }
+    selectNextScaleRoot();
+    startScalePreview();
+  },2600);
 }
 function answerScaleKey(midi){
   if(targetMidi===null || scaleRestarting || scalePhase==="preview" || scalePhase==="passed")return false;
@@ -241,6 +288,7 @@ function answerScaleKey(midi){
       if(scaleStreak===30){finishScaleAttempt();return true;}
     }
     nextScaleDegree();
+    updateScaleStatus();
     return correct;
   }
   return false;
@@ -907,6 +955,7 @@ function activateMode(mode) {
   semitoneControls.hidden = mode !== "semitones";
   builderControls.hidden = mode !== "builder";
   scaleControls.hidden = mode !== "scale";
+  scaleStatus.hidden = mode !== "scale";
   selected.clear();
   modeName.textContent = mode === "find" ? "Find the Note" : mode === "remember" ? "Remember the Key" : mode === "degrees" ? "Chord Degrees" : mode === "semitones" ? "Semitones" : mode === "scale" ? "Scale Builder" : mode === "phrase" ? "Phrase Trainer" : mode === "builder" ? "Chord Builder" : mode === "dictionary" ? "Chord Dictionary" : "Free Play";
   trainingPrompt.textContent = mode === "free" ? "Explore the keyboard, or choose a training mode." : "Ready?";
@@ -1180,6 +1229,7 @@ function updatePracticeChrome() {
   if(activeMode==="builder") text=(builderLevel.value==="mixed"?"Mixed":"Level "+({triads:1,colors:2,sevenths:3,extended:4,altered:5}[builderLevel.value]))+" · "+(builderSelection.value==="random"?"Random":levelBuilderLessons().filter(l=>chosenBuilderTypes.has(l.id)).length+" types");
   if(activeMode==="semitones") text=semitoneDifficulty.selectedOptions[0].textContent;
   if(activeMode==="scale") text=scaleRoot.selectedOptions[0].textContent+" "+scaleType.selectedOptions[0].textContent+" · "+(scalePhase==="degrees" ? scaleStreak+"/30" : scalePhase==="race" ? "7-second race" : scalePhase==="passed" ? "Passed" : "Preview");
+  updateScaleStatus();
   // Dictionary choices are already visible inline; avoid repeating them in the summary.
   summary.textContent=text;
   document.getElementById("dictionaryActions").hidden=activeMode!=="dictionary";
