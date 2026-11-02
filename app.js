@@ -693,6 +693,7 @@ function keyRange() {
   return Array.from({length:count * 12}, (_,i) => i + 48);
 }
 function cancelChallenge() {
+  clearScaleDelay();
   phraseEngine?.stop();
   midiController?.resetQuestion();
   stopBuilderAudio();
