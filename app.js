@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.02.26";
+const APP_VERSION = "2026.11.03.28";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -136,7 +136,7 @@ let scaleNotes=[],scaleIndex=0,scaleFeedbackTimer=null,scaleRestarting=false;
 const scaleStart=document.getElementById("scaleStart");
 let scalePhase="preview",scalePreviewIndex=0,scalePreviewInterval=null,scaleRaceInterval=null;
 let scaleRaceDeadline=0,scaleStreak=0,scaleAskedAt=0,scaleTarget=0,scaleRuns=0;
-const SCALE_RACE_MS=10000,SCALE_DEGREE_MS=3000,SCALE_SUCCESS_MS=300,SCALE_QUESTION_PREVIEW_MS=1000,SCALE_LEVELUP_MS=2500;
+const SCALE_RACE_MS=10000,SCALE_DEGREE_MS=3000,SCALE_SUCCESS_MS=300,SCALE_QUESTION_PREVIEW_MS=3000,SCALE_LEVELUP_MS=2500;
 let scaleDegreeDeadline=0,scaleDegreeTimer=null,scaleDegreeInterval=null,scaleGeneration=0,scaleQuestionId=0;
 const scaleNoteName=midi=>noteName(midi)+(Math.floor(midi/12)-1);
 const scaleStatus=document.getElementById("scaleStatus");
@@ -276,16 +276,23 @@ function nextScaleDegree(){
   renderPiano();updatePracticeChrome();
   document.getElementById("scaleDegreeTitle").textContent="DEGREE "+SCALE_DEGREES[scaleType.value][index];
   document.getElementById("scaleDegreeRange").textContent=scaleRoot.selectedOptions[0].textContent+" "+scaleType.selectedOptions[0].textContent+" · "+scaleNoteName(scaleNotes[0])+"–"+scaleNoteName(scaleNotes.at(-1));
+  const manual=scaleStreak<5;
+  document.getElementById("confirmScaleDegree").hidden=!manual;
+  document.getElementById("scaleDegreeInstructions").textContent=manual?"Question "+(scaleStreak+1)+" of the first 5. Press Start answering when ready; then you have three seconds.":"Read the question. The keys appear after three seconds, then you have three seconds to answer.";
   openPracticeDialog("scaleDegreeOverlay","scaleStart");dialogReturnFocus=scaleStart;
+  if(manual)return;
   const generation=scaleGeneration,question=scaleQuestionId;
   scaleFeedbackTimer=setTimeout(()=>{
     if(activeMode!=="scale"||scalePhase!=="degree-preview"||scaleGeneration!==generation||scaleQuestionId!==question||currentDialog?.id!=="scaleDegreeOverlay")return;
     if(document.hidden){startScalePreview();return;}
-    scaleFeedbackTimer=null;closePracticeDialog({cancelScaleRun:false});
-    scalePhase="degrees";targetMidi=scaleTarget;renderPiano();updatePracticeChrome();
-    piano.querySelector(".key")?.focus({preventScroll:true});
-    startScaleDegreeClock();
+    scaleFeedbackTimer=null;beginScaleDegreeAnswer();
   },SCALE_QUESTION_PREVIEW_MS);
+}
+function beginScaleDegreeAnswer(){
+  if(activeMode!=="scale"||scalePhase!=="degree-preview"||currentDialog?.id!=="scaleDegreeOverlay")return;
+  if(document.hidden){startScalePreview();return;}
+  closePracticeDialog({cancelScaleRun:false});scalePhase="degrees";targetMidi=scaleTarget;
+  renderPiano();updatePracticeChrome();piano.querySelector(".key")?.focus({preventScroll:true});startScaleDegreeClock();
 }
 function startScaleDegreeClock(){
   scaleAskedAt=performance.now();scaleDegreeDeadline=scaleAskedAt+SCALE_DEGREE_MS;
@@ -1113,9 +1120,11 @@ function renderPiano() {
   const width = viewportWidth;
   const pad = mobile ? 6 : 10;
   const octaves = visibleOctaves(width);
-  const start = activeMode === "phrase" ? phraseKeyboardRange().start : activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
-  const end = activeMode==="phrase"?phraseKeyboardRange().end:start + octaves * 12; // exclusive upper MIDI boundary
-  const whiteCount = activeMode==="phrase"?Array.from({length:end-start},(_,i)=>start+i).filter(m=>!BLACK.has(m%12)).length:octaves * 7;
+  const compactScale=activeMode==="scale"&&width>0&&width<=900&&!midiController?.isConnected();
+  const scaleBase=48+Number(scaleRoot.value);
+  const start = compactScale?scaleBase:activeMode === "phrase" ? phraseKeyboardRange().start : activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
+  const end = compactScale?scaleBase+13:activeMode==="phrase"?phraseKeyboardRange().end:start + octaves * 12; // exclusive upper MIDI boundary
+  const whiteCount = (compactScale||activeMode==="phrase")?Array.from({length:end-start},(_,i)=>start+i).filter(m=>!BLACK.has(m%12)).length:octaves * 7;
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
   // Fit one or two dictionary octaves in portrait; only longer ranges scroll.
@@ -1125,17 +1134,23 @@ function renderPiano() {
   // Cap desktop key width so a short keyboard never stretches into giant keys.
   // Use the keyboard's own natural width and center it when space remains.
   const desktopWhiteWidth = (usable - (whiteCount - 1) * gap) / whiteCount;
-  const whiteW = activeMode==="phrase"&&width<1050?Math.max(26,mobile?mobileWhiteWidth:26):mobile
+  const edgeBlack=compactScale&&BLACK.has(start%12);
+  const compactWhiteWidth=(usable-(whiteCount-1)*gap-(edgeBlack?2*gap:0))/(whiteCount+(edgeBlack?.65:0));
+  const whiteW = compactScale?Math.max(18,compactWhiteWidth):activeMode==="phrase"&&width<1050?Math.max(26,mobile?mobileWhiteWidth:26):mobile
     ? Math.max(activeMode === "dictionary" ? 22 : 26, mobileWhiteWidth)
     : Math.max(18, Math.min(54, desktopWhiteWidth));
-  const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + pad * 2;
+  const edgeSpace=edgeBlack?whiteW*.65/2+gap:0;
+  const keyboardWidth = whiteCount * whiteW + (whiteCount - 1) * gap + (pad+edgeSpace) * 2;
+  piano.style.paddingLeft=compactScale?(pad+edgeSpace)+"px":"";piano.style.paddingRight=compactScale?(pad+edgeSpace)+"px":"";
   piano.style.width = keyboardWidth + "px";
   const phrase=activeMode==="phrase";
   piano.classList.toggle("phrasePiano",phrase);
   piano.classList.toggle("scalePiano",activeMode==="scale");
+  piano.classList.toggle("compactScalePiano",compactScale);
   piano.classList.toggle("compactBlackLabels",phrase&&whiteW*.65<20);
   const hint=document.querySelector(".pianoHint");
-  if(phrase)hint.textContent=(start===21&&end===109?"88 keys · A0–C8":"Extended MIDI "+start+"–"+(end-1))+(keyboardWidth>width+1?" · Scroll sideways ↔":"");
+  if(compactScale)hint.textContent="Practice octave · "+scaleNoteName(start)+"–"+scaleNoteName(end-1);
+  else if(phrase)hint.textContent=(start===21&&end===109?"88 keys · A0–C8":"Extended MIDI "+start+"–"+(end-1))+(keyboardWidth>width+1?" · Scroll sideways ↔":"");
   else{hint.textContent="Swipe sideways for more keys ";const arrow=document.createElement("span");arrow.setAttribute("aria-hidden","true");arrow.textContent="↔";hint.append(arrow);}
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
   const shortLandscape = matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
@@ -1197,9 +1212,10 @@ function renderPiano() {
   }
   for (const {midi, anchor} of blackKeys) {
     const black = makeKey(midi, "black");
-    black.style.left = (pad + anchor * (whiteW + gap) + whiteW - blackW / 2) + "px";
+    black.style.left = (pad + edgeSpace + anchor * (whiteW + gap) + whiteW - blackW / 2) + "px";
     piano.append(black);
   }
+  if(compactScale)container.scrollLeft=0;
   updateStatus(start, end - 1);
   renderPhraseView();
 }
@@ -1253,13 +1269,14 @@ function openPracticeDialog(id,buttonId) {
   shell.inert=true;
   document.body.style.overflow="hidden";
   document.getElementById(buttonId).setAttribute("aria-expanded","true");
-  (id==="scaleRunOverlay"?document.getElementById("confirmScaleRun"):currentDialog.querySelector(".modalTop button")).focus();
+  (id==="scaleRunOverlay"?document.getElementById("confirmScaleRun"):id==="scaleDegreeOverlay"&&!document.getElementById("confirmScaleDegree").hidden?document.getElementById("confirmScaleDegree"):currentDialog.querySelector(".modalTop button")).focus();
 }
 for(const [open,dialog,close] of [["openModes","modeOverlay","closeModes"],["openSettings","settingsOverlay","closeSettings"],["openHint","hintOverlay","closeHint"]]) {
   document.getElementById(open).addEventListener("click",()=>openPracticeDialog(dialog,open));
   document.getElementById(close).addEventListener("click",closePracticeDialog);
   document.getElementById(dialog).addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
 }
+document.getElementById("confirmScaleDegree").addEventListener("click",beginScaleDegreeAnswer);
 document.getElementById("cancelScaleDegree").addEventListener("click",closePracticeDialog);
 document.getElementById("scaleDegreeOverlay").addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
 function suspendScaleQuestionPreview(){if(activeMode==="scale"&&["levelup","degree-preview","degree-success"].includes(scalePhase))startScalePreview();}
@@ -1392,7 +1409,7 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
   connect:document.getElementById("connectMidi"),disconnect:document.getElementById("disconnectMidi"),
   onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,
   onSuspend:()=>{phraseRawHeld.clear();resetMidiAudio();resetMonitorControllers();phraseEngine?.stop({releaseHeld:true});if(activeMode==="phrase"){selected.clear();renderPiano();}},
-  onConnection:()=>{if(activeMode==="phrase")refreshPhraseUI();},
+  onConnection:()=>{if(activeMode==="phrase")refreshPhraseUI();if(activeMode==="scale")renderPiano();},
   onRaw:event=>{
     if(!phraseEngine)return false;
     if(event.kind==="control"){phraseEngine.input(event);applyMonitorControl(event);return activeMode==="phrase";}

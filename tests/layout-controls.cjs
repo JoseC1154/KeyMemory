@@ -8,7 +8,7 @@ let now=0,id=0;const timers=new Map();
 w.Date.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};w.clearTimeout=id=>timers.delete(id);w.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};w.clearInterval=id=>timers.delete(id);
 function advance(ms){const end=now+ms;for(;;){const t=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!t)break;const [key,timer]=t;now=timer.time;if(timer.repeat)timer.time+=timer.repeat;else timers.delete(key);timer.fn();}now=end;}
 w.eval(fs.readFileSync(path.join(root,'phrase.js'),'utf8'));
-w.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode;window.snapshot=()=>({activeMode,targetMidi,builderPhase,builderStep,notes:[...builderNotes],selected:[...selected],deadline,countdown,prompt:trainingPrompt.textContent,dictionaryPractice,dictionaryVoicing:[...dictionaryVoicing]});');
+w.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode;window.setGeometryMidi=connected=>{midiController=connected?{isConnected:()=>true,resetQuestion(){}}:null;renderPiano();};window.redrawGeometry=renderPiano;window.snapshot=()=>({activeMode,targetMidi,builderPhase,builderStep,notes:[...builderNotes],selected:[...selected],deadline,countdown,prompt:trainingPrompt.textContent,dictionaryPractice,dictionaryVoicing:[...dictionaryVoicing]});');
 const el=id=>d.getElementById(id),s=()=>w.snapshot(),shell=d.querySelector('.shell');
 const change=(id,value)=>{el(id).value=value;el(id).dispatchEvent(new w.Event('change',{bubbles:true}));};
 const keyboard=(key,shiftKey=false)=>d.dispatchEvent(new w.KeyboardEvent('keydown',{key,shiftKey,bubbles:true,cancelable:true}));
@@ -70,4 +70,36 @@ change('dictionaryRoot','0');change('dictionaryQuality','major');change('diction
 open('openHint');assert.equal(el('dictionaryNotes').hidden,false);assert.equal(el('builderHint').hidden,true);el('hintOverlay').click();assert.equal(d.activeElement,el('openHint'));
 el('toggleChordNotes').click();assert(el('openHint').hidden,'dictionary practice hides answer hint');press(52);before=s();open('openSettings');el('closeSettings').click();assert.deepEqual(Array.from(s().selected),[52]);assert.equal(s().deadline,before.deadline);
 open('openModes');d.querySelector('[data-mode="free"]').click();assert.equal(shell.inert,false);assert.equal(el('hearBuilder').hidden,false);assert(el('hearBuilder').disabled);assert(el('dictionaryActions').hidden);press(48);advance(20000);assert.equal(s().activeMode,'free');assert.deepEqual(Array.from(s().selected),[48]);
+// Simulated CSS arithmetic for the compact touch octave; actual hit targets/layout
+// are checked independently in the browser, not claimed from jsdom.
+const piano=el('piano'),container=piano.parentElement;
+let geometryWidth=400,landscape=false;
+Object.defineProperty(container,'clientWidth',{configurable:true,get:()=>geometryWidth});
+w.matchMedia=query=>({matches:query.includes('max-height')?landscape:geometryWidth<=600&&!landscape});
+const blackPC=new Set([1,3,6,8,10]);
+for(const width of [280,333,400,600,843,900])for(const orientation of [false,true]){
+ geometryWidth=width;landscape=orientation;w.activateMode('scale');
+ for(let root=0;root<12;root++){
+  change('scaleRoot',String(root));w.redrawGeometry();
+  const keys=[...piano.querySelectorAll('.key')],base=48+root;
+  assert.equal(keys.length,13);assert.deepEqual(keys.map(k=>+k.dataset.midi).sort((a,b)=>a-b),Array.from({length:13},(_,i)=>base+i));
+  assert(piano.classList.contains('compactScalePiano'));
+  assert(Math.abs(parseFloat(piano.style.width)-width)<.01,'compact octave fits available width');
+  const ww=parseFloat(d.documentElement.style.getPropertyValue('--white-w')),bw=parseFloat(d.documentElement.style.getPropertyValue('--black-w')),pad=parseFloat(piano.style.paddingLeft);
+  assert(ww>=28,'larger white targets even on narrow geometry');
+  let whites=0;
+  for(let n=base;n<=base+12;n++){
+   const key=piano.querySelector('[data-midi="'+n+'"]');assert(key.querySelector('.noteLabel').textContent.includes(String(Math.floor(n/12)-1)));
+   if(blackPC.has(n%12)){
+    const left=parseFloat(key.style.left),expected=pad+(whites-1)*(ww+2)+ww-bw/2;
+    assert(Math.abs(left-expected)<.01);assert(left>=0&&left+bw<=width,'full black endpoint stays inside piano');
+   }else{assert(pad+whites*(ww+2)+ww<=width+.01);whites++;}
+  }
+  assert.equal(container.scrollLeft,0);
+ }
+ const beforeGeometry=s();w.setGeometryMidi(true);assert(!piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>13);assert.equal(s().deadline,beforeGeometry.deadline);assert.equal(s().targetMidi,beforeGeometry.targetMidi);
+ w.setGeometryMidi(false);assert(piano.classList.contains('compactScalePiano'));assert.equal(piano.querySelectorAll('.key').length,13);
+}
+geometryWidth=1180;w.redrawGeometry();assert(!piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>13);
+geometryWidth=400;w.activateMode('free');assert(!piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>13);assert.equal(piano.style.paddingLeft,'');
 console.log('PASS: unique IDs; 9 compact modes; contextual settings; immediate changes; modal Done/Escape/backdrop/focus trap/inert/focus return; preserved question/red feedback/notes/deadlines; countdown mirrors and timeout; hint isolation; settings/navigation interruption. DOM only, not visual or touch QA.');w.close();
