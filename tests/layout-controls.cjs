@@ -81,14 +81,16 @@ for(const width of [280,333,400,600,843,900])for(const orientation of [false,tru
  geometryWidth=width;landscape=orientation;w.activateMode('scale');
  for(let root=0;root<12;root++){
   change('scaleRoot',String(root));w.redrawGeometry();
-  const keys=[...piano.querySelectorAll('.key')],base=48+root;
-  assert.equal(keys.length,13);assert.deepEqual(keys.map(k=>+k.dataset.midi).sort((a,b)=>a-b),Array.from({length:13},(_,i)=>base+i));
+  const keys=[...piano.querySelectorAll('.key')],base=48+root,low=base-(blackPC.has((base-2)%12)?3:2),high=base+12+(blackPC.has((base+14)%12)?3:2);
+  assert([2,3].includes(base-low));assert([2,3].includes(high-base-12));assert(!blackPC.has(low%12));assert(!blackPC.has(high%12));
+  assert(keys.length>=17&&keys.length<=19);assert.deepEqual(keys.map(k=>+k.dataset.midi).sort((a,b)=>a-b),Array.from({length:high-low+1},(_,i)=>low+i));
+  assert(piano.querySelector('[data-midi="'+low+'"]').classList.contains('white'));assert(piano.querySelector('[data-midi="'+high+'"]').classList.contains('white'));
   assert(piano.classList.contains('compactScalePiano'));
   assert(Math.abs(parseFloat(piano.style.width)-width)<.01,'compact octave fits available width');
   const ww=parseFloat(d.documentElement.style.getPropertyValue('--white-w')),bw=parseFloat(d.documentElement.style.getPropertyValue('--black-w')),pad=parseFloat(piano.style.paddingLeft);
-  assert(ww>=28,'larger white targets even on narrow geometry');
+  assert(ww>=20,'white targets retain usable width in narrow geometry');
   let whites=0;
-  for(let n=base;n<=base+12;n++){
+  for(let n=low;n<=high;n++){
    const key=piano.querySelector('[data-midi="'+n+'"]');assert(key.querySelector('.noteLabel').textContent.includes(String(Math.floor(n/12)-1)));
    if(blackPC.has(n%12)){
     const left=parseFloat(key.style.left),expected=pad+(whites-1)*(ww+2)+ww-bw/2;
@@ -98,7 +100,7 @@ for(const width of [280,333,400,600,843,900])for(const orientation of [false,tru
   assert.equal(container.scrollLeft,0);
  }
  const beforeGeometry=s();w.setGeometryMidi(true);assert(!piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>13);assert.equal(s().deadline,beforeGeometry.deadline);assert.equal(s().targetMidi,beforeGeometry.targetMidi);
- w.setGeometryMidi(false);assert(piano.classList.contains('compactScalePiano'));assert.equal(piano.querySelectorAll('.key').length,13);
+ w.setGeometryMidi(false);assert(piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>=17&&piano.querySelectorAll('.key').length<=19);
 }
 geometryWidth=1180;w.redrawGeometry();assert(!piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>13);
 geometryWidth=400;w.activateMode('free');assert(!piano.classList.contains('compactScalePiano'));assert(piano.querySelectorAll('.key').length>13);assert.equal(piano.style.paddingLeft,'');

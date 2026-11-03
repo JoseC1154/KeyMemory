@@ -116,7 +116,7 @@ Use **Inspect** to examine a saved phrase without playing it, and **Window** to 
 
 **Show example** displays a labeled C-major chord with a C3 bass and a separate C5 note, including a pedal-tail example. It is view-only: never saved, graded, played automatically, or substituted for your recording. **Back to my phrase** exits it; starting any transport exits it automatically.
 
-## Scale Builder (Build 28)
+## Scale Builder (Build 29)
 
 Choose one of the existing 12 scale types and a root in Settings. The study preview repeats until you press **Start scale race**. Before **each of four consecutive runs**, a modal covers the piano and shows the scale, exact octave range, run number, and ten-second task. Press **Start run** to close it and begin the timer. There is no countdown or grading while that modal is open. Cancel, Escape or backdrop dismissal returns to preview and resets the current key’s four-run attempt; already mastered keys remain saved. Release notes played or held while the modal was open before starting.
 
@@ -128,4 +128,4 @@ After a question modal closes, degree questions remain large, bold and centered 
 
 Both the pre-run and degree-preview dialogs are centered in the available viewport in portrait and landscape, including tall phones. It respects safe-area padding and scrolls internally when content exceeds the screen. General Settings retains its compact mobile sheet layout.
 
-On small displays (piano area at most 900 pixels wide) without a connected MIDI input, Scale Builder fits the full chromatic root-to-upper-tonic octave across the screen, including all intervening black and white notes. MIDI connection restores the broader keyboard; other modes are unchanged. A mistake or new key restarts the first-five manual question introductions.
+On small displays (piano area at most 900 pixels wide) without a connected MIDI input, Scale Builder fits the full chromatic root-to-upper-tonic octave plus two or three neighboring chromatic keys below and above it across the screen. Both ends are white keys; all intervening black and white notes remain present. MIDI connection restores the broader keyboard; other modes are unchanged. A mistake or new key restarts the first-five manual question introductions.

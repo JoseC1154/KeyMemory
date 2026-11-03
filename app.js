@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.28";
+const APP_VERSION = "2026.11.03.29";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -1122,8 +1122,11 @@ function renderPiano() {
   const octaves = visibleOctaves(width);
   const compactScale=activeMode==="scale"&&width>0&&width<=900&&!midiController?.isConnected();
   const scaleBase=48+Number(scaleRoot.value);
-  const start = compactScale?scaleBase:activeMode === "phrase" ? phraseKeyboardRange().start : activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
-  const end = compactScale?scaleBase+13:activeMode==="phrase"?phraseKeyboardRange().end:start + octaves * 12; // exclusive upper MIDI boundary
+  // Add two or three chromatic neighbors on each side, ending on white keys.
+  const scaleLow=scaleBase-(BLACK.has((scaleBase-2)%12)?3:2);
+  const scaleHigh=scaleBase+12+(BLACK.has((scaleBase+14)%12)?3:2);
+  const start = compactScale?scaleLow:activeMode === "phrase" ? phraseKeyboardRange().start : activeMode === "dictionary" ? dictionaryKeyboardRange().start : 48;
+  const end = compactScale?scaleHigh+1:activeMode==="phrase"?phraseKeyboardRange().end:start + octaves * 12; // exclusive upper MIDI boundary
   const whiteCount = (compactScale||activeMode==="phrase")?Array.from({length:end-start},(_,i)=>start+i).filter(m=>!BLACK.has(m%12)).length:octaves * 7;
   const gap = 2;
   const usable = Math.max(0, width - pad * 2);
@@ -1149,7 +1152,7 @@ function renderPiano() {
   piano.classList.toggle("compactScalePiano",compactScale);
   piano.classList.toggle("compactBlackLabels",phrase&&whiteW*.65<20);
   const hint=document.querySelector(".pianoHint");
-  if(compactScale)hint.textContent="Practice octave · "+scaleNoteName(start)+"–"+scaleNoteName(end-1);
+  if(compactScale)hint.textContent="Practice octave + neighboring keys · "+scaleNoteName(start)+"–"+scaleNoteName(end-1);
   else if(phrase)hint.textContent=(start===21&&end===109?"88 keys · A0–C8":"Extended MIDI "+start+"–"+(end-1))+(keyboardWidth>width+1?" · Scroll sideways ↔":"");
   else{hint.textContent="Swipe sideways for more keys ";const arrow=document.createElement("span");arrow.setAttribute("aria-hidden","true");arrow.textContent="↔";hint.append(arrow);}
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
