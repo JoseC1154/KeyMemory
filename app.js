@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.35";
+const APP_VERSION = "2026.11.03.36";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -137,7 +137,7 @@ const scaleStart=document.getElementById("scaleStart");
 let scalePhase="preview",scalePreviewIndex=0,scalePreviewInterval=null,scaleRaceInterval=null;
 let scaleRaceDeadline=0,scaleStreak=0,scaleAskedAt=0,scaleTarget=0,scaleRuns=0;
 const SCALE_RACE_MS=10000,SCALE_DEGREE_MS=3000,SCALE_SUCCESS_MS=300,SCALE_QUESTION_PREVIEW_MS=3000,SCALE_LEVELUP_MS=2500;
-let scaleLives=3,scaleCorrection=null,scaleQuestionsShown=0;
+let scaleLives=3,scaleCorrection=null,scaleQuestionsShown=0,scaleStartGuardUntil=0;
 let scaleDialogPause=null,scaleFeedbackScheduleId=0,scaleFeedbackDeadline=0,scaleFeedbackCallback=null,scaleDegreeTick=null;
 let scaleReverseStreak=0,scaleReverseIndex=0,scaleReverseDeadline=0,scaleReverseWrongIndex=null;
 const SCALE_REVERSE_SHOW_MS=2000,SCALE_REVERSE_ANSWER_MS=2000;
@@ -265,7 +265,14 @@ function continueScaleCorrection(){
   stopBuilderAudio();clearWrongKeyFeedback();
   const stage=scaleCorrection.stage;
   scaleCorrection=null;scaleReverseWrongIndex=null;selected.clear();dismissAchievement();
-  if(scaleLives===0){startScalePreview();scaleStart.focus({preventScroll:true});return;}
+  if(scaleLives===0){
+    startScalePreview();
+    // A native double click may land its second click on the replacement Start
+    // button. Briefly lock only that replacement, not legitimate piano input.
+    const generation=scaleGeneration;scaleStartGuardUntil=performance.now()+600;scaleStart.disabled=true;
+    setTimeout(()=>{if(activeMode==="scale"&&scalePhase==="preview"&&scaleGeneration===generation)scaleStart.disabled=false;},600);
+    document.getElementById("scaleQuestion").focus({preventScroll:true});return;
+  }
   if(stage==="race")prepareScaleRun();
   else if(stage==="degrees"){scalePhase="degrees";nextScaleDegree();}
   else{nextScaleReverse();document.getElementById("scaleQuestion").focus({preventScroll:true});}
@@ -282,7 +289,7 @@ function failScaleAttempt(message){
   renderPiano();updatePracticeChrome();document.getElementById("continueScaleCorrection").focus({preventScroll:true});
 }
 function startScalePreview(){
-  clearWrongKeyFeedback();
+  scaleStartGuardUntil=0;scaleStart.disabled=false;clearWrongKeyFeedback();
   if(["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog?.id))closePracticeDialog({cancelScaleRun:false});
   clearScaleDelay();stopCountdown();dismissAchievement();scaleBuildNotes();
   scalePhase="preview";scaleQuestionsShown=0;scaleLives=3;scaleCorrection=null;scaleReverseStreak=0;scaleReverseDeadline=0;scaleReverseWrongIndex=null;scaleIndex=0;scaleStreak=0;scaleRuns=0;scaleRaceDeadline=0;scaleDegreeDeadline=0;targetMidi=null;selected.clear();
@@ -486,7 +493,7 @@ function answerScaleKey(midi){
   return true;
 }
 
-scaleStart.addEventListener("click",()=>{if(activeMode==="scale"&&["preview","passed"].includes(scalePhase))prepareScaleRun();});
+scaleStart.addEventListener("click",event=>{if(event.detail>1||performance.now()<scaleStartGuardUntil)return;if(activeMode==="scale"&&["preview","passed"].includes(scalePhase))prepareScaleRun();});
 scaleRoot.addEventListener("change",()=>{if(activeMode==="scale")startScalePreview();});
 scaleType.addEventListener("change",()=>{if(activeMode==="scale")startScalePreview();});
 

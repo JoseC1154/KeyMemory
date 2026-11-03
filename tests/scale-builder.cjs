@@ -70,7 +70,7 @@ function finishCorrection(h,stage){
  button.click();const once=JSON.stringify(h.state()),timers=h.pending();button.click();button.dispatchEvent(new h.w.MouseEvent('click',{bubbles:true,detail:2}));assert.equal(JSON.stringify(h.state()),once,'Continue double-click cannot skip the next stage or reset twice');assert.deepEqual(h.pending(),timers,'repeated Continue cannot duplicate or restart timers');assert(button.hidden||button.disabled,'Continue is inactive outside correction');
  assert.equal(h.state().scalePhase,before.scaleLives===0?'preview':stage==='race'?'ready':stage==='degrees'?'degree-preview':'reverse-show');
  assert.equal(h.state().scaleCorrection,null);assert.equal(h.d.querySelectorAll('.correctionTarget,.wrongAnswer').length,0,'keyboard correction cues clear before resume');if(!h.el('scaleReverseChoices').hidden)assert.equal(h.d.querySelectorAll('.wrongChoice').length,0,'visible wrong circle clears before resume');
- if(before.scaleLives===0){assertLives(h,3);assert.equal(h.state().scaleRuns,0);assert.equal(h.state().scaleStreak,0);assert.equal(h.state().scaleReverseStreak,0);}
+ if(before.scaleLives===0){assertLives(h,3);assert.equal(h.state().scaleRuns,0);assert.equal(h.state().scaleStreak,0);assert.equal(h.state().scaleReverseStreak,0);assert(h.el('scaleStart').disabled,'replacement Start briefly ignores the Continue gesture');h.advance(600);assert(!h.el('scaleStart').disabled);}
  else{assertLives(h,before.scaleLives);assert.equal(h.state().scaleRuns,before.scaleRuns);assert.equal(h.state().scaleStreak,before.scaleStreak);assert.equal(h.state().scaleReverseStreak,before.scaleReverseStreak);}
  const next=h.state();for(const callback of stale)callback();assert.equal(h.state().scalePhase,next.scalePhase);assert.equal(h.state().question,next.question);assert.equal(h.state().scaleLives,next.scaleLives,'stale correction callback cannot spend or refill lives');
 }
@@ -139,6 +139,20 @@ async function validateRapidInputs(){
  console.log('PASS rapid Start, native double-click, distinct clicks, held/released MIDI, circle bursts, locked pauses, third loss, and stale callbacks during manual corrections');
 }
 function validateManualCorrections(){
+ // A native second click can hit the Start button replacing Continue at the same location.
+ for(const stage of ['race','degrees','reverse-answer']){
+  const p=setup();p.mode('scale');p.w.audit.fixture(stage,1,1);if(stage==='reverse-answer')choose(p,0);else p.press(p.state().notes[0]);p.el('continueScaleCorrection').click();assert.equal(p.state().scalePhase,'preview');assertLives(p,3);const button=p.el('scaleStart'),saved=JSON.stringify(p.state());assert(button.disabled);
+  const click=detail=>button.dispatchEvent(new p.w.MouseEvent('click',{bubbles:true,detail}));
+  button.click();click(2);click(1);assert.equal(JSON.stringify(p.state()),saved,'replacement Start ignores both native second click and early synthetic click');assert(p.el('scaleRunOverlay').hidden);assert.equal(p.state().deadline,0);
+  p.advance(599);assert(button.disabled);click(1);click(2);assert.equal(JSON.stringify(p.state()),saved,'Start is guarded for the full first599ms');p.advance(1);assert(!button.disabled);click(2);assert.equal(JSON.stringify(p.state()),saved,'native double-click continuation stays ignored after deadline');click(1);assert.equal(p.state().scalePhase,'ready');assert.equal(p.state().deadline,0);assert(!p.el('scaleRunOverlay').hidden);p.close();
+ }
+ // Old enable callbacks cannot unlock a newer guard; ordinary reset previews stay immediately usable.
+ for(const change of ['root','type','mode']){
+  const p=setup();p.mode('scale');p.w.audit.fixture('race',1,1);p.press(p.state().notes[0]);p.el('continueScaleCorrection').click();const old=p.callbacks();assert(p.el('scaleStart').disabled);
+  if(change==='root')p.change('scaleRoot','11');else if(change==='type')p.change('scaleType','blues');else{p.mode('free');const before=JSON.stringify(p.state());for(const callback of old)callback();assert.equal(JSON.stringify(p.state()),before);assert.equal(p.state().mode,'free');p.mode('scale');}
+  assert(!p.el('scaleStart').disabled,'normal reset removes the third-loss gesture guard');start(p);assert.equal(p.state().scalePhase,'race');p.mode('free');p.mode('scale');p.w.audit.fixture('race',1,1);p.press(p.state().notes[0]);p.el('continueScaleCorrection').click();assert(p.el('scaleStart').disabled);const saved=JSON.stringify(p.state());for(const callback of old)callback();assert(p.el('scaleStart').disabled,'stale enable cannot unlock a newer third-loss guard');assert.equal(JSON.stringify(p.state()),saved);p.advance(600);assert(!p.el('scaleStart').disabled);p.close();
+ }
+
  // Immediate Continue clears the red key before its old flash duration can elapse.
  for(const stage of ['race','degrees','reverse-answer']){
   const p=setup();p.mode('scale');p.w.audit.fixture(stage,1);if(stage==='reverse-answer')choose(p,0);else p.press(p.state().notes[0]);assertCorrectionVisuals(p,stage,p.state().notes[1],stage==='reverse-answer'?0:p.state().notes[0]);p.el('continueScaleCorrection').click();assert.notEqual(p.state().scalePhase,'correction');assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget').length,0,'immediate Continue clears all keyboard feedback');if(!p.el('scaleReverseChoices').hidden)assert.equal(p.d.querySelectorAll('.wrongChoice').length,0);p.close();
