@@ -23,6 +23,7 @@ assert.match(el('settingsOverlay').textContent,/Changes apply immediately/);
 // CSS contract: only the pre-run dialog overrides the narrow-screen bottom sheet.
 // Actual viewport geometry is independently checked in a real browser.
 const css=fs.readFileSync(path.join(root,'styles.css'),'utf8');
+assert.match(css,/\.scaleReverseMode \.info,\.scaleReverseMode \.pianoHint,\.scaleReverseMode \.achievement\{display:none\}/,'reverse feedback uses the primary question and circle, not a duplicate error slab');
 const runOverlayRule=css.match(/#scaleRunOverlay,#scaleDegreeOverlay\{([^}]+)\}/)[1];
 assert.match(runOverlayRule,/align-items:center/);assert.match(runOverlayRule,/justify-content:center/);
 assert.match(runOverlayRule,/height:100%;height:100dvh/);assert.match(runOverlayRule,/bottom:auto/);

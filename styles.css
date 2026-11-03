@@ -360,6 +360,6 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .scaleDegreeChoice strong{font-size:20px}.scaleDegreeChoice small{font-size:10px;margin-top:1px}
 .scaleDegreeChoice:disabled{opacity:.65}.scaleDegreeChoice.correctChoice{background:#226d3d;border-color:#8beba9;opacity:1}.scaleDegreeChoice.wrongChoice{background:#b82525;border-color:#ff9696;opacity:1}
 .key.reverseTarget{background:#ffd45f!important;color:#171717;box-shadow:inset 0 0 0 3px #ff9e00}
-.key.reverseTarget .noteLabel{color:#171717}.scaleReverseMode .info,.scaleReverseMode .pianoHint{display:none}
+.key.reverseTarget .noteLabel{color:#171717}.scaleReverseMode .info,.scaleReverseMode .pianoHint,.scaleReverseMode .achievement{display:none}
 @media(max-width:600px){.scaleReverseChoices{gap:3px}.scaleDegreeChoice{width:min(42px,calc((100vw - 40px)/8));height:min(42px,calc((100vw - 40px)/8))}}
 @media(max-height:500px) and (orientation:landscape){.scaleDegreeChoice{width:40px;height:40px}.scaleReverseChoices{padding:3px 0}}
