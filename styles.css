@@ -353,3 +353,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 @media(max-height:500px) and (orientation:landscape){.scaleRunPanel{padding:10px}#scaleRunScale{font-size:23px;margin:7px 0}#scaleRunInstructions{font-size:15px;margin:7px 0}.scaleRunHint{margin:6px 0}#confirmScaleRun,#confirmScaleDegree{min-height:38px;padding:6px 24px;margin-top:4px}}
 
 #scaleDegreeTitle{font-size:clamp(28px,5vw,44px);font-weight:900}#scaleDegreeRange{display:block;font-size:20px;font-weight:800}#scaleDegreeInstructions{font-size:16px;line-height:1.4}
+
+/* Reverse-degree circles stay below a playable, normally proportioned piano. */
+.scaleReverseChoices{display:flex;justify-content:center;gap:5px;padding:6px 0;flex-wrap:nowrap}
+.scaleDegreeChoice{border-radius:50%;width:46px;height:46px;min-width:0;padding:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid #a9c7b4;background:#24362b;color:white;line-height:1}
+.scaleDegreeChoice strong{font-size:20px}.scaleDegreeChoice small{font-size:10px;margin-top:1px}
+.scaleDegreeChoice:disabled{opacity:.65}.scaleDegreeChoice.correctChoice{background:#226d3d;border-color:#8beba9;opacity:1}.scaleDegreeChoice.wrongChoice{background:#b82525;border-color:#ff9696;opacity:1}
+.key.reverseTarget{background:#ffd45f!important;color:#171717;box-shadow:inset 0 0 0 3px #ff9e00}
+.key.reverseTarget .noteLabel{color:#171717}.scaleReverseMode .info,.scaleReverseMode .pianoHint{display:none}
+@media(max-width:600px){.scaleReverseChoices{gap:3px}.scaleDegreeChoice{width:min(42px,calc((100vw - 40px)/8));height:min(42px,calc((100vw - 40px)/8))}}
+@media(max-height:500px) and (orientation:landscape){.scaleDegreeChoice{width:40px;height:40px}.scaleReverseChoices{padding:3px 0}}

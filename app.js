@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.29";
+const APP_VERSION = "2026.11.03.30";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -137,6 +137,8 @@ const scaleStart=document.getElementById("scaleStart");
 let scalePhase="preview",scalePreviewIndex=0,scalePreviewInterval=null,scaleRaceInterval=null;
 let scaleRaceDeadline=0,scaleStreak=0,scaleAskedAt=0,scaleTarget=0,scaleRuns=0;
 const SCALE_RACE_MS=10000,SCALE_DEGREE_MS=3000,SCALE_SUCCESS_MS=300,SCALE_QUESTION_PREVIEW_MS=3000,SCALE_LEVELUP_MS=2500;
+let scaleReverseStreak=0,scaleReverseIndex=0,scaleReverseDeadline=0,scaleReverseWrongIndex=null;
+const SCALE_REVERSE_SHOW_MS=2000,SCALE_REVERSE_ANSWER_MS=2000;
 let scaleDegreeDeadline=0,scaleDegreeTimer=null,scaleDegreeInterval=null,scaleGeneration=0,scaleQuestionId=0;
 const scaleNoteName=midi=>noteName(midi)+(Math.floor(midi/12)-1);
 const scaleStatus=document.getElementById("scaleStatus");
@@ -146,9 +148,16 @@ try {
   const saved=JSON.parse(localStorage.getItem(scaleMasteryKey)||"{}");
   if(saved && typeof saved==="object" && !Array.isArray(saved)) scaleMastery=saved;
 } catch(_) {}
-function masteredRoots(){
+const scaleReverseMasteryKey="keymemory.scale.reverse.mastery.v1";
+let scaleReverseMastery={};
+try{const saved=JSON.parse(localStorage.getItem(scaleReverseMasteryKey)||"{}");if(saved&&typeof saved==="object"&&!Array.isArray(saved))scaleReverseMastery=saved;}catch(_){}
+function priorMasteredRoots(){
   const stored=scaleMastery[scaleType.value];
-  return Array.isArray(stored) ? new Set(stored.filter(n=>Number.isInteger(n)&&n>=0&&n<12)) : new Set();
+  return Array.isArray(stored)?new Set(stored.filter(n=>Number.isInteger(n)&&n>=0&&n<12)):new Set();
+}
+function masteredRoots(){
+  const stored=scaleReverseMastery[scaleType.value],prior=priorMasteredRoots();
+  return Array.isArray(stored) ? new Set(stored.filter(n=>Number.isInteger(n)&&n>=0&&n<12&&prior.has(n))) : new Set();
 }
 function setScaleQuestion(title,detail=""){
   document.getElementById("scaleQuestionTitle").textContent=title;
@@ -160,11 +169,14 @@ function updateScaleStatus(){
   document.getElementById("scaleQuestion").hidden=activeMode!=="scale";
   trainingPrompt.hidden=activeMode==="scale";
   const panel=document.querySelector(".practicePanel");panel.classList.toggle("scalePractice",activeMode==="scale");panel.dataset.scalePhase=scalePhase;
+  const reverse=activeMode==="scale"&&scalePhase.startsWith("reverse-");
+  document.querySelector(".shell").classList.toggle("scaleReverseMode",reverse);
+  updateScaleReverseChoices();
   if(activeMode!=="scale")return;
   const count=masteredRoots().size;
-  const phaseLabel={preview:"Study preview",race:"Scale run "+(scaleRuns+1)+"/4",ready:"Ready to start run",levelup:"Level up","degree-preview":"Read the degree question",degrees:"Degree exam","degree-success":"Correct degree",passed:"Key mastered",failed:"Retry preview"}[scalePhase]||"Scale Builder";
-  const score=["degree-preview","degrees","degree-success","passed"].includes(scalePhase)?" · "+scaleStreak+"/30 consecutive":" · "+scaleRuns+"/4 runs complete";
-  scaleStatus.textContent=phaseLabel+" · Key "+scaleRoot.selectedOptions[0].textContent+" · "+count+"/12 keys mastered"+score;
+  const phaseLabel={preview:"Study preview",race:"Scale run "+(scaleRuns+1)+"/4",ready:"Ready to start run",levelup:"Level up","degree-preview":"Read the degree question",degrees:"Degree exam","degree-success":"Correct degree","reverse-levelup":"Reverse level up","reverse-show":"Watch the key","reverse-answer":"Choose its degree","reverse-success":"Correct degree number",passed:"Key mastered",failed:"Retry preview"}[scalePhase]||"Scale Builder";
+  const score=reverse?" · "+scaleReverseStreak+"/30 reverse answers":["degree-preview","degrees","degree-success","passed"].includes(scalePhase)?" · "+scaleStreak+"/30 consecutive":" · "+scaleRuns+"/4 runs complete";
+  scaleStatus.textContent=phaseLabel+" · Key "+scaleRoot.selectedOptions[0].textContent+" · "+count+"/12 keys mastered"+score+(priorMasteredRoots().size>count?" · "+priorMasteredRoots().size+"/12 prior level completed":"");
 }
 function selectNextScaleRoot(){
   const mastered=masteredRoots();
@@ -216,7 +228,7 @@ function completeScaleRun(){
   scaleFeedbackTimer=setTimeout(()=>{if(activeMode!=="scale"||scalePhase!=="levelup"||scaleGeneration!==generation)return;scaleFeedbackTimer=null;startScaleDegreeTest();},SCALE_LEVELUP_MS);
 }
 function failScaleAttempt(message){
-  clearScaleDelay();stopCountdown();scalePhase="failed";scaleStreak=0;scaleRuns=0;targetMidi=null;selected.clear();
+  clearScaleDelay();stopCountdown();scalePhase="failed";scaleStreak=0;scaleRuns=0;scaleReverseStreak=0;scaleReverseDeadline=0;targetMidi=null;selected.clear();
   setScaleQuestion("Start again",message+" Returning to the full preview · four runs to rebuild.");
   renderPiano();updatePracticeChrome();incorrect(message);
   const generation=scaleGeneration;
@@ -225,7 +237,7 @@ function failScaleAttempt(message){
 function startScalePreview(){
   if(["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog?.id))closePracticeDialog({cancelScaleRun:false});
   clearScaleDelay();stopCountdown();dismissAchievement();scaleBuildNotes();
-  scalePhase="preview";scaleIndex=0;scaleStreak=0;scaleRuns=0;scaleRaceDeadline=0;scaleDegreeDeadline=0;targetMidi=null;selected.clear();
+  scalePhase="preview";scaleReverseStreak=0;scaleReverseDeadline=0;scaleReverseWrongIndex=null;scaleIndex=0;scaleStreak=0;scaleRuns=0;scaleRaceDeadline=0;scaleDegreeDeadline=0;targetMidi=null;selected.clear();
   scaleStart.hidden=false;scaleStart.textContent="Start scale race";
   nextChallenge.hidden=true;timerRemaining.textContent="";
   setScaleQuestion("Study the scale",scaleNoteName(scaleNotes[0])+"–"+scaleNoteName(scaleNotes.at(-1))+" · Four complete runs, 10 seconds each. Press Start when ready.");
@@ -306,12 +318,76 @@ function startScaleDegreeClock(){
   };
   tick();scaleDegreeTimer=setTimeout(tick,SCALE_DEGREE_MS);scaleDegreeInterval=setInterval(tick,50);
 }
+function updateScaleReverseChoices(){
+  const box=document.getElementById("scaleReverseChoices");
+  const visible=activeMode==="scale"&&(scalePhase.startsWith("reverse-")||(scalePhase==="failed"&&scaleReverseWrongIndex!==null));
+  box.hidden=!visible;
+  if(!visible)return;
+  const labels=SCALE_DEGREES[scaleType.value],heptatonic=labels.length===8;
+  if(box.dataset.scaleType!==scaleType.value){
+    box.replaceChildren();box.dataset.scaleType=scaleType.value;
+    labels.forEach((label,index)=>{
+      const button=document.createElement("button");button.type="button";button.dataset.degreeIndex=String(index);button.className="scaleDegreeChoice";
+      const number=document.createElement("strong");number.textContent=heptatonic?String(index+1):label;button.append(number);
+      if(heptatonic&&label!==String(index+1)){const formula=document.createElement("small");formula.textContent=label;button.append(formula);}
+      button.setAttribute("aria-label","Degree "+(heptatonic?String(index+1):label)+(heptatonic&&label!==String(index+1)?", formula "+label:""));
+      button.addEventListener("click",()=>answerScaleReverse(index));box.append(button);
+    });
+  }
+  for(const button of box.children){
+    const index=Number(button.dataset.degreeIndex);button.disabled=scalePhase!=="reverse-answer";
+    const correct=scalePhase==="reverse-success"&&index===scaleReverseIndex;
+    button.classList.toggle("correctChoice",correct);button.classList.toggle("wrongChoice",scalePhase==="failed"&&index===scaleReverseWrongIndex);
+    button.setAttribute("aria-pressed",String(correct));
+  }
+}
+function startScaleReverseLevel(){
+  clearScaleDelay();stopCountdown();targetMidi=null;selected.clear();scaleReverseStreak=0;scaleReverseWrongIndex=null;
+  const prior=priorMasteredRoots();prior.add(Number(scaleRoot.value));scaleMastery[scaleType.value]=[...prior].sort((a,b)=>a-b);
+  try{localStorage.setItem(scaleMasteryKey,JSON.stringify(scaleMastery));}catch(_){}
+  scalePhase="reverse-levelup";setScaleQuestion("LEVEL UP!","Now identify the highlighted key’s degree. Watch for 2 seconds, then choose a circle within 2 seconds. 30 correct to master this key.");
+  renderPiano();updatePracticeChrome();const generation=scaleGeneration;
+  scaleFeedbackTimer=setTimeout(()=>{if(activeMode!=="scale"||scalePhase!=="reverse-levelup"||scaleGeneration!==generation)return;scaleFeedbackTimer=null;nextScaleReverse();},SCALE_LEVELUP_MS);
+}
+function scaleReverseClock(phase,duration,onElapsed){
+  clearScaleDegreeClock();scaleReverseDeadline=performance.now()+duration;
+  const generation=scaleGeneration,question=scaleQuestionId;
+  const tick=()=>{
+    if(activeMode!=="scale"||scalePhase!==phase||scaleGeneration!==generation||scaleQuestionId!==question)return;
+    const remaining=Math.max(0,scaleReverseDeadline-performance.now());timerRemaining.textContent=(remaining/1000).toFixed(1)+"s";
+    document.querySelectorAll(".countdownMirror").forEach(el=>el.textContent=timerRemaining.textContent);
+    if(remaining<=0){clearScaleDegreeClock();onElapsed();}
+  };
+  tick();scaleDegreeTimer=setTimeout(tick,duration);scaleDegreeInterval=setInterval(tick,50);
+}
+function nextScaleReverse(){
+  if(activeMode!=="scale")return;
+  if(document.hidden||currentDialog){startScalePreview();return;}
+  clearScaleDegreeClock();scaleReverseIndex=Math.floor(Math.random()*scaleNotes.length);scalePhase="reverse-show";targetMidi=null;selected.clear();scaleReverseWrongIndex=null;
+  setScaleQuestion("WATCH THIS KEY","Remember its degree · circles unlock after the 2-second highlight.");
+  renderPiano();updatePracticeChrome();
+  scaleReverseClock("reverse-show",SCALE_REVERSE_SHOW_MS,()=>{
+    scalePhase="reverse-answer";setScaleQuestion("WHICH DEGREE?","Choose a circle below the piano · 2 seconds to answer.");renderPiano();updatePracticeChrome();
+    document.querySelector(".scaleDegreeChoice")?.focus({preventScroll:true});
+    scaleReverseClock("reverse-answer",SCALE_REVERSE_ANSWER_MS,()=>failScaleAttempt("2 seconds elapsed — restart all four scale runs."));
+  });
+}
+function answerScaleReverse(index){
+  if(activeMode!=="scale"||scalePhase!=="reverse-answer"||currentDialog||document.hidden)return;
+  if(performance.now()>=scaleReverseDeadline){failScaleAttempt("2 seconds elapsed — restart all four scale runs.");return;}
+  if(index!==scaleReverseIndex){scaleReverseWrongIndex=index;failScaleAttempt("Wrong degree number — restart all four scale runs.");return;}
+  clearScaleDegreeClock();stopCountdown();scaleReverseStreak++;scalePhase="reverse-success";
+  const labels=SCALE_DEGREES[scaleType.value],label=labels.length===8?String(index+1)+(labels[index]!==String(index+1)?" ("+labels[index]+")":""):labels[index];
+  setScaleQuestion("CORRECT — DEGREE "+label,scaleReverseStreak+"/30 reverse answers");renderPiano();updatePracticeChrome();
+  const generation=scaleGeneration,question=scaleQuestionId;
+  scaleFeedbackTimer=setTimeout(()=>{if(activeMode!=="scale"||scalePhase!=="reverse-success"||scaleGeneration!==generation||scaleQuestionId!==question)return;scaleFeedbackTimer=null;if(scaleReverseStreak===30)finishScaleAttempt();else nextScaleReverse();},SCALE_SUCCESS_MS);
+}
 function finishScaleAttempt(){
   clearScaleDelay();stopCountdown();targetMidi=null;scalePhase="passed";
   const mastered=masteredRoots();
   mastered.add(Number(scaleRoot.value));
-  scaleMastery[scaleType.value]=[...mastered].sort((a,b)=>a-b);
-  try {localStorage.setItem(scaleMasteryKey,JSON.stringify(scaleMastery));} catch(_) {}
+  scaleReverseMastery[scaleType.value]=[...mastered].sort((a,b)=>a-b);
+  try {localStorage.setItem(scaleReverseMasteryKey,JSON.stringify(scaleReverseMastery));} catch(_) {}
   const complete=mastered.size===12;
   celebrate(complete ? "All 12 keys mastered for this scale!" : "Key mastered! Moving to the next key.");
   scaleStart.hidden=true;nextChallenge.hidden=true;
@@ -345,9 +421,9 @@ function answerScaleKey(midi){
   if(midi!==scaleTarget){failScaleAttempt("Wrong degree — restart all four scale runs.");return false;}
   scaleStreak++;clearScaleDegreeClock();stopCountdown();scalePhase="degree-success";targetMidi=null;
   selected.clear();selected.add(midi);
-  setScaleQuestion("CORRECT — "+scaleNoteName(midi),scaleStreak===30?"30/30 correct. Key mastered next!":"Next degree question in a moment · "+scaleStreak+"/30 correct");
+  setScaleQuestion("CORRECT — "+scaleNoteName(midi),scaleStreak===30?"30/30 correct. Reverse-degree level next!":"Next degree question in a moment · "+scaleStreak+"/30 correct");
   renderPiano();updatePracticeChrome();const generation=scaleGeneration,question=scaleQuestionId;
-  scaleFeedbackTimer=setTimeout(()=>{if(activeMode!=="scale"||scalePhase!=="degree-success"||scaleGeneration!==generation||scaleQuestionId!==question)return;scaleFeedbackTimer=null;if(scaleStreak===30)finishScaleAttempt();else{scalePhase="degrees";nextScaleDegree();}},SCALE_SUCCESS_MS);
+  scaleFeedbackTimer=setTimeout(()=>{if(activeMode!=="scale"||scalePhase!=="degree-success"||scaleGeneration!==generation||scaleQuestionId!==question)return;scaleFeedbackTimer=null;if(scaleStreak===30)startScaleReverseLevel();else{scalePhase="degrees";nextScaleDegree();}},SCALE_SUCCESS_MS);
   return true;
 }
 
@@ -1157,8 +1233,9 @@ function renderPiano() {
   else{hint.textContent="Swipe sideways for more keys ";const arrow=document.createElement("span");arrow.setAttribute("aria-hidden","true");arrow.textContent="↔";hint.append(arrow);}
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
   const shortLandscape = matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
-  const whiteH = shortLandscape ? 118 : mobile
-    ? Math.min(166, Math.max(125, whiteW * 4.6))
+  const reverseScale=activeMode==="scale"&&scalePhase.startsWith("reverse-");
+  const whiteH = shortLandscape ? (reverseScale?100:118) : mobile
+    ? Math.min(reverseScale?140:166, Math.max(125, whiteW * 4.6))
     : Math.min(270, Math.max(120, whiteW * 5.2));
   const blackW = whiteW * .65;
   const root = document.documentElement.style;
@@ -1192,6 +1269,9 @@ function renderPiano() {
     if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) :
       activeMode === "builder" ? builderNotes.includes(midi) : activeMode==="phrase" ? (phraseSnapshot?.target||[]).includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
+    if(activeMode==="scale"&&scalePhase==="reverse-show"&&midi===scaleNotes[scaleReverseIndex]){
+      button.classList.add("reverseTarget");button.setAttribute("aria-label",button.getAttribute("aria-label")+" · highlighted key");
+    }
     if(activeMode==="scale"){
       const index=scaleNotes.indexOf(midi);
       if(index>=0&&(scalePhase==="preview" ? selected.has(midi) : scalePhase==="race" && index<scaleIndex)){button.classList.add("chordTone");
@@ -1219,6 +1299,12 @@ function renderPiano() {
     piano.append(black);
   }
   if(compactScale)container.scrollLeft=0;
+  if(activeMode==="scale"&&scalePhase==="reverse-show"){
+    const key=piano.querySelector(".reverseTarget"),view=container.getBoundingClientRect(),rect=key?.getBoundingClientRect();
+    // Connected MIDI retains the broader keyboard; reveal an off-screen cue
+    // synchronously before the independent two-second viewing clock begins.
+    if(rect&&view.width>0){if(rect.left<view.left)container.scrollLeft-=view.left-rect.left+4;else if(rect.right>view.right)container.scrollLeft+=rect.right-view.right+4;}
+  }
   updateStatus(start, end - 1);
   renderPhraseView();
 }
@@ -1264,6 +1350,7 @@ function closePracticeDialog(options={}) {
 }
 function openPracticeDialog(id,buttonId) {
   if(activeMode==="phrase")phraseEngine?.stop();
+  if(activeMode==="scale"&&scalePhase.startsWith("reverse-"))startScalePreview();
   if(id!=="scaleDegreeOverlay")midiController?.resetQuestion();
   if(currentDialog) closePracticeDialog();
   dialogReturnFocus=document.activeElement;
@@ -1282,7 +1369,7 @@ for(const [open,dialog,close] of [["openModes","modeOverlay","closeModes"],["ope
 document.getElementById("confirmScaleDegree").addEventListener("click",beginScaleDegreeAnswer);
 document.getElementById("cancelScaleDegree").addEventListener("click",closePracticeDialog);
 document.getElementById("scaleDegreeOverlay").addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
-function suspendScaleQuestionPreview(){if(activeMode==="scale"&&["levelup","degree-preview","degree-success"].includes(scalePhase))startScalePreview();}
+function suspendScaleQuestionPreview(){if(activeMode==="scale"&&(["levelup","degree-preview","degree-success"].includes(scalePhase)||scalePhase.startsWith("reverse-")))startScalePreview();}
 window.addEventListener("blur",suspendScaleQuestionPreview);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)suspendScaleQuestionPreview();});
 document.getElementById("cancelScaleRun").addEventListener("click",closePracticeDialog);
@@ -1432,7 +1519,7 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
     if(!duplicate)soundPhraseMonitor(event.note,event.velocity,event.channel);
     renderPiano();return true;
   },
-  onNote:note=>{if(currentDialog||document.hidden)return;soundMidiNote(note);pressPianoKey(note,true);}
+  onNote:note=>{if(currentDialog||document.hidden||(activeMode==="scale"&&scalePhase.startsWith("reverse-")))return;soundMidiNote(note);pressPianoKey(note,true);}
 });
 
 // Phrase playback has its own cancelable synth; recorded MIDI never leaves this browser.
