@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.36";
+const APP_VERSION = "2026.11.03.37";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -1370,7 +1370,10 @@ function renderPiano() {
       activeMode === "builder" ? builderNotes.includes(midi) : activeMode==="phrase" ? (phraseSnapshot?.target||[]).includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
     if (activeMode === "builder" && builderNotes[builderNotes.length - 1] === midi) button.classList.add("builderNewest");
     if(activeMode==="scale"&&scalePhase==="correction"&&midi===scaleCorrection?.midi){
-      button.classList.add("correctionTarget");button.setAttribute("aria-label",button.getAttribute("aria-label")+" · correct answer");
+      const index=scaleCorrection.index,labels=SCALE_DEGREES[scaleType.value],formula=labels[index];
+      const degreeName=labels.length===8?String(index+1)+(formula!==String(index+1)?" ("+formula+")":""):formula;
+      button.classList.add("correctionTarget");button.setAttribute("aria-label",button.getAttribute("aria-label")+" · correct answer · Degree "+degreeName);
+      const badge=document.createElement("span");badge.className="scaleDegree correctionDegree";badge.textContent=formula;badge.title="Correct degree "+degreeName;button.append(badge);
     }
     if(activeMode==="scale"&&scalePhase==="reverse-show"&&midi===scaleNotes[scaleReverseIndex]){
       button.classList.add("reverseTarget");button.setAttribute("aria-label",button.getAttribute("aria-label")+" · highlighted key");

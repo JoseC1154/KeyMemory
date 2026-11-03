@@ -20,6 +20,8 @@ function assertReversePhaseCues(h){
  const phase=h.state().scalePhase,box=h.el('scaleReverseChoices'),cue=h.el('scaleReverseCue'),countdown=h.el('scaleReverseCountdown');
  assert(cue,'reverse phase cue exists');assert(countdown,'reverse countdown exists');
  const watching=h.state().mode==='scale'&&phase==='reverse-show',answering=h.state().mode==='scale'&&phase==='reverse-answer';
+ if(watching||answering)assert.equal(h.d.querySelectorAll('.scaleDegree,.correctionDegree').length,0,'reverse WATCH and answer phases never expose degree badges');
+ if(phase!=='correction')assert.equal(h.d.querySelectorAll('.correctionDegree').length,0,'correction badge exists only during correction');
  assert.equal(box.classList.contains('watchPhase'),watching,'watch styling follows only the show phase');
  assert.equal(box.classList.contains('answerPhase'),answering,'answer styling follows only the answer phase');
  assert.equal(countdown.hidden,!answering,'near-circle countdown is visible only while answering');
@@ -50,6 +52,13 @@ function assertCorrectionVisuals(h,stage,expected,wrong){
  assert.equal(h.d.querySelectorAll('.reverseTarget').length,0,'show cue is replaced by the correction cue');
  assert.match(h.el('scaleQuestionTitle').textContent,/CORRECT/i);assert.match(h.el('scaleQuestionDetail').textContent,/Wrong answer|Time expired/i);
  const index=h.state().notes.indexOf(expected),labels=degreeLabels[h.state().type],ordinal=String(index+1),degree=labels.length===8?ordinal+(labels[index]!==ordinal?' ('+labels[index]+')':''):labels[index];if(stage==='reverse-answer')assert.equal(h.el('scaleQuestionTitle').textContent,'CORRECT DEGREE '+degree);else assert(h.el('scaleQuestionDetail').textContent.includes('Degree '+degree),'correction text uses the literal expected degree/formula');
+ const badges=[...h.d.querySelectorAll('.scaleDegree.correctionDegree')];
+ assert.equal(badges.length,1,'exactly one correction degree badge exists');
+ assert.equal(h.d.querySelectorAll('.scaleDegree,.correctionDegree').length,1,'no duplicate or unrelated degree badge survives correction');
+ assert.equal(badges[0].parentElement,correctionKey,'degree badge belongs directly to the exact green correction key');
+ assert.equal(badges[0].textContent,labels[index],'correction badge uses the literal scale formula, including upper tonic 8');
+ assert.equal(correctionKey.getAttribute('aria-label'),correctionKey.title+' · correct answer · Degree '+degree,'accessible correct key identifies the exact MIDI, ordinal and altered formula, or literal pentatonic/blues degree');
+ assert.equal(h.d.querySelectorAll('.key.wrongAnswer .correctionDegree').length,0,'red wrong key never contains the correct degree badge');
  if(stage==='reverse-answer'){
   assert(!h.el('scaleReverseChoices').hidden);assertReverseLabels(h);assert(choices(h).every(button=>button.disabled));
   const index=h.state().notes.indexOf(expected);assert.equal(choices(h).filter(button=>button.classList.contains('correctChoice')).length,1);assert(choices(h)[index].classList.contains('correctChoice'));
@@ -69,7 +78,7 @@ function finishCorrection(h,stage){
  for(const elapsed of [2500,60000,3600000]){h.advance(elapsed);assert.equal(JSON.stringify(h.state()),saved,'correction remains unchanged indefinitely until Continue');assertCorrectionVisuals(h,stage,before.scaleCorrection.midi,wrongAnswer);}
  button.click();const once=JSON.stringify(h.state()),timers=h.pending();button.click();button.dispatchEvent(new h.w.MouseEvent('click',{bubbles:true,detail:2}));assert.equal(JSON.stringify(h.state()),once,'Continue double-click cannot skip the next stage or reset twice');assert.deepEqual(h.pending(),timers,'repeated Continue cannot duplicate or restart timers');assert(button.hidden||button.disabled,'Continue is inactive outside correction');
  assert.equal(h.state().scalePhase,before.scaleLives===0?'preview':stage==='race'?'ready':stage==='degrees'?'degree-preview':'reverse-show');
- assert.equal(h.state().scaleCorrection,null);assert.equal(h.d.querySelectorAll('.correctionTarget,.wrongAnswer').length,0,'keyboard correction cues clear before resume');if(!h.el('scaleReverseChoices').hidden)assert.equal(h.d.querySelectorAll('.wrongChoice').length,0,'visible wrong circle clears before resume');
+ assert.equal(h.state().scaleCorrection,null);assert.equal(h.d.querySelectorAll('.correctionTarget,.wrongAnswer,.correctionDegree').length,0,'keyboard correction cues clear before resume');if(!h.el('scaleReverseChoices').hidden)assert.equal(h.d.querySelectorAll('.wrongChoice').length,0,'visible wrong circle clears before resume');
  if(before.scaleLives===0){assertLives(h,3);assert.equal(h.state().scaleRuns,0);assert.equal(h.state().scaleStreak,0);assert.equal(h.state().scaleReverseStreak,0);assert(h.el('scaleStart').disabled,'replacement Start briefly ignores the Continue gesture');h.advance(600);assert(!h.el('scaleStart').disabled);}
  else{assertLives(h,before.scaleLives);assert.equal(h.state().scaleRuns,before.scaleRuns);assert.equal(h.state().scaleStreak,before.scaleStreak);assert.equal(h.state().scaleReverseStreak,before.scaleReverseStreak);}
  const next=h.state();for(const callback of stale)callback();assert.equal(h.state().scalePhase,next.scalePhase);assert.equal(h.state().question,next.question);assert.equal(h.state().scaleLives,next.scaleLives,'stale correction callback cannot spend or refill lives');
@@ -100,7 +109,7 @@ async function validateSharedLives(){
  const reviewLife=setup(JSON.stringify({major:Array.from({length:12},(_,i)=>i)}));reviewLife.mode('scale');reviewLife.w.audit.fixture('reverse-answer',1,1);while(reviewLife.state().scaleReverseStreak<30)reverseAnswer(reviewLife);assert.equal(reviewLife.state().scalePhase,'passed');assertLives(reviewLife,1);reviewLife.advance(2600);assert.match(reviewLife.el('scaleStart').textContent,/Review/i);reviewLife.el('scaleStart').click();assert.equal(reviewLife.state().scalePhase,'ready');assertLives(reviewLife,3);assert.equal(reviewLife.state().scaleRuns,0);assert.equal(reviewLife.state().scaleStreak,0);assert.equal(reviewLife.state().scaleReverseStreak,0);assert.equal(reviewLife.state().scaleQuestionsShown,0);assert.equal(JSON.parse(reviewLife.state().mastery).major.length,12);reviewLife.close();
  // Changes during correction invalidate its callbacks and start a fresh three-life attempt.
  for(const stage of ['race','degrees','reverse-answer'])for(const change of ['root','type','new-attempt']){
-  const p=setup(JSON.stringify({major:[5]}));p.mode('scale');p.w.audit.fixture(stage,1);const before=p.state();if(stage==='reverse-answer')choose(p,0);else p.press(before.notes[0]);assertCorrection(p,before,stage,before.notes[1],stage==='reverse-answer'?0:before.notes[0]);const stale=p.callbacks();if(change==='root')p.change('scaleRoot','11');else if(change==='type')p.change('scaleType','blues');else{p.mode('free');p.mode('scale');}for(const callback of stale)callback();p.advance(10000);preview(p);assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget').length,0,'root/type/new-attempt clears persistent keyboard correction');assert.deepEqual(JSON.parse(p.state().mastery).major,[5]);p.close();
+  const p=setup(JSON.stringify({major:[5]}));p.mode('scale');p.w.audit.fixture(stage,1);const before=p.state();if(stage==='reverse-answer')choose(p,0);else p.press(before.notes[0]);assertCorrection(p,before,stage,before.notes[1],stage==='reverse-answer'?0:before.notes[0]);const stale=p.callbacks();if(change==='root')p.change('scaleRoot','11');else if(change==='type')p.change('scaleType','blues');else{p.mode('free');p.mode('scale');}for(const callback of stale)callback();p.advance(10000);preview(p);assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget,.correctionDegree').length,0,'root/type/new-attempt clears persistent keyboard correction');assert.deepEqual(JSON.parse(p.state().mastery).major,[5]);p.close();
  }
  await validateRapidInputs();
  validateManualCorrections();
@@ -155,7 +164,7 @@ function validateManualCorrections(){
 
  // Immediate Continue clears the red key before its old flash duration can elapse.
  for(const stage of ['race','degrees','reverse-answer']){
-  const p=setup();p.mode('scale');p.w.audit.fixture(stage,1);if(stage==='reverse-answer')choose(p,0);else p.press(p.state().notes[0]);assertCorrectionVisuals(p,stage,p.state().notes[1],stage==='reverse-answer'?0:p.state().notes[0]);p.el('continueScaleCorrection').click();assert.notEqual(p.state().scalePhase,'correction');assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget').length,0,'immediate Continue clears all keyboard feedback');if(!p.el('scaleReverseChoices').hidden)assert.equal(p.d.querySelectorAll('.wrongChoice').length,0);p.close();
+  const p=setup();p.mode('scale');p.w.audit.fixture(stage,1);if(stage==='reverse-answer')choose(p,0);else p.press(p.state().notes[0]);assertCorrectionVisuals(p,stage,p.state().notes[1],stage==='reverse-answer'?0:p.state().notes[0]);p.el('continueScaleCorrection').click();assert.notEqual(p.state().scalePhase,'correction');assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget,.correctionDegree').length,0,'immediate Continue clears all keyboard feedback');if(!p.el('scaleReverseChoices').hidden)assert.equal(p.d.querySelectorAll('.wrongChoice').length,0);p.close();
  }
 
  // Real active-phase callbacks, including expired answer callbacks, stay harmless throughout review.
@@ -181,7 +190,7 @@ function validateManualCorrections(){
  }
  // A retained reference to Continue cannot resurrect a correction after any mode exit.
  for(const stage of ['race','degrees','reverse-answer'])for(const mode of ['free','find','remember','semitones','degrees','builder','dictionary','phrase']){
-  const p=setup();p.mode('scale');p.w.audit.fixture(stage,1);if(stage==='reverse-answer')choose(p,0);else p.press(p.state().notes[0]);const button=p.el('continueScaleCorrection'),stale=p.callbacks();p.mode(mode);const before=p.state();button.click();for(const callback of stale)callback();p.advance(60000);assert.equal(p.state().mode,mode);assert.equal(p.state().scaleLives,before.scaleLives);assert.equal(p.state().scalePhase,before.scalePhase);assert.equal(p.state().degreeClock,false);assert.equal(p.state().raceClock,false);assert(button.hidden||button.disabled);assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget').length,0);p.close();
+  const p=setup();p.mode('scale');p.w.audit.fixture(stage,1);if(stage==='reverse-answer')choose(p,0);else p.press(p.state().notes[0]);const button=p.el('continueScaleCorrection'),stale=p.callbacks();p.mode(mode);const before=p.state();button.click();for(const callback of stale)callback();p.advance(60000);assert.equal(p.state().mode,mode);assert.equal(p.state().scaleLives,before.scaleLives);assert.equal(p.state().scalePhase,before.scalePhase);assert.equal(p.state().degreeClock,false);assert.equal(p.state().raceClock,false);assert(button.hidden||button.disabled);assert.equal(p.d.querySelectorAll('.key.wrongAnswer,.correctionTarget,.correctionDegree').length,0);p.close();
  }
  console.log('PASS indefinite manual corrections, repeated keys/circles, Continue double-click, Settings guard, stale active callbacks, and all correction-stage mode exits');
 }
@@ -192,19 +201,21 @@ function validateCorrectionMappings(){
   const h=setup();h.mode('scale');h.change('scaleType',type);
   for(let root=0;root<12;root++){
    h.change('scaleRoot',String(root));assert.deepEqual(Array.from(h.state().notes),pattern.map(offset=>48+root+offset));
-   for(let index=0;index<pattern.length;index++)for(const stage of ['race','degrees','reverse-answer']){
+   for(let index=0;index<pattern.length;index++)for(const stage of ['race','degrees','reverse-answer'])for(const failure of ['wrong','timeout']){
     h.w.audit.fixture(stage,index);const before=h.state(),expected=48+root+pattern[index],wrongIndex=(index+1)%pattern.length,wrong=before.notes[wrongIndex];
+    if(failure==='timeout')h.jump(stage==='race'?10000:stage==='degrees'?3000:2000);
     if(stage==='reverse-answer')choose(h,wrongIndex);else h.press(wrong);
-    assert.equal(h.state().scalePhase,'correction',type+' root '+root+' '+stage+' correction');assert.equal(h.state().scaleCorrection.midi,expected);assert.equal(h.state().scaleCorrection.index,index);assertLives(h,2);assertCorrectionVisuals(h,stage,expected,stage==='reverse-answer'?wrongIndex:wrong);targets++;
+    assert.equal(h.state().scalePhase,'correction',type+' root '+root+' '+stage+' correction');assert.equal(h.state().scaleCorrection.midi,expected);assert.equal(h.state().scaleCorrection.index,index);assertLives(h,2);assertCorrectionVisuals(h,stage,expected,failure==='timeout'?null:stage==='reverse-answer'?wrongIndex:wrong);targets++;
    }combinations++;
   }h.close();
  }
- assert.equal(combinations,144);assert.equal(targets,91*12*3);console.log('PASS all 144 root/type correction mappings, '+targets+' exact MIDI/degree feedback cases across all stages');
+ assert.equal(combinations,144);assert.equal(targets,91*12*3*2);console.log('PASS all 144 root/type correction mappings, '+targets+' exact MIDI/formula badge/ARIA feedback cases (3276 wrong + 3276 timeout) across all stages');
 }
 (async()=>{
  if(process.argv.includes('--reverse-feedback-only')){
   const h=setup();h.w.matchMedia=query=>({matches:query.includes('max-height')});h.mode('scale');reverse(h);const before=h.state(),wrong=(before.scaleReverseIndex+1)%before.notes.length;choose(h,wrong);assertCorrection(h,before,'reverse-answer',before.notes[before.scaleReverseIndex],wrong);assert(h.d.querySelector('.shell').classList.contains('scaleReverseMode'));assert.equal(h.d.documentElement.style.getPropertyValue('--white-h'),'100px');assert.match(h.el('scaleQuestionDetail').textContent,/Wrong answer/i);finishCorrection(h,'reverse-answer');reverseShow(h);h.close();console.log('PASS reverse correction layout, correct/wrong circles and retained-progress resume');return;
  }
+ if(process.argv.includes('--correction-badges-only')){await validateSharedLives();validateCorrectionMappings();console.log('PASS correction badge location, uniqueness, literal formula/ARIA, indefinite review, repeated input and cleanup');return;}
  if(process.argv.includes('--lives-only')){await validateSharedLives();validateCorrectionMappings();console.log('PASS shared three lives, manual Continue correction, stage resumes, third-loss reset, and all 144 root/type correction mappings');return;}
 
  if(process.argv.includes('--mappings-only')){validateLiteralMappings();console.log('PASS 91 literal interval/degree pairs, rendered labels and exact reverse circle answers.');return;}
