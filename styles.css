@@ -341,8 +341,8 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 /* The pre-run question is a centered dialog, never the mobile Settings sheet.
    Dynamic viewport height follows mobile browser chrome; safe-area padding and
    the panel's internal overflow keep controls reachable on very short screens. */
-#scaleRunOverlay,#scaleDegreeOverlay,#modeOverlay{align-items:center;justify-content:center;bottom:auto;height:100%;height:100dvh;box-sizing:border-box}
-#scaleRunOverlay .scaleRunPanel,#scaleDegreeOverlay .scaleRunPanel,#modeOverlay .modalPanel{min-height:0;max-height:100%;overflow-y:auto}
+#scaleRunOverlay,#scaleDegreeOverlay,#modeOverlay,#scalePauseOverlay{align-items:center;justify-content:center;bottom:auto;height:100%;height:100dvh;box-sizing:border-box}
+#scaleRunOverlay .scaleRunPanel,#scaleDegreeOverlay .scaleRunPanel,#modeOverlay .modalPanel,#scalePauseOverlay .modalPanel{min-height:0;max-height:100%;overflow-y:auto}
 .scaleRunPanel{width:min(580px,100%);text-align:center;border:2px solid #75c994}
 .scaleRunPanel .modalTop{text-align:left}.scaleRunPanel .modalTop h2{font-size:26px;font-weight:900}
 #scaleRunScale{display:block;font-size:clamp(22px,3vw,32px);font-weight:900;margin:12px 0;color:#fff}
@@ -383,3 +383,26 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 #continueScaleCorrection{min-height:44px;font-weight:900;background:#226d3d;border-color:#8beba9;color:white}
 
 .scaleCorrectionMode .key.wrongAnswer{animation:none!important;background:#d93636!important;color:#fff!important}.scaleCorrectionMode .key.wrongAnswer .noteLabel{color:#fff}
+
+/* Scale identity and progress should be legible at a glance, without new panels. */
+.scalePractice #activeModeName{display:none}
+#scaleStudyName{font-size:clamp(21px,2.5vw,30px);font-weight:900;line-height:1.1;color:#fff;min-width:0;overflow-wrap:anywhere}
+.scalePractice .practiceMeta{flex-wrap:nowrap}
+.scalePractice #timerRemaining{flex-shrink:0}
+.scalePractice .scaleStatus{padding:5px 8px;margin:4px 0}
+.scaleRemainingRow{display:flex;justify-content:center;align-items:baseline;flex-wrap:wrap;column-gap:10px}
+#scaleRemaining{font-size:clamp(22px,2.5vw,30px);font-weight:900;line-height:1.1;color:#fff}
+#scaleRemainingLabel{font-size:12px;font-weight:800}
+#scaleStatusDetail{display:block;font-size:10px;line-height:1.2;margin-top:3px}
+@media(max-height:500px) and (orientation:landscape){#scaleStudyName{font-size:22px}.scalePractice .scaleStatus{padding:2px 6px;margin:2px 0}#scaleRemaining{font-size:22px}#scaleStatusDetail{margin-top:1px;font-size:10px}.scaleRemainingRow{line-height:1}.scalePractice .practiceMeta{margin-bottom:1px}}
+
+/* Pause stays in the existing action row, including short landscape screens. */
+.scalePractice .practiceActions{flex-wrap:nowrap}
+.scalePractice .practiceActions>button{flex-shrink:1}
+.scalePausePanel{width:min(420px,100%);text-align:center}
+.scalePausePanel #resumeScale{min-height:44px;min-width:120px}
+.scaleRunPanel .modalTop [data-pause-scale]{flex-shrink:0}
+
+#soundToggle,#hearBuilder{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 12px}#soundToggle svg{flex-shrink:0;pointer-events:none}#soundToggle[aria-pressed="true"]{background:#d9f3e6;color:#123d2a;border-color:#38885e}#soundToggle[aria-pressed="false"] .soundWaves,#soundToggle[aria-pressed="true"] .soundMuted{display:none}
+
+@media(max-width:600px){#soundToggle span{display:none}#soundToggle{min-width:44px;padding:8px}#hearBuilder{padding:8px;gap:4px}.scalePractice .practiceActions{gap:5px}}

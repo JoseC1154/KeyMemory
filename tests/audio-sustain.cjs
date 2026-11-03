@@ -3,19 +3,20 @@ const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path'),a
 const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'app.js'),'utf8');
 function setup(){
  const dom=new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'),{pretendToBeVisual:true,runScripts:'outside-only',url:'https://keymemory.test/'}),w=dom.window,d=w.document;
+ w.localStorage.setItem("keymemory.sound.v1","on");
  w.matchMedia=()=>({matches:false});w.ResizeObserver=class{observe(){}};
  let now=0,id=0;const timers=new Map(),resumes=[],oscillators=[],gains=[];
  w.Date.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};w.clearTimeout=id=>timers.delete(id);w.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};w.clearInterval=id=>timers.delete(id);
  function advance(ms){const end=now+ms;for(;;){const t=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!t)break;const [key,timer]=t;now=timer.time;if(timer.repeat)timer.time+=timer.repeat;else timers.delete(key);timer.fn();}now=end;}
  w.AudioContext=class{
-  get currentTime(){return now/1000;} destination={};
-  resume(){return new Promise((resolve,reject)=>resumes.push({resolve,reject}));}
+  state="suspended";get currentTime(){return now/1000;} destination={};
+  resume(){return new Promise((resolve,reject)=>resumes.push({resolve:()=>{this.state="running";resolve();},reject}));}
   createOscillator(){const o={frequency:{value:0},starts:[],stops:[],connect(){},disconnect(){this.disconnected=true;},start(t){this.starts.push(t);},stop(t){this.stops.push(t);}};oscillators.push(o);return o;}
   createGain(){const events=[];const g={events,gain:{value:.04,setValueAtTime(v,t){events.push(['set',v,t]);},linearRampToValueAtTime(v,t){events.push(['ramp',v,t]);},cancelAndHoldAtTime(t){events.push(['hold',t]);}},connect(){},disconnect(){this.disconnected=true;}};gains.push(g);return g;}
  };
- w.eval(source+'\nwindow.audioTest={get:()=>({phase:builderPhase,target:targetMidi,deadline,countdown,notes:[...builderNotes],audioUntil:builderAudioUntil}),start:()=>{activateMode("builder");cancelChallenge();builderLesson=ALL_BUILDER_LESSONS.find(l=>l.id==="dominant7");builderRoot=48;builderTargets=[48,52,55,58];builderNotes=[48,52,55];builderStep=3;builderAdvancePending=false;showBuilderMilestone(false);},mode:activateMode};');
+ w.eval(source+'\nwindow.audioTest={press:handlePianoKey,get:()=>({phase:builderPhase,target:targetMidi,deadline,countdown,notes:[...builderNotes],audioUntil:builderAudioUntil}),start:()=>{activateMode("builder");cancelChallenge();builderLesson=ALL_BUILDER_LESSONS.find(l=>l.id==="dominant7");builderRoot=48;builderTargets=[48,52,55,58];builderNotes=[48,52,55];builderStep=3;builderAdvancePending=false;showBuilderMilestone(false);},mode:activateMode};');
  const el=id=>d.getElementById(id),api=w.audioTest,get=()=>api.get(),timed=value=>{el('timerEnabled').checked=value;el('timerEnabled').dispatchEvent(new w.Event('change'));};
- const hear=()=>el('hearBuilder').click(),next=()=>el('nextChallenge').click(),press=m=>d.querySelector(`[data-midi="${m}"]`).click();
+ const hear=()=>el('hearBuilder').click(),next=()=>el('nextChallenge').click(),press=m=>api.press(m);
  const flush=()=>new Promise(resolve=>setImmediate(resolve));
  async function resolve(index=resumes.length-1){resumes[index].resolve();await flush();}
  async function reject(index=resumes.length-1){resumes[index].reject(new Error('resume rejected'));await flush();}

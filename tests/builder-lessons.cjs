@@ -15,7 +15,7 @@ function setup(saved) {
  win.Date.now=()=>now;win.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};win.clearTimeout=id=>timers.delete(id);
  win.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};win.clearInterval=id=>timers.delete(id);
  function advance(ms){const end=now+ms;for(;;){const pending=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!pending)break;const [key,timer]=pending;now=timer.time;if(timer.repeat)timer.time+=timer.repeat;else timers.delete(key);timer.fn();}now=end;}
- win.eval(source+'\nwindow.activateMode=activateMode;window.builderApi={get:()=>({targetMidi,builderPhase,builderStep,builderLesson,builderRoot,notes:[...builderNotes],targets:[...builderTargets],spellings:builderTargets.map((_,i)=>builderSpelling(i)),label:builderLesson?builderName():null}),lessons:ALL_BUILDER_LESSONS,start:(id,root)=>{cancelChallenge();activeMode="builder";builderLesson=ALL_BUILDER_LESSONS.find(l=>l.id===id);builderRoot=root;builderTargets=builderLesson.intervals.map(i=>root+i);builderNotes=[root];builderStep=1;builderAdvancePending=false;builderQuestion();}};');
+ win.eval(source+'\nwindow.activateMode=activateMode;window.builderApi={audioFixture:()=>{soundEnabled=true;updateSoundControl();updateHearControl();unlockMidiAudio=()=>{};soundMidiNote=()=>{};},get:()=>({targetMidi,builderPhase,builderStep,builderLesson,builderRoot,notes:[...builderNotes],targets:[...builderTargets],spellings:builderTargets.map((_,i)=>builderSpelling(i)),label:builderLesson?builderName():null}),lessons:ALL_BUILDER_LESSONS,start:(id,root)=>{cancelChallenge();activeMode="builder";builderLesson=ALL_BUILDER_LESSONS.find(l=>l.id===id);builderRoot=root;builderTargets=builderLesson.intervals.map(i=>root+i);builderNotes=[root];builderStep=1;builderAdvancePending=false;builderQuestion();}};');
  const doc=win.document,api=win.builderApi,get=()=>api.get(),el=id=>doc.getElementById(id),key=m=>doc.querySelector(`[data-midi="${m}"]`);
  const press=m=>{assert(key(m),`target ${m} is visible`);key(m).click();};
  const change=(id,value)=>{el(id).value=value;el(id).dispatchEvent(new win.Event('change'));};
@@ -103,8 +103,10 @@ const emptyRestore=setup(JSON.stringify({level:'extended',selection:'custom',typ
 change('builderLevel','triads');el('builderSelectAll').click();change('builderLevel','extended');el('builderClear').click();change('builderLevel','triads');assert.equal(doc.querySelectorAll('#builderTypeOptions input:checked').length,4);
 press(get().targetMidi+1);assert(doc.querySelector('.wrongAnswer'));change('builderLevel','altered');el('builderSelectAll').click();assert(!doc.querySelector('.wrongAnswer'));const target=get().targetMidi;advance(1000);assert.equal(get().targetMidi,target);
 // Explicit audio uses only completed physical notes, up to a seven-note thirteenth.
+// This suite isolates replay from live audition; real pointer sound has its own suite.
+api.audioFixture();
 const frequencies=[];
-win.AudioContext=class {currentTime=0;destination={};resume(){return Promise.resolve();}createOscillator(){return {frequency:{set value(v){frequencies.push(v);}},connect(){},disconnect(){},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}};}};
+win.AudioContext=class {state="running";currentTime=0;destination={};resume(){return Promise.resolve();}createOscillator(){return {frequency:{set value(v){frequencies.push(v);}},connect(){},disconnect(){},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){},disconnect(){}};}};
 (async()=>{
  api.start('dominant7',48);press(get().targetMidi);next();press(get().targetMidi);assert.equal(frequencies.length,0);el('hearBuilder').click();await new Promise(resolve=>setImmediate(resolve));assert.equal(frequencies.length,3);[48,52,55].forEach((m,i)=>assert.equal(frequencies[i],440*2**((m-69)/12)));
  next();press(get().targetMidi);el('hearBuilder').click();await new Promise(resolve=>setImmediate(resolve));assert.equal(frequencies.length,7);

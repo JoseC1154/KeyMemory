@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path'),a
 const root=path.resolve(__dirname,'..'),flush=()=>new Promise(r=>setImmediate(r));
 function setup(){
  const w=new JSDOM(fs.readFileSync(path.join(root,'index.html'),'utf8'),{pretendToBeVisual:true,runScripts:'outside-only',url:'https://keymemory.test/'}).window,d=w.document;
- w.confirm=()=>true;w.matchMedia=()=>({matches:false});w.ResizeObserver=class{observe(){}};Object.defineProperty(w,'isSecureContext',{value:true});
+ w.localStorage.setItem("keymemory.sound.v1","on");w.confirm=()=>true;w.matchMedia=()=>({matches:false});w.ResizeObserver=class{observe(){}};Object.defineProperty(w,'isSecureContext',{value:true});
  let now=1000,id=0,engine,defer=false;const timers=new Map(),contexts=[],oscillators=[],resumes=[],sounds=[],beats=[],controls=[];
  w.Date.now=()=>now;w.performance.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,time:now+ms});return id;};w.clearTimeout=id=>timers.delete(id);w.setInterval=(fn,ms)=>{timers.set(++id,{fn,time:now+ms,repeat:ms});return id;};w.clearInterval=id=>timers.delete(id);
  function advance(ms){const end=now+ms;for(;;){const t=[...timers].filter(([,v])=>v.time<=end).sort((a,b)=>a[1].time-b[1].time)[0];if(!t)break;const[k,v]=t;now=v.time;if(v.repeat)v.time+=v.repeat;else timers.delete(k);v.fn();}now=end;}
