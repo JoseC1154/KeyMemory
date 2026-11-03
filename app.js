@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.30";
+const APP_VERSION = "2026.11.03.31";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -170,7 +170,7 @@ function updateScaleStatus(){
   trainingPrompt.hidden=activeMode==="scale";
   const panel=document.querySelector(".practicePanel");panel.classList.toggle("scalePractice",activeMode==="scale");panel.dataset.scalePhase=scalePhase;
   const reverse=activeMode==="scale"&&scalePhase.startsWith("reverse-");
-  document.querySelector(".shell").classList.toggle("scaleReverseMode",reverse);
+  document.querySelector(".shell").classList.toggle("scaleReverseMode",reverse||(activeMode==="scale"&&scalePhase==="failed"&&scaleReverseWrongIndex!==null));
   updateScaleReverseChoices();
   if(activeMode!=="scale")return;
   const count=masteredRoots().size;
@@ -1233,7 +1233,7 @@ function renderPiano() {
   else{hint.textContent="Swipe sideways for more keys ";const arrow=document.createElement("span");arrow.setAttribute("aria-hidden","true");arrow.textContent="↔";hint.append(arrow);}
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
   const shortLandscape = matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
-  const reverseScale=activeMode==="scale"&&scalePhase.startsWith("reverse-");
+  const reverseScale=activeMode==="scale"&&(scalePhase.startsWith("reverse-")||(scalePhase==="failed"&&scaleReverseWrongIndex!==null));
   const whiteH = shortLandscape ? (reverseScale?100:118) : mobile
     ? Math.min(reverseScale?140:166, Math.max(125, whiteW * 4.6))
     : Math.min(270, Math.max(120, whiteW * 5.2));
