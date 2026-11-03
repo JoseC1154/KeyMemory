@@ -24,11 +24,11 @@ assert.match(el('settingsOverlay').textContent,/Changes apply immediately/);
 // Actual viewport geometry is independently checked in a real browser.
 const css=fs.readFileSync(path.join(root,'styles.css'),'utf8');
 assert.match(css,/\.scaleReverseMode \.info,\.scaleReverseMode \.pianoHint,\.scaleReverseMode \.achievement\{display:none\}/,'reverse feedback uses the primary question and circle, not a duplicate error slab');
-const runOverlayRule=css.match(/#scaleRunOverlay,#scaleDegreeOverlay\{([^}]+)\}/)[1];
+const runOverlayRule=css.match(/#scaleRunOverlay,#scaleDegreeOverlay,#modeOverlay\{([^}]+)\}/)[1];
 assert.match(runOverlayRule,/align-items:center/);assert.match(runOverlayRule,/justify-content:center/);
 assert.match(runOverlayRule,/height:100%;height:100dvh/);assert.match(runOverlayRule,/bottom:auto/);
 assert.match(runOverlayRule,/box-sizing:border-box/);
-assert.match(css,/#scaleRunOverlay \.scaleRunPanel,#scaleDegreeOverlay \.scaleRunPanel\{min-height:0;max-height:100%;overflow-y:auto\}/);
+assert.match(css,/#scaleRunOverlay \.scaleRunPanel,#scaleDegreeOverlay \.scaleRunPanel,#modeOverlay \.modalPanel\{min-height:0;max-height:100%;overflow-y:auto\}/);
 assert.match(css,/\.modalOverlay \{ align-items:flex-end; padding:max\(6px,env\(safe-area-inset-top\)\)/);
 assert.equal(el('scaleRunOverlay').getAttribute('role'),'dialog');
 assert(el('scaleRunOverlay').querySelector('.scaleRunPanel'));

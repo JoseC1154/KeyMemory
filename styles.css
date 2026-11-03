@@ -341,8 +341,8 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 /* The pre-run question is a centered dialog, never the mobile Settings sheet.
    Dynamic viewport height follows mobile browser chrome; safe-area padding and
    the panel's internal overflow keep controls reachable on very short screens. */
-#scaleRunOverlay,#scaleDegreeOverlay{align-items:center;justify-content:center;bottom:auto;height:100%;height:100dvh;box-sizing:border-box}
-#scaleRunOverlay .scaleRunPanel,#scaleDegreeOverlay .scaleRunPanel{min-height:0;max-height:100%;overflow-y:auto}
+#scaleRunOverlay,#scaleDegreeOverlay,#modeOverlay{align-items:center;justify-content:center;bottom:auto;height:100%;height:100dvh;box-sizing:border-box}
+#scaleRunOverlay .scaleRunPanel,#scaleDegreeOverlay .scaleRunPanel,#modeOverlay .modalPanel{min-height:0;max-height:100%;overflow-y:auto}
 .scaleRunPanel{width:min(580px,100%);text-align:center;border:2px solid #75c994}
 .scaleRunPanel .modalTop{text-align:left}.scaleRunPanel .modalTop h2{font-size:26px;font-weight:900}
 #scaleRunScale{display:block;font-size:clamp(22px,3vw,32px);font-weight:900;margin:12px 0;color:#fff}
@@ -363,3 +363,11 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .key.reverseTarget .noteLabel{color:#171717}.scaleReverseMode .info,.scaleReverseMode .pianoHint,.scaleReverseMode .achievement{display:none}
 @media(max-width:600px){.scaleReverseChoices{gap:3px}.scaleDegreeChoice{width:min(42px,calc((100vw - 40px)/8));height:min(42px,calc((100vw - 40px)/8))}}
 @media(max-height:500px) and (orientation:landscape){.scaleDegreeChoice{width:40px;height:40px}.scaleReverseChoices{padding:3px 0}}
+
+.scaleLivesMirror{font-weight:900;color:#ffe296}
+.key.correctionTarget{background:#35b75b!important;color:#08180c;box-shadow:inset 0 0 0 3px #baffce}.key.correctionTarget .noteLabel{color:#08180c}
+.scaleCorrectionMode .info,.scaleCorrectionMode .pianoHint,.scaleCorrectionMode .achievement{display:none}
+
+#hearBuilder{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:8px}#hearBuilder[aria-busy="true"]{opacity:.65}#hearBuilder svg{display:block;pointer-events:none}
+
+#audioStatus{font-size:12px;color:#ffb6b6;max-width:220px}
