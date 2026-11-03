@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.33";
+const APP_VERSION = "2026.11.03.34";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -376,6 +376,13 @@ function updateScaleReverseChoices(){
   const box=document.getElementById("scaleReverseChoices");
   const visible=activeMode==="scale"&&(scalePhase.startsWith("reverse-")||(scalePhase==="correction"&&scaleCorrection?.stage==="reverse-answer"));
   box.hidden=!visible;
+  const cue=document.getElementById("scaleReverseCue"),clock=document.getElementById("scaleReverseCountdown");
+  cue.hidden=!visible||!["reverse-show","reverse-answer"].includes(scalePhase);
+  document.getElementById("scaleReverseCueLabel").textContent=scalePhase==="reverse-answer"?"CHOOSE NOW":"WATCH THE KEY";
+  clock.hidden=scalePhase!=="reverse-answer";
+  if(scalePhase==="reverse-answer")clock.textContent=(Math.max(0,scaleReverseDeadline-performance.now())/1000).toFixed(1)+"s";
+  box.classList.toggle("watchPhase",visible&&scalePhase==="reverse-show");
+  box.classList.toggle("answerPhase",visible&&scalePhase==="reverse-answer");
   if(!visible)return;
   const labels=SCALE_DEGREES[scaleType.value],heptatonic=labels.length===8;
   if(box.dataset.scaleType!==scaleType.value){
@@ -410,6 +417,7 @@ function scaleReverseClock(phase,duration,onElapsed){
     if(scaleDialogPause||activeMode!=="scale"||scalePhase!==phase||scaleGeneration!==generation||scaleQuestionId!==question)return;
     const remaining=Math.max(0,scaleReverseDeadline-performance.now());timerRemaining.textContent=(remaining/1000).toFixed(1)+"s";
     document.querySelectorAll(".countdownMirror").forEach(el=>el.textContent=timerRemaining.textContent);
+    if(phase==="reverse-answer")document.getElementById("scaleReverseCountdown").textContent=(remaining/1000).toFixed(1)+"s";
     if(remaining<=0){clearScaleDegreeClock();onElapsed();}
   };
   scaleDegreeTick=tick;tick();scaleDegreeTimer=setTimeout(tick,duration);scaleDegreeInterval=setInterval(tick,50);
@@ -419,12 +427,13 @@ function nextScaleReverse(){
   stopBuilderAudio();
   if(document.hidden||currentDialog){startScalePreview();return;}
   clearScaleDegreeClock();scaleReverseIndex=Math.floor(Math.random()*scaleNotes.length);scalePhase="reverse-show";targetMidi=null;selected.clear();scaleReverseWrongIndex=null;
-  setScaleQuestion("WATCH THIS KEY","Remember its degree · circles unlock after the 2-second highlight.");
+  setScaleQuestion("WATCH THE KEY","Remember its degree · circles unlock after the 2-second highlight.");
   renderPiano();updatePracticeChrome();
   scaleReverseClock("reverse-show",SCALE_REVERSE_SHOW_MS,()=>{
-    stopBuilderAudio();scalePhase="reverse-answer";setScaleQuestion("WHICH DEGREE?","Choose a circle below the piano · 2 seconds to answer.");renderPiano();updatePracticeChrome();
+    stopBuilderAudio();scalePhase="reverse-answer";setScaleQuestion("CHOOSE NOW","Choose a circle below the piano · 2 seconds to answer.");renderPiano();updatePracticeChrome();
     document.querySelector(".scaleDegreeChoice")?.focus({preventScroll:true});
     scaleReverseClock("reverse-answer",SCALE_REVERSE_ANSWER_MS,()=>failScaleAttempt("2 seconds elapsed."));
+    soundScaleChooseCue();
   });
 }
 function answerScaleReverse(index){
@@ -723,6 +732,28 @@ function advanceBuilder(preservePlayback=false) {
   }
   builderQuestion();
 }
+// The cue uses an already user-unlocked context. Visual timing never waits for audio.
+let scaleCueVoice=null;
+function stopScaleChooseCue(){
+  if(!scaleCueVoice)return;
+  const voice=scaleCueVoice;scaleCueVoice=null;
+  try{voice.oscillator.stop();voice.oscillator.disconnect();voice.gain.disconnect();}catch(_){}
+}
+function soundScaleChooseCue(){
+  stopScaleChooseCue();
+  if(activeMode!=="scale"||scalePhase!=="reverse-answer"||currentDialog||document.hidden)return;
+  const context=[midiAudioContext,builderAudioContext].find(context=>context?.state==="running");
+  if(!context)return;
+  try{
+    const now=context.currentTime,oscillator=context.createOscillator(),gain=context.createGain();
+    oscillator.type="sine";oscillator.frequency.value=880;
+    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(.055,now+.008);gain.gain.linearRampToValueAtTime(0,now+.14);
+    oscillator.connect(gain);gain.connect(context.destination);
+    const voice={oscillator,gain};scaleCueVoice=voice;
+    oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();if(scaleCueVoice===voice)scaleCueVoice=null;};
+    oscillator.start(now);oscillator.stop(now+.16);
+  }catch(_){stopScaleChooseCue();}
+}
 let builderAudioContext = null;
 let builderVoices = [];
 let builderAudioUntil = 0;
@@ -734,6 +765,7 @@ function hearDuration(mode,notes) {
   return mode==="builder" ? {sustain:BUILDER_SUSTAIN_SECONDS,release:BUILDER_RELEASE_SECONDS} : {sustain:notes.length===1?1:2,release:.15};
 }
 function stopBuilderAudio() {
+  stopScaleChooseCue();
   builderAudioRequest++;
   audioResumePending=false;hearBuilder.setAttribute("aria-busy","false");
   document.getElementById("audioStatus").hidden=true;document.getElementById("audioStatus").textContent="";
@@ -1299,7 +1331,7 @@ function renderPiano() {
   piano.style.marginInline = !mobile && keyboardWidth <= width ? "auto" : "0";
   const shortLandscape = matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
   const reverseScale=activeMode==="scale"&&(scalePhase.startsWith("reverse-")||scalePhase==="correction");
-  const whiteH = shortLandscape ? (reverseScale?100:118) : mobile
+  const whiteH = shortLandscape ? (reverseScale?(["reverse-show","reverse-answer"].includes(scalePhase)?70:100):118) : mobile
     ? Math.min(reverseScale?140:166, Math.max(125, whiteW * 4.6))
     : Math.min(270, Math.max(120, whiteW * 5.2));
   const blackW = whiteW * .65;
@@ -1450,7 +1482,7 @@ document.getElementById("cancelScaleRun").addEventListener("click",closePractice
 document.getElementById("scaleRunOverlay").addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
 document.getElementById("confirmScaleRun").addEventListener("click",()=>{
   if(activeMode!=="scale"||scalePhase!=="ready"||currentDialog?.id!=="scaleRunOverlay")return;
-  closePracticeDialog({cancelScaleRun:false});startScaleRace();
+  unlockMidiAudio();closePracticeDialog({cancelScaleRun:false});startScaleRace();
   piano.querySelector('[data-midi="'+scaleNotes[0]+'"]')?.focus({preventScroll:true});
 });
 document.querySelectorAll(".startMode").forEach(button=>button.addEventListener("click",()=>{

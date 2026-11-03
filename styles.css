@@ -371,3 +371,11 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 #hearBuilder{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:8px}#hearBuilder[aria-busy="true"]{opacity:.65}#hearBuilder svg{display:block;pointer-events:none}
 
 #audioStatus{font-size:12px;color:#ffb6b6;max-width:220px}
+
+/* A fixed phase cue sits immediately above the answer circles, never over them. */
+.scaleReverseCue{display:flex;align-items:center;justify-content:center;gap:12px;min-height:30px;line-height:30px;color:#fff;font-size:16px;font-weight:900}
+#scaleReverseCountdown{font-size:26px;font-variant-numeric:tabular-nums;color:#ffe296}
+.scaleReverseChoices.watchPhase .scaleDegreeChoice{opacity:.3;filter:saturate(.2)}
+.scaleReverseChoices.answerPhase .scaleDegreeChoice{opacity:1;background:#315c8b;border-color:#b7dcff;animation:chooseReadyPulse .4s ease-out}
+@keyframes chooseReadyPulse{0%{box-shadow:0 0 0 0 #b7dcff}50%{box-shadow:0 0 0 4px #b7dcff80}100%{box-shadow:0 0 0 0 transparent}}
+@media(prefers-reduced-motion:reduce){.scaleReverseChoices.answerPhase .scaleDegreeChoice{animation:none}}

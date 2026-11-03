@@ -116,7 +116,7 @@ Use **Inspect** to examine a saved phrase without playing it, and **Window** to 
 
 **Show example** displays a labeled C-major chord with a C3 bass and a separate C5 note, including a pedal-tail example. It is view-only: never saved, graded, played automatically, or substituted for your recording. **Back to my phrase** exits it; starting any transport exits it automatically.
 
-## Scale Builder (Build 33)
+## Scale Builder (Build 34)
 
 Choose one of the existing 12 scale types and a root in Settings. The study preview repeats until you press **Start scale race**. Before **each of four successful runs**, a modal covers the piano and shows the scale, exact octave range, run number, and ten-second task. Press **Start run** to close it and begin the timer. There is no countdown or grading while that modal is open. Cancel, Escape or backdrop dismissal returns to preview and resets the current key’s four-run attempt; already mastered keys remain saved. Release notes played or held while the modal was open before starting.
 
@@ -150,3 +150,5 @@ A new key/type or explicitly restarted attempt starts with three lives. Lives ar
 
 
 The speaker button keeps a contextual accessible label and tooltip, shows a busy state while audio unlocks, and reports an audio-start failure beside the control. In Scale Builder it plays the currently shown/requested note or the correction note. It is disabled when there is no visible audio context, including the reverse answer window after the cue disappears. New Scale questions, root/type changes and navigation cancel stale playback. Repeated speaker presses replace the previous sound instead of layering it. Phrase Trainer retains its separate phrase playback control.
+
+Reverse questions explicitly show WATCH THE KEY with dimmed, locked circles for two seconds, then CHOOSE NOW with bright circles and a separate two-second countdown directly above them. A short chime plays when audio was successfully unlocked by a prior user gesture; unavailable audio never blocks practice. Reduced-motion settings disable the brief circle pulse.

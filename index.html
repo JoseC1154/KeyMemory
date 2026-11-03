@@ -7,11 +7,11 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="#121212" name="theme-color"/>
 <title>KeyMemory — Piano</title>
-<link href="./styles.css?v=20261103-33" rel="stylesheet"/>
-<script defer="" src="./midi.js?v=20261103-33"></script>
-<script defer="" src="./phrase.js?v=20261103-33"></script>
-<script defer="" src="./phrase-view.js?v=20261103-33"></script>
-<script defer="" src="./app.js?v=20261103-33"></script>
+<link href="./styles.css?v=20261103-34" rel="stylesheet"/>
+<script defer="" src="./midi.js?v=20261103-34"></script>
+<script defer="" src="./phrase.js?v=20261103-34"></script>
+<script defer="" src="./phrase-view.js?v=20261103-34"></script>
+<script defer="" src="./app.js?v=20261103-34"></script>
 </head>
 <body>
 <main class="shell">
@@ -68,6 +68,7 @@
 <section aria-label="Interactive piano" class="pianoContainer">
 <div aria-label="Piano keys" class="piano" id="piano"></div>
 </section>
+<div id="scaleReverseCue" class="scaleReverseCue" hidden><strong id="scaleReverseCueLabel" role="status" aria-live="polite">WATCH THE KEY</strong><span id="scaleReverseCountdown" role="timer" aria-label="Time left to choose a degree" hidden>2.0s</span></div>
 <section id="scaleReverseChoices" class="scaleReverseChoices" hidden aria-label="Choose the highlighted key’s scale degree"></section>
 <div class="info">
 <span aria-live="polite" id="rangeText"></span>
