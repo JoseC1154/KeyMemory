@@ -116,7 +116,7 @@ Use **Inspect** to examine a saved phrase without playing it, and **Window** to 
 
 **Show example** displays a labeled C-major chord with a C3 bass and a separate C5 note, including a pedal-tail example. It is view-only: never saved, graded, played automatically, or substituted for your recording. **Back to my phrase** exits it; starting any transport exits it automatically.
 
-## Scale Builder (Build 34)
+## Scale Builder (Build 35)
 
 Choose one of the existing 12 scale types and a root in Settings. The study preview repeats until you press **Start scale race**. Before **each of four successful runs**, a modal covers the piano and shows the scale, exact octave range, run number, and ten-second task. Press **Start run** to close it and begin the timer. There is no countdown or grading while that modal is open. Cancel, Escape or backdrop dismissal returns to preview and resets the current key’s four-run attempt; already mastered keys remain saved. Release notes played or held while the modal was open before starting.
 
@@ -142,7 +142,7 @@ Previously saved achievements remain prior-level progress. Reverse-level complet
 
 ### Three shared lives
 
-Each key attempt starts with **three lives shared across all three stages**. Moving to a new stage does not refill them. A wrong answer or deadline miss costs one life exactly once and pauses the clocks for a **2.5-second correction**: the correct key or degree circle is green, the mistaken choice is red, and text identifies the right answer. The correction does not award a point.
+Each key attempt starts with **three lives shared across all three stages**. Moving to a new stage does not refill them. A wrong answer or deadline miss costs one life exactly once and pauses the clocks for an **untimed correction, until Continue is pressed**: the correct key or degree circle is green, the mistaken choice is red, and text identifies the right answer. The correction does not award a point.
 
 With lives remaining, completed full-scale runs and correct-answer counts stay saved within the attempt. A missed full-scale run repeats from its own Start modal with a fresh ten seconds; forward and reverse degree practice continue with a new question and their normal viewing/answer windows. Each degree stage needs 30 correct answers, not an uninterrupted streak. On the third loss, the correction is still shown before returning to the full study preview, zero attempt progress and three fresh lives. Mastered keys and prior-level achievements are retained.
 

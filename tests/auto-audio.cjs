@@ -137,7 +137,7 @@ function checkSpeaker(h){
   else if(action==='race-error'||action==='degree-error')h.press(h.get().target===48?49:48);
   else if(action==='degree-next'||action==='reverse-next')h.advance(300);
   else if(action==='reverse-hide')h.advance(2000);
-  else if(action==='correction-next')h.advance(2500);
+  else if(action==='correction-next')h.el('continueScaleCorrection').click();
   else if(action==='settings')h.el('openSettings').click();
   else h.api.mode('phrase');
   assert.equal(h.el('hearBuilder').getAttribute('aria-busy'),'false',action+' clears pending state');

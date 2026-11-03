@@ -379,3 +379,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .scaleReverseChoices.answerPhase .scaleDegreeChoice{opacity:1;background:#315c8b;border-color:#b7dcff;animation:chooseReadyPulse .4s ease-out}
 @keyframes chooseReadyPulse{0%{box-shadow:0 0 0 0 #b7dcff}50%{box-shadow:0 0 0 4px #b7dcff80}100%{box-shadow:0 0 0 0 transparent}}
 @media(prefers-reduced-motion:reduce){.scaleReverseChoices.answerPhase .scaleDegreeChoice{animation:none}}
+
+#continueScaleCorrection{min-height:44px;font-weight:900;background:#226d3d;border-color:#8beba9;color:white}
+
+.scaleCorrectionMode .key.wrongAnswer{animation:none!important;background:#d93636!important;color:#fff!important}.scaleCorrectionMode .key.wrongAnswer .noteLabel{color:#fff}

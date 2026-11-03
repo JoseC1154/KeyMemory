@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.34";
+const APP_VERSION = "2026.11.03.35";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -137,8 +137,7 @@ const scaleStart=document.getElementById("scaleStart");
 let scalePhase="preview",scalePreviewIndex=0,scalePreviewInterval=null,scaleRaceInterval=null;
 let scaleRaceDeadline=0,scaleStreak=0,scaleAskedAt=0,scaleTarget=0,scaleRuns=0;
 const SCALE_RACE_MS=10000,SCALE_DEGREE_MS=3000,SCALE_SUCCESS_MS=300,SCALE_QUESTION_PREVIEW_MS=3000,SCALE_LEVELUP_MS=2500;
-let scaleLives=3,scaleCorrection=null,scaleQuestionsShown=0,scaleCorrectionResumeId=0;
-const SCALE_CORRECTION_MS=2500;
+let scaleLives=3,scaleCorrection=null,scaleQuestionsShown=0;
 let scaleDialogPause=null,scaleFeedbackScheduleId=0,scaleFeedbackDeadline=0,scaleFeedbackCallback=null,scaleDegreeTick=null;
 let scaleReverseStreak=0,scaleReverseIndex=0,scaleReverseDeadline=0,scaleReverseWrongIndex=null;
 const SCALE_REVERSE_SHOW_MS=2000,SCALE_REVERSE_ANSWER_MS=2000;
@@ -169,6 +168,7 @@ function setScaleQuestion(title,detail=""){
 }
 function updateScaleStatus(){
   scaleStatus.hidden=activeMode!=="scale";
+  document.getElementById("continueScaleCorrection").hidden=activeMode!=="scale"||scalePhase!=="correction";
   document.getElementById("scaleQuestion").hidden=activeMode!=="scale";
   trainingPrompt.hidden=activeMode==="scale";
   const panel=document.querySelector(".practicePanel");panel.classList.toggle("scalePractice",activeMode==="scale");panel.dataset.scalePhase=scalePhase;
@@ -226,7 +226,7 @@ function clearScaleDegreeClock(){
 }
 function clearScaleDelay(){
   if(activeMode==="scale")stopBuilderAudio();
-  scaleGeneration++;scaleCorrectionResumeId++;scaleFeedbackScheduleId++;scaleDialogPause=null;scaleFeedbackCallback=null;clearScaleDegreeClock();
+  scaleGeneration++;scaleFeedbackScheduleId++;scaleDialogPause=null;scaleFeedbackCallback=null;clearScaleDegreeClock();
   if(scaleFeedbackTimer!==null)clearTimeout(scaleFeedbackTimer);
   if(scalePreviewInterval!==null)clearInterval(scalePreviewInterval);
   if(scaleRaceInterval!==null)clearInterval(scaleRaceInterval);
@@ -260,21 +260,15 @@ function completeScaleRun(){
   renderPiano();updatePracticeChrome();const generation=scaleGeneration;
   queueScaleFeedback(()=>{if(activeMode!=="scale"||scalePhase!=="levelup"||scaleGeneration!==generation)return;scaleFeedbackTimer=null;startScaleDegreeTest();},SCALE_LEVELUP_MS);
 }
-function scheduleScaleCorrectionResume(){
-  if(scaleFeedbackTimer!==null)clearTimeout(scaleFeedbackTimer);
-  const generation=scaleGeneration,correction=scaleCorrection,resume=++scaleCorrectionResumeId;
-  queueScaleFeedback(()=>{
-    if(activeMode!=="scale"||scalePhase!=="correction"||scaleGeneration!==generation||scaleCorrection!==correction||scaleCorrectionResumeId!==resume)return;
-    scaleFeedbackTimer=null;
-    // If a Settings sheet covered the timeout, keep the explanation until it
-    // closes; dialog pause/resume preserves the remaining visible review time.
-    if(currentDialog)return;
-    if(document.hidden||scaleLives===0){startScalePreview();return;}
-    const stage=correction.stage;scaleCorrection=null;scaleReverseWrongIndex=null;selected.clear();dismissAchievement();
-    if(stage==="race")prepareScaleRun();
-    else if(stage==="degrees"){scalePhase="degrees";nextScaleDegree();}
-    else nextScaleReverse();
-  },SCALE_CORRECTION_MS);
+function continueScaleCorrection(){
+  if(activeMode!=="scale"||scalePhase!=="correction"||!scaleCorrection||currentDialog||document.hidden)return;
+  stopBuilderAudio();clearWrongKeyFeedback();
+  const stage=scaleCorrection.stage;
+  scaleCorrection=null;scaleReverseWrongIndex=null;selected.clear();dismissAchievement();
+  if(scaleLives===0){startScalePreview();scaleStart.focus({preventScroll:true});return;}
+  if(stage==="race")prepareScaleRun();
+  else if(stage==="degrees"){scalePhase="degrees";nextScaleDegree();}
+  else{nextScaleReverse();document.getElementById("scaleQuestion").focus({preventScroll:true});}
 }
 function failScaleAttempt(message){
   if(activeMode!=="scale"||!["race","degrees","reverse-answer"].includes(scalePhase))return;
@@ -284,10 +278,11 @@ function failScaleAttempt(message){
   const labels=SCALE_DEGREES[scaleType.value],degree=labels.length===8?String(index+1)+(labels[index]!==String(index+1)?" ("+labels[index]+")":""):labels[index];
   const reason=message.includes("elapsed")?"Time expired":"Wrong answer";
   const next=scaleLives===0?"Restart all four runs":stage==="race"?"Retry run "+(scaleRuns+1)+"/4":"Continue with your score";
-  setScaleQuestion(stage==="reverse-answer"?"CORRECT DEGREE "+degree:"CORRECT: "+scaleNoteName(midi),(stage==="reverse-answer"?scaleNoteName(midi):"Degree "+degree)+" · "+reason+" · "+scaleLives+" lives left · "+next);
-  renderPiano();updatePracticeChrome();scheduleScaleCorrectionResume();
+  setScaleQuestion(stage==="reverse-answer"?"CORRECT DEGREE "+degree:"CORRECT: "+scaleNoteName(midi),(stage==="reverse-answer"?scaleNoteName(midi):"Degree "+degree)+" · "+reason+" · "+scaleLives+" lives left · Press Continue: "+next);
+  renderPiano();updatePracticeChrome();document.getElementById("continueScaleCorrection").focus({preventScroll:true});
 }
 function startScalePreview(){
+  clearWrongKeyFeedback();
   if(["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog?.id))closePracticeDialog({cancelScaleRun:false});
   clearScaleDelay();stopCountdown();dismissAchievement();scaleBuildNotes();
   scalePhase="preview";scaleQuestionsShown=0;scaleLives=3;scaleCorrection=null;scaleReverseStreak=0;scaleReverseDeadline=0;scaleReverseWrongIndex=null;scaleIndex=0;scaleStreak=0;scaleRuns=0;scaleRaceDeadline=0;scaleDegreeDeadline=0;targetMidi=null;selected.clear();
@@ -1123,12 +1118,13 @@ function flashWrongKey(key) {
   const midi = Number(key.dataset.midi);
   const previous = wrongKeyFeedback.get(midi);
   if (previous) clearTimeout(previous.timer);
-  const feedback = { started: Date.now(), timer: null };
+  const feedback = { started: Date.now(), timer: null, persistent: activeMode==="scale"&&scalePhase==="correction" };
   wrongKeyFeedback.set(midi, feedback);
   key.classList.remove("wrongAnswer");
   void key.offsetWidth; // Restart the visible hold/fade on rapid repeat mistakes.
   key.style.setProperty("--wrong-key-delay", "0ms");
   key.classList.add("wrongAnswer");
+  if(feedback.persistent)return;
   feedback.timer = setTimeout(() => {
     if (wrongKeyFeedback.get(midi) !== feedback) return;
     wrongKeyFeedback.delete(midi);
@@ -1359,7 +1355,7 @@ function renderPiano() {
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
     const feedback = wrongKeyFeedback.get(midi);
-    if (feedback && Date.now() - feedback.started < WRONG_KEY_DURATION) {
+    if (feedback && (feedback.persistent || Date.now() - feedback.started < WRONG_KEY_DURATION)) {
       button.classList.add("wrongAnswer");
       button.style.setProperty("--wrong-key-delay", -(Date.now() - feedback.started) + "ms");
     }
@@ -1475,11 +1471,12 @@ for(const [open,dialog,close] of [["openModes","modeOverlay","closeModes"],["ope
 document.getElementById("confirmScaleDegree").addEventListener("click",beginScaleDegreeAnswer);
 document.getElementById("cancelScaleDegree").addEventListener("click",closePracticeDialog);
 document.getElementById("scaleDegreeOverlay").addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
-function suspendScaleQuestionPreview(){if(scaleDialogPause)return;if(activeMode==="scale"&&(["levelup","degree-preview","degree-success","correction"].includes(scalePhase)||scalePhase.startsWith("reverse-")))startScalePreview();}
+function suspendScaleQuestionPreview(){if(activeMode==="scale"&&scalePhase==="correction"){stopBuilderAudio();return;}if(scaleDialogPause)return;if(activeMode==="scale"&&(["levelup","degree-preview","degree-success"].includes(scalePhase)||scalePhase.startsWith("reverse-")))startScalePreview();}
 window.addEventListener("blur",suspendScaleQuestionPreview);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)suspendScaleQuestionPreview();});
 document.getElementById("cancelScaleRun").addEventListener("click",closePracticeDialog);
 document.getElementById("scaleRunOverlay").addEventListener("click",event=>{if(event.target===event.currentTarget)closePracticeDialog();});
+document.getElementById("continueScaleCorrection").addEventListener("click",continueScaleCorrection);
 document.getElementById("confirmScaleRun").addEventListener("click",()=>{
   if(activeMode!=="scale"||scalePhase!=="ready"||currentDialog?.id!=="scaleRunOverlay")return;
   unlockMidiAudio();closePracticeDialog({cancelScaleRun:false});startScaleRace();
