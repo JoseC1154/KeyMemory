@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.04.39";
+const APP_VERSION = "2026.11.04.40";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -1968,7 +1968,7 @@ function renderPhraseViewContent(){
   for(const key of piano.querySelectorAll(".key")){const on=highlighted.has(Number(key.dataset.midi));key.classList.toggle("phrasePlaying",on);if(on)key.setAttribute("aria-label",key.title+(playing?" · playing, key held":" · live key held"));else if(key.title)key.setAttribute("aria-label",key.title);}
   if(show){
     const width=Math.max(320,panel.clientWidth||800),start=Math.max(0,time-phraseViewWindow/4),end=Math.min(Math.max(source.duration,phraseViewWindow),start+phraseViewWindow);
-    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width,maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
+    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
     const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
     document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":"At cursor: ")+(names.join(" · ")||"No keys held")+". C4 = middle C.";
     document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,names:phraseViewNames,spelling:phraseViewSpelling});
@@ -2000,3 +2000,6 @@ window.addEventListener("blur",()=>{stopBuilderAudio();resetMidiAudio();silenceP
 document.addEventListener("visibilitychange",()=>{if(document.hidden){stopBuilderAudio();resetMidiAudio();silencePhrase(false);}});
 
 for(const id of ["closeSettings","openModes"]){document.getElementById(id)?.addEventListener("click",()=>midiTransport?.cancelLearn());}
+
+// Hidden piano containers do not resize-observe while Score is visible.
+window.addEventListener("resize",()=>{if(activeMode==="phrase")renderPhraseView();});

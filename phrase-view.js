@@ -158,7 +158,7 @@
   }
   if(finite(cursor)&&cursor>=start&&cursor<=end)body+=`<line class="staffTimelineCursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="${minY+15}" y2="${maxY}" stroke="#8e2525" stroke-width="2"/>`;
   if(omitted)body+=`<text x="${left}" y="${minY+10}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">Dense window: ${omitted} more notes; zoom in.</text>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseTimelineStaffSVG" style="min-height:${height}px" viewBox="${minX} ${minY} ${maxX-minX} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseTimelineStaffSVG" style="min-height:${height}px;min-width:${maxX-minX}px" viewBox="${minX} ${minY} ${maxX-minX} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
  }
  return{pitch,staffPosition,staffSVG,prepareTimeline,controllerAt,rollSVG,timelineStaffSVG};
 });

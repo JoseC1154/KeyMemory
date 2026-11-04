@@ -20,7 +20,7 @@ function setup(saved,prefs){
  const el=id=>d.getElementById(id),click=id=>el(id).click(),change=(id,value)=>{el(id).value=String(value);el(id).dispatchEvent(new w.Event('change',{bubbles:true}));};
  const send=(note,velocity=100,channel=0,kind=0x90,timeStamp=now)=>port.onmidimessage?.({data:new Uint8Array([kind|channel,note,velocity]),timeStamp}),off=(note,channel=0)=>send(note,0,channel,0x80);
  async function connect(){click('connectMidi');await flush();}
- return{w,d,el,click,change,send,off,advance,connect,port,access,sounds,controls,oscillators,cc:(controller,value,channel=0)=>send(controller,value,channel,0xb0),mode:m=>w.phraseTest.mode(m),get:()=>w.phraseTest.get(),snapshot:()=>engine.snapshot(),now:()=>now,close:()=>w.close()};
+ return{w,d,el,click,change,send,off,advance,connect,port,access,sounds,controls,oscillators,cc:(controller,value,channel=0)=>send(controller,value,channel,0xb0),mode:m=>w.phraseTest.mode(m),get:()=>w.phraseTest.get(),snapshot:()=>engine.snapshot(),transportTimers:()=>[...timers].filter(([,v])=>v.fn.name!=='renderPhraseView').map(([id,v])=>({id,time:v.time,repeat:v.repeat})),now:()=>now,close:()=>w.close()};
 }
 async function beginPlay(h){
  h.click('phrasePlay');await flush();if(h.snapshot().state!=='play-countin')return;
@@ -63,5 +63,46 @@ function viewOperations(h){stable(h,()=>h.change('phraseSpelling','flat'));stabl
  // Section is half-open: a note exactly at end is neither sounded nor highlighted during100ms completion grace.
  const boundary=setup(saved);resize(boundary,1280);boundary.mode('phrase');boundary.change('phraseSectionEnd',2);await beginPlay(boundary);boundary.advance(1999);assert.equal(boundary.snapshot().state,'playing');boundary.advance(1);boundary.change('phraseSpelling','flat');assert.equal(+boundary.el('phraseViewTime').value,2);assert.equal(boundary.d.querySelectorAll('.key.phrasePlaying').length,0);assert.match(boundary.el('phrasePitchText').textContent,/No keys held/);assert(!boundary.sounds.some(args=>args[0]===67),'onset exactly at section end is excluded');boundary.advance(99);assert.equal(boundary.snapshot().state,'playing');assert.equal(boundary.d.querySelectorAll('.key.phrasePlaying').length,0);boundary.advance(1);assert.equal(boundary.snapshot().state,'idle');boundary.close();
  const scroll=setup();resize(scroll,400,606);scroll.mode('phrase');const viewport=scroll.el('piano').parentElement;viewport.scrollLeft=300;scroll.click('phraseViewSwitch');assert(viewport.hidden);viewport.scrollLeft=42;scroll.click('phraseViewSwitch');assert(!viewport.hidden);assert.equal(viewport.scrollLeft,300,'Score/Piano restores scroll after hidden-width clamp');scroll.close();
+ // An actual resize event must update an already-open Score using its own column,
+ // not the wider score panel. No visibility toggling or direct render call here.
+ const responsive=setup(saved);
+ function eventResize(h,screenWidth,screenHeight,panelWidth,staffWidth){
+  h.w.innerWidth=screenWidth;h.w.innerHeight=screenHeight;
+  Object.defineProperty(h.el('phraseScore'),'clientWidth',{configurable:true,value:panelWidth});
+  Object.defineProperty(h.el('phraseStaff'),'clientWidth',{configurable:true,value:staffWidth});
+  h.w.dispatchEvent(new h.w.Event('resize'));
+ }
+ const shapes=[[1280,900,932,932],[390,844,358,358],[844,390,816,398],[1280,900,932,932]];
+ eventResize(responsive,...shapes[0]);responsive.mode('phrase');responsive.change('phraseViewVisibility','show');responsive.change('phraseViewWindow',1000);inspect(responsive,1.4);
+ const resizeStored=responsive.w.localStorage.getItem('keymemory.phrase.v1');
+ function assertResizedScore(h,shape){
+  const cursorBefore=+h.el('phraseViewTime').value,windowBefore=h.el('phraseViewWindow').value,timers=h.transportTimers(),title=h.el('phraseStaff').querySelector('svg > title').textContent;
+  stable(h,()=>eventResize(h,...shape));
+  const staff=h.el('phraseStaff').querySelector('svg'),box=staff.getAttribute('viewBox').split(' ').map(Number);
+  assert.equal(box[2],shape[3],'staff uses its own current column width, including landscape split');
+  assert.equal(staff.style.minWidth,shape[3]+'px','glyph scale retains actual column width');
+  assert.equal(+h.el('phraseViewTime').value,cursorBefore,'resize preserves inspect/transport cursor');
+  assert.equal(h.el('phraseViewWindow').value,windowBefore,'resize preserves selected window');
+  assert.equal(staff.querySelector('title').textContent,title,'same source-time window remains visible');
+  assert.deepEqual(h.transportTimers(),timers,'resize never restarts or replaces transport/count-in timers');
+  const cursor=staff.querySelector('.staffTimelineCursor'),start=Math.max(0,cursorBefore*1000- +windowBefore/4),end=Math.min(Math.max(h.snapshot().duration,+windowBefore),start+ +windowBefore);
+  assert(Math.abs(+cursor.getAttribute('x1')-(80+(cursorBefore*1000-start)/(end-start)*(shape[3]-144)))<1e-8,'cursor uses resized time geometry');
+  assert(!h.el('phraseScore').hidden,'Score stays open without toggling');
+ }
+ for(const shape of shapes)assertResizedScore(responsive,shape);
+ // A resize in count-in must not extend its deadline; during playback it must
+ // neither restart sound nor change source timing or the saved recording.
+ responsive.click('phrasePlay');await flush();assert.equal(responsive.snapshot().state,'play-countin');
+ responsive.advance(300);for(const shape of shapes)assertResizedScore(responsive,shape);
+ responsive.advance(1199);assert.equal(responsive.snapshot().state,'play-countin');responsive.advance(1);assert.equal(responsive.snapshot().state,'playing');
+ responsive.advance(800);const soundsBefore=responsive.sounds.length;
+ for(const shape of shapes)assertResizedScore(responsive,shape);
+ assert.equal(responsive.sounds.length,soundsBefore,'resize does not replay sounding notes');
+ assert.equal(responsive.w.localStorage.getItem('keymemory.phrase.v1'),resizeStored);
+ responsive.advance(200);assert.equal(responsive.sounds.filter(args=>args[0]===48).length,1,'next source onset remains on original schedule');
+ responsive.mode('find');const exited=JSON.stringify(responsive.snapshot()),exitTimers=responsive.transportTimers(),oldSVG=responsive.el('phraseStaff').innerHTML;
+ for(const shape of shapes)eventResize(responsive,...shape);
+ assert.equal(JSON.stringify(responsive.snapshot()),exited);assert.deepEqual(responsive.transportTimers(),exitTimers);assert.equal(responsive.el('phraseStaff').innerHTML,oldSVG,'resize outside Phrase leaves dormant Score alone');
+ assert(responsive.el('phraseScore').hidden);assert(!responsive.el('piano').parentElement.hidden);assert.equal(responsive.w.localStorage.getItem('keymemory.phrase.v1'),resizeStored);responsive.close();
  console.log('PASS: Live Score app integration: read-only controls, persisted preferences/malformed fallback, source-time cursor/section/tempo, key-vs-pedal highlights, responsive Score/Piano/mode restoration, live recording projection and saved-data preservation. Simulated DOM/MIDI/audio only.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
