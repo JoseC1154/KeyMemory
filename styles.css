@@ -406,3 +406,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 #soundToggle,#hearBuilder{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 12px}#soundToggle svg{flex-shrink:0;pointer-events:none}#soundToggle[aria-pressed="true"]{background:#d9f3e6;color:#123d2a;border-color:#38885e}#soundToggle[aria-pressed="false"] .soundWaves,#soundToggle[aria-pressed="true"] .soundMuted{display:none}
 
 @media(max-width:600px){#soundToggle span{display:none}#soundToggle{min-width:44px;padding:8px}#hearBuilder{padding:8px;gap:4px}.scalePractice .practiceActions{gap:5px}}
+
+/* Phrase transport and exact-time staff retain normal scroll on small displays. */
+#phraseRecordIndicator{color:#a61f2b;font-weight:900;font-size:13px}
+#phraseMetronome[aria-pressed="true"]{background:#d9eddb;color:#173e25}
+.midiTransportRow{display:grid;grid-template-columns:minmax(80px,1fr) minmax(90px,1.5fr) auto auto;gap:6px;align-items:center;margin:8px 0}
+.midiTransportRow span{font-size:12px;overflow-wrap:anywhere}
+#midiTransportControls p,#midiTransportControls small{font-size:12px;line-height:1.4}
+.phraseStaff:has(.phraseTimelineStaffSVG){max-height:260px}
+.phraseStaff .phraseTimelineStaffSVG{height:auto;min-width:320px}
+@media(max-width:600px){.midiTransportRow{grid-template-columns:1fr 1fr}.midiTransportRow button{min-height:40px}.phraseStaff:has(.phraseTimelineStaffSVG){max-height:230px}.phraseActions{gap:4px}#phraseMetronome{padding:7px;font-size:12px}}

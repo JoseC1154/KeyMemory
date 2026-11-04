@@ -1,7 +1,7 @@
 // Input-only Web MIDI adapter. Permission is requested only by Connect MIDI.
 "use strict";
 window.KeyMemoryMidi = {
-  create({onNote, onRelease=()=>{}, onReset=()=>{}, onConnect=()=>{}, onRaw=()=>false, onSuspend=()=>{}, onConnection=()=>{}, status, select, connect, disconnect}) {
+  create({transport=null, onNote, onRelease=()=>{}, onReset=()=>{}, onConnect=()=>{}, onRaw=()=>false, onSuspend=()=>{}, onConnection=()=>{}, status, select, connect, disconnect}) {
     let access=null, input=null, desiredId=null, generation=0, pending=false, binding=0;
     let waitingForRelease=false, boundary=performance.now(), failedPort=null, focused=true;
     const held=new Set();
@@ -9,6 +9,7 @@ window.KeyMemoryMidi = {
     const clearHeld=()=>{held.clear();waitingForRelease=false;onReset();};
     function detach() {
       if(input)onSuspend("MIDI input changed or disconnected");
+      transport?.reset();
       binding++;
       if(input){input.onmidimessage=null;try{Promise.resolve(input.close()).catch(()=>{});}catch{}}
       input=null;clearHeld();
@@ -30,10 +31,17 @@ window.KeyMemoryMidi = {
         if(note>127||velocity>127)return;
         const stamp=event.timeStamp,clock=performance.now();
         const time=Number.isFinite(stamp)&&stamp>0&&stamp<=clock+1000?Date.now()-Math.max(0,clock-stamp):Date.now();
-        if(kind===0xb0){if([64,7,11].includes(note))onRaw({kind:"control",controller:note,value:velocity,channel,focused,time});return;}
+        const active=focused&&!document.hidden&&!(stamp>0&&stamp<boundary);
+        if(kind===0xb0){
+          const event={kind:"control",controller:note,value:velocity,channel,focused,active,time};
+          if(transport?.handle(event))return;
+          if([64,7,11].includes(note))onRaw(event);return;
+        }
         if(kind!==0x80&&kind!==0x90)return;
+        const eventData={kind:kind===0x80||velocity===0?"off":"on",note,velocity,channel,focused,active,time};
+        if(transport?.handle(eventData))return;
         const key=channel+":"+note;
-        const intercepted=onRaw({kind:kind===0x80||velocity===0?"off":"on",note,velocity,channel,focused,time});
+        const intercepted=onRaw(eventData);
         if(kind===0x80||velocity===0){
           held.delete(key);
           if(![...held].some(k=>Number(k.split(":")[1])===note))onRelease(note,channel);
@@ -96,9 +104,10 @@ window.KeyMemoryMidi = {
     }
     connect.addEventListener("click",start);disconnect.addEventListener("click",stop);
     select.addEventListener("change",()=>{if(!access)return;failedPort=null;desiredId=select.value;refresh();});
-    window.addEventListener("blur",()=>{focused=false;onSuspend("Window lost focus");resetQuestion();});
+    transport?.subscribeBoundary(()=>{onSuspend("MIDI transport settings changed");clearHeld();boundary=performance.now();});
+    window.addEventListener("blur",()=>{focused=false;transport?.suspend();onSuspend("Window lost focus");resetQuestion();});
     window.addEventListener("focus",()=>{focused=true;resetQuestion();});
-    document.addEventListener("visibilitychange",()=>{if(document.hidden){onSuspend("Page hidden");resetQuestion();}});
+    document.addEventListener("visibilitychange",()=>{if(document.hidden){transport?.suspend();onSuspend("Page hidden");resetQuestion();}});
     window.addEventListener("pagehide",stop);
     select.disabled=true;disconnect.hidden=true;
     say(!window.isSecureContext?"MIDI needs HTTPS.":typeof navigator.requestMIDIAccess!=="function"?"Web MIDI unavailable — use Chrome or Edge on your Mac.":"Not connected. MIDI access is requested only when you choose Connect MIDI.");

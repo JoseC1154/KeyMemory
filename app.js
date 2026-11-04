@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.03.38";
+const APP_VERSION = "2026.11.04.39";
 let midiController = null;
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
@@ -1563,6 +1563,7 @@ document.getElementById("scalePauseOverlay").addEventListener("click",event=>{if
 function closePracticeDialog(options={}) {
   if(scaleUserPause){resumeScaleUserPause();return;}
   if (!currentDialog) return;
+  if(currentDialog.id==="settingsOverlay")midiTransport?.cancelLearn();
   const cancelRun=["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog.id)&&options.cancelScaleRun!==false;
   currentDialog.hidden=true;
   currentDialog=null;
@@ -1721,7 +1722,42 @@ async function soundMidiNote(note){
     osc.onended=()=>{osc.disconnect();gain.disconnect();if(midiVoices.get(note)===voice)midiVoices.delete(note);};
   }catch{}
 }
+const transportLabels={record:"Record",stop:"Stop",play:"Play",practice:"Start practice",continue:"Continue / Start"};
+let midiTransport=null;
+function refreshTransportUI(state){
+  const toggle=document.getElementById("midiTransportEnabled");if(!toggle)return;
+  toggle.checked=state.enabled;
+  document.getElementById("midiTransportStatus").textContent=state.error||(state.learning?"Play one note or move one controller for "+transportLabels[state.learning]+". This input will not be recorded.":state.enabled?"Transport enabled. Assigned inputs are reserved, not musical notes.":"Transport disabled. All keys play normally.");
+  document.getElementById("midiTransportCancel").hidden=!state.learning;
+  for(const action of Object.keys(transportLabels)){
+    const m=state.mappings[action],label=document.getElementById("midiMap-"+action);
+    label.textContent=m?(m.kind==="note"?noteName(m.number)+" · MIDI "+m.number:"CC "+m.number)+" · channel "+(m.channel+1):"Not assigned";
+    document.getElementById("midiRemove-"+action).disabled=!m;
+  }
+}
+function midiTransportAction(action){
+  if(document.hidden)return;
+  const click=id=>{const button=document.getElementById(id);if(button&&!button.hidden&&!button.disabled&&button.getClientRects().length)button.click();};
+  if(action==="continue"){
+    if(currentDialog){const id={scaleRunOverlay:"confirmScaleRun",scaleDegreeOverlay:"confirmScaleDegree",scalePauseOverlay:"resumeScale"}[currentDialog.id];if(id)click(id);return;}
+    if(activeMode==="scale"){if(scalePhase==="correction")click("continueScaleCorrection");else if(scalePhase==="preview"||scalePhase==="passed")click("scaleStart");return;}
+    click("nextChallenge");return;
+  }
+  if(activeMode!=="phrase"||currentDialog)return;
+  const id={record:"phraseRecord",stop:"phraseStop",play:"phrasePlay",practice:"phrasePractice"}[action];if(id)click(id);
+}
+if(window.KeyMemoryMidiTransport){
+  midiTransport=window.KeyMemoryMidiTransport.create({onAction:midiTransportAction,onChange:refreshTransportUI});
+  refreshTransportUI(midiTransport.getState());
+  document.getElementById("midiTransportEnabled").addEventListener("change",event=>midiTransport.setEnabled(event.target.checked));
+  for(const action of Object.keys(transportLabels)){
+    document.getElementById("midiLearn-"+action).addEventListener("click",()=>midiTransport.learn(action));
+    document.getElementById("midiRemove-"+action).addEventListener("click",()=>midiTransport.removeMapping(action));
+  }
+  document.getElementById("midiTransportCancel").addEventListener("click",()=>midiTransport.cancelLearn());
+}
 if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
+  transport:midiTransport,
   status:document.getElementById("midiStatus"),select:document.getElementById("midiInput"),
   connect:document.getElementById("connectMidi"),disconnect:document.getElementById("disconnectMidi"),
   onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,
@@ -1729,6 +1765,7 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
   onConnection:()=>{if(activeMode==="phrase")refreshPhraseUI();if(activeMode==="scale")renderPiano();},
   onRaw:event=>{
     if(!phraseEngine)return false;
+    if(event.kind!=="off"&&(event.active===false||event.focused===false||document.hidden))return activeMode==="phrase";
     if(event.kind==="control"){phraseEngine.input(event);applyMonitorControl(event);return activeMode==="phrase";}
     const key=event.channel+":"+event.note;
     if(event.kind==="off"){
@@ -1751,17 +1788,25 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
 
 // Phrase playback has its own cancelable synth; recorded MIDI never leaves this browser.
 let phraseAudioContext=null,phraseSoundGeneration=0,phraseAudioAnchor=null,phraseTransportRequest=0,phraseTransportPending=false,phraseTransportWake=null;
-const phraseVoices=new Set(),phrasePlaybackChannels=new Map();
+const phraseVoices=new Set(),phraseBeatVoices=new Set(),phrasePlaybackChannels=new Map();
+function silencePhraseMetronome(){
+  for(const voice of phraseBeatVoices)try{voice.osc.stop();voice.osc.disconnect();voice.gain.disconnect();}catch{}
+  phraseBeatVoices.clear();
+}
 function silencePhrase(cancelTransport=true){
   phraseSoundGeneration++;if(cancelTransport){phraseTransportRequest++;phraseTransportPending=false;}
   for(const voice of phraseVoices){try{const t=phraseAudioContext.currentTime;voice.gain.gain.cancelScheduledValues(t);voice.gain.gain.setTargetAtTime(0,t,.02);voice.osc.stop(t+.1);}catch{}}
   phraseVoices.clear();
   for(const state of phrasePlaybackChannels.values())try{const t=phraseAudioContext.currentTime;state.gain.gain.cancelScheduledValues(t);state.gain.gain.setValueAtTime(0,t);if(cancelTransport)state.gain.disconnect();}catch{}
-  if(cancelTransport)phrasePlaybackChannels.clear();
+  if(cancelTransport){phrasePlaybackChannels.clear();silencePhraseMetronome();}
 }
 function unlockPhraseAudio(){
-  if(!soundEnabled)return Promise.resolve();
-  return enableSoundAudio().then(ok=>{if(!ok&&soundEnabled)throw Error("Audio unavailable");});
+  if(soundEnabled)return enableSoundAudio().then(ok=>{if(!ok&&soundEnabled)throw Error("Audio unavailable");});
+  if(!phraseSnapshot?.options.metronome)return Promise.resolve();
+  const Audio=window.AudioContext||window.webkitAudioContext;
+  if(!Audio)return Promise.reject(Error("Audio unavailable"));
+  phraseAudioContext ||= midiAudioContext || new Audio();
+  return phraseAudioContext.resume().then(()=>{if(phraseAudioContext.state!=="running")throw Error("Audio unavailable");if(phraseAudioAnchor)phraseAudioAnchor.audio=phraseAudioContext.currentTime-(Date.now()-phraseAudioAnchor.wall)/1000;});
 }
 
 function phraseAudioTime(plannedAt){
@@ -1793,14 +1838,14 @@ function soundPhrase(note,velocity,durationMs,plannedAt,meta={}){
   }catch{}
 }
 function soundPhraseBeat({beat,at}){
-  if(!soundEnabled||!phraseAudioContext||phraseAudioContext.state!=="running"||activeMode!=="phrase")return;
+  if(!phraseSnapshot?.options.metronome||!phraseAudioContext||phraseAudioContext.state!=="running"||activeMode!=="phrase")return;
   try{
     const scheduled=phraseAudioTime(at);if(phraseAudioContext.currentTime-scheduled>.08)return;
     const t=Math.max(phraseAudioContext.currentTime,scheduled),osc=phraseAudioContext.createOscillator(),gain=phraseAudioContext.createGain();
     osc.type="sine";osc.frequency.value=(beat-1)%4===0?1400:1000;
     gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(.12,t+.002);gain.gain.exponentialRampToValueAtTime(.001,t+.04);
     osc.connect(gain);gain.connect(phraseAudioContext.destination);osc.start(t);osc.stop(t+.05);
-    const voice={osc,gain};phraseVoices.add(voice);osc.onended=()=>{osc.disconnect();gain.disconnect();phraseVoices.delete(voice);};
+    const voice={osc,gain};phraseBeatVoices.add(voice);osc.onended=()=>{osc.disconnect();gain.disconnect();phraseBeatVoices.delete(voice);};
   }catch{}
 }
 async function startPhraseTransport(action){
@@ -1823,6 +1868,10 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   if(snapshot){if(snapshot!==phraseSnapshot)phraseViewStamp=Date.now();phraseSnapshot=snapshot;}
   if(!phraseSnapshot)return;
   const s=phraseSnapshot,o=s.options,active=phraseTransportPending||["record-countin","play-countin","recording","playing","countin","practice","wait-release"].includes(s.state),has=s.notes.length>0;
+  const recordingIndicator=document.getElementById("phraseRecordIndicator");
+  recordingIndicator.hidden=!["recording","record-countin"].includes(s.state);
+  recordingIndicator.textContent=s.state==="recording"?"● REC":"○ Ready to record";
+  const metro=document.getElementById("phraseMetronome");metro.setAttribute("aria-pressed",String(o.metronome));metro.textContent="Click "+(o.metronome?"on":"off");
   document.getElementById("phraseRecord").disabled=phraseTransportPending||s.state==="recording"||s.state==="record-countin";
   document.getElementById("phrasePlay").disabled=phraseTransportPending||!has||s.state==="recording"||s.state==="record-countin";
   document.getElementById("phrasePractice").disabled=phraseTransportPending||!has||s.state==="recording"||s.state==="record-countin";
@@ -1846,7 +1895,7 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   renderPiano();
 }
 if(window.KeyMemoryPhrase){
-  phraseEngine=window.KeyMemoryPhrase.create({viewProjection:true,onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onWrong:(note,message)=>{const key=piano.querySelector('[data-midi="'+note+'"]');if(key)flashWrongKey(key);selected.clear();resetMidiAudio();incorrect(message);}});
+  phraseEngine=window.KeyMemoryPhrase.create({viewProjection:true,onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onMetronomeSilence:silencePhraseMetronome,onWrong:(note,message)=>{const key=piano.querySelector('[data-midi="'+note+'"]');if(key)flashWrongKey(key);selected.clear();resetMidiAudio();incorrect(message);}});
   refreshPhraseUI(phraseEngine.snapshot());
 }
 function phraseAction(action){if(!phraseEngine)return;phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
@@ -1856,9 +1905,13 @@ document.getElementById("phraseRecord").addEventListener("click",()=>{
   startPhraseTransport(()=>phraseEngine.record());
 });
 document.getElementById("phrasePlay").addEventListener("click",()=>{if(!window.AudioContext&&!window.webkitAudioContext){incorrect("Audio is unavailable. Your saved phrase is unchanged.");return;}startPhraseTransport(()=>phraseEngine.play());});
-document.getElementById("phrasePractice").addEventListener("click",()=>phraseAction(()=>{selected.clear();phraseEngine.practice();}));
+document.getElementById("phrasePractice").addEventListener("click",()=>startPhraseTransport(()=>{selected.clear();phraseEngine.practice();}));
 document.getElementById("phraseStop").addEventListener("click",()=>{selected.clear();phraseEngine?.stop();resetMidiAudio();});
 for(const [id,step]of[["phraseDown",-1],["phraseUp",1]])document.getElementById(id).addEventListener("click",()=>phraseAction(()=>phraseEngine.setOptions({transpose:phraseSnapshot.options.transpose+step})));
+document.getElementById("phraseMetronome").addEventListener("click",()=>{
+  phraseEngine?.setMetronome(!phraseSnapshot.options.metronome);
+  if(phraseSnapshot.options.metronome)unlockPhraseAudio().catch(()=>{incorrect("Tempo click could not start. Tap Click off, then on to retry.");});
+});
 const phraseFields={phraseSourceBpm:["sourceBpm",1],phrasePlayBpm:["playBpm",1],phraseTolerance:["tolerance",1],phraseSectionStart:["sectionStart",1000],phraseSectionEnd:["sectionEnd",1000]};
 for(const [id,[key,multiplier]]of Object.entries(phraseFields))document.getElementById(id).addEventListener("change",event=>phraseEngine?.setOptions({[key]:Number(event.target.value)*multiplier}));
 document.getElementById("phraseRhythm").addEventListener("change",event=>phraseEngine?.setOptions({rhythm:event.target.value==="rhythm"}));
@@ -1902,8 +1955,9 @@ function renderPhraseViewContent(){
   const source=phraseViewExample?{duration:3000,notes:[48,60,64,67].map(note=>({note,channel:0,velocity:90,start:0,duration:600})).concat([{note:72,channel:0,velocity:90,start:2000,duration:500}]),controllers:[{controller:64,value:127,channel:0,time:200},{controller:64,value:0,channel:0,time:1500}],initialControllers:[]}:{notes:recording?(s.viewNotes||[]):s.notes,controllers:recording?(s.viewControllers||[]):s.controllers,initialControllers:recording?(s.viewInitialControllers||[]):s.initialControllers,duration:recording?s.viewDuration:s.duration};
   const signature=[phraseViewExample,s.state,source.notes.length,source.controllers?.length,source.duration,s.options.transpose,source.notes[0]?.note,source.notes.at(-1)?.note].join(":");
   if(signature!==phraseViewSignature||!phraseViewModel){phraseViewModel=view.prepareTimeline(source,{transpose:recording||phraseViewExample?0:s.options.transpose});phraseViewSignature=signature;}
-  const model=phraseViewModel,elapsed=s.elapsed+(playing?Math.max(0,Date.now()-phraseViewStamp):0);
-  const time=recording?source.duration:playing?Math.min(source.duration,s.options.sectionEnd,s.options.sectionStart+elapsed*s.options.playBpm/s.options.sourceBpm):Math.min(source.duration,phraseInspectTime);
+  const model=phraseViewModel,elapsed=s.elapsed+((playing||(s.state==="practice"&&s.options.rhythm))?Math.max(0,Date.now()-phraseViewStamp):0);
+  const practiceTime=s.state==="practice"?s.options.sectionStart+(s.options.rhythm?elapsed:s.targetTime??0)*s.options.playBpm/s.options.sourceBpm:null;
+  const time=recording?source.duration:practiceTime!==null?Math.min(source.duration,s.options.sectionEnd,practiceTime):playing?Math.min(source.duration,s.options.sectionEnd,s.options.sectionStart+elapsed*s.options.playBpm/s.options.sourceBpm):Math.min(source.duration,phraseInspectTime);
   const held=playing&&time>=Math.min(source.duration,s.options.sectionEnd)?[]:model.notes.filter(n=>n.start<=time&&n.keyEnd>time);
   const live=[...new Set([...phraseRawHeld].map(k=>Number(k.split(":")[1])))];
   const showingLive=!phraseViewExample&&(recording||!source.notes.length||(!playing&&live.length>0));
@@ -1913,12 +1967,12 @@ function renderPhraseViewContent(){
   const highlighted=new Set(playing?held.map(n=>n.midi):showingLive?live:[]);
   for(const key of piano.querySelectorAll(".key")){const on=highlighted.has(Number(key.dataset.midi));key.classList.toggle("phrasePlaying",on);if(on)key.setAttribute("aria-label",key.title+(playing?" · playing, key held":" · live key held"));else if(key.title)key.setAttribute("aria-label",key.title);}
   if(show){
-    document.getElementById("phraseStaff").innerHTML=view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
+    const width=Math.max(320,panel.clientWidth||800),start=Math.max(0,time-phraseViewWindow/4),end=Math.min(Math.max(source.duration,phraseViewWindow),start+phraseViewWindow);
+    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width,maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
     const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
     document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":"At cursor: ")+(names.join(" · ")||"No keys held")+". C4 = middle C.";
-    const width=Math.max(320,panel.clientWidth||800),start=Math.max(0,time-phraseViewWindow/4),end=Math.min(Math.max(source.duration,phraseViewWindow),start+phraseViewWindow);
     document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,names:phraseViewNames,spelling:phraseViewSpelling});
-    const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=playing||recording||!source.notes.length;
+    const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=playing||recording||practicing||!source.notes.length;
     document.getElementById("phraseViewTimeLabel").textContent=(time/1000).toFixed(2)+" s";
     const cc=new Map((source.initialControllers||[]).map(c=>[c.channel+":"+c.controller,c.value]));
     for(const c of source.controllers||[])if(c.time<=time)cc.set(c.channel+":"+c.controller,c.value);
@@ -1926,7 +1980,7 @@ function renderPhraseViewContent(){
     const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; playback stops at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
     document.getElementById("phraseControllerText").textContent=sectionContext+(channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
   }
-  if(playing&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
+  if((playing||recording||(s.state==="practice"&&s.options.rhythm))&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
 }
 for(const [id,apply]of[
   ["phraseViewVisibility",event=>{phraseViewVisibility=event.target.value;phraseSmallScore=phraseViewVisibility==="show";}],
@@ -1944,3 +1998,5 @@ document.getElementById("phraseViewExample").addEventListener("click",()=>{phras
 // Backgrounding cancels voices and pending live requests without changing mute preference.
 window.addEventListener("blur",()=>{stopBuilderAudio();resetMidiAudio();silencePhrase(false);});
 document.addEventListener("visibilitychange",()=>{if(document.hidden){stopBuilderAudio();resetMidiAudio();silencePhrase(false);}});
+
+for(const id of ["closeSettings","openModes"]){document.getElementById(id)?.addEventListener("click",()=>midiTransport?.cancelLearn());}

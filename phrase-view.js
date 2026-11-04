@@ -26,6 +26,16 @@
   if(kind==='b')return `<path d="M${x-2} ${y-12}v18C${x+10} ${y} ${x+4} ${y-6} ${x-2} ${y-1}" fill="none" stroke="currentColor" stroke-width="1.7"/>`;
   return `<path d="M${x-3} ${y-9}v14l6-2M${x+3} ${y+9}v-14l-6 2" fill="none" stroke="currentColor" stroke-width="1.4"/>`;
  }
+ function staffFrameSVG(width){
+  let body='';
+  for(const y of [60,70,80,90,100,150,160,170,180,190])body+=`<line x1="12" x2="${width-12}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".38"/>`;
+  body+='<line x1="12" x2="12" y1="60" y2="190" stroke="currentColor" opacity=".6"/>';
+  // G-clef spiral is centered on G4 (y90); F-clef dots bracket F3 (y160).
+  body+='<g class="trebleClef" aria-label="Treble G clef"><path d="M32 96 C23 96 23 84 32 84 C43 84 43 99 33 101 C16 103 13 83 27 74 C41 65 43 55 36 46 C27 53 29 73 33 91 L39 113 C42 125 24 127 24 117 C24 109 35 111 32 118" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></g>';
+  body+='<g class="bassClef" aria-label="Bass F clef"><path d="M23 161 C16 151 38 146 39 161 C40 173 28 181 20 185 C29 178 34 171 33 161 C32 155 27 154 23 157" fill="currentColor"/><circle cx="23" cy="160" r="3" fill="currentColor"/><circle cx="45" cy="155" r="1.8" fill="currentColor"/><circle cx="45" cy="165" r="1.8" fill="currentColor"/></g>';
+  body+='<text x="15" y="43" font-size="9" font-family="system-ui,sans-serif" fill="currentColor">Treble</text><text x="15" y="140" font-size="9" font-family="system-ui,sans-serif" fill="currentColor">Bass</text>';
+  return body;
+ }
  function staffSVG(notes=[],options={}){
   const spelling=options.spelling||'sharp',names=options.names!==false;
   const pitches=[...new Set(notes.map(n=>typeof n==='number'?n:n.midi??n.note))].map(n=>staffPosition(n,spelling)).sort((a,b)=>a.y-b.y||a.midi-b.midi);
@@ -34,12 +44,7 @@
   const width=Math.max(340,maxX+16),minY=Math.min(38,...pitches.map(p=>p.y-20)),maxY=Math.max(205,...pitches.map(p=>p.y+15)),height=maxY-minY;
   const label=(options.title||'Grand staff pitch reading — not rhythmic notation')+(pitches.length?': '+pitches.map(p=>p.name).join(', '):'. No notes selected.');
   let body='';
-  for(const y of [60,70,80,90,100,150,160,170,180,190])body+=`<line x1="12" x2="${width-12}" y1="${y}" y2="${y}" stroke="currentColor" opacity=".38"/>`;
-  body+='<line x1="12" x2="12" y1="60" y2="190" stroke="currentColor" opacity=".6"/>';
-  // G-clef spiral is centered on G4 (y90); F-clef dots bracket F3 (y160).
-  body+='<g class="trebleClef" aria-label="Treble G clef"><path d="M32 96 C23 96 23 84 32 84 C43 84 43 99 33 101 C16 103 13 83 27 74 C41 65 43 55 36 46 C27 53 29 73 33 91 L39 113 C42 125 24 127 24 117 C24 109 35 111 32 118" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></g>';
-  body+='<g class="bassClef" aria-label="Bass F clef"><path d="M23 161 C16 151 38 146 39 161 C40 173 28 181 20 185 C29 178 34 171 33 161 C32 155 27 154 23 157" fill="currentColor"/><circle cx="23" cy="160" r="3" fill="currentColor"/><circle cx="45" cy="155" r="1.8" fill="currentColor"/><circle cx="45" cy="165" r="1.8" fill="currentColor"/></g>';
-  body+='<text x="15" y="43" font-size="9" font-family="system-ui,sans-serif" fill="currentColor">Treble</text><text x="15" y="140" font-size="9" font-family="system-ui,sans-serif" fill="currentColor">Bass</text>';
+  body+=staffFrameSVG(width);
   for(const p of pitches){body+=`<g class="staffPitch" data-midi="${p.midi}" data-clef="${p.clef}" data-diatonic="${p.diatonic}"><title>${esc(p.name+', '+p.clef+' staff')}</title>`;
    for(const y of p.ledger)body+=`<line class="ledger" x1="${p.x-10}" x2="${p.x+10}" y1="${y}" y2="${y}" stroke="currentColor"/>`;
    body+=accidentalSVG(p.accidental,p.x-17,p.y)+`<ellipse cx="${p.x}" cy="${p.y}" rx="6" ry="4" transform="rotate(-15 ${p.x} ${p.y})" fill="currentColor"/>`;
@@ -109,5 +114,51 @@
   if(omitted)body+=`<text x="${left}" y="12" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">Dense window: ${omitted} more notes; zoom in.</text>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseRollSVG" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${body}</svg>`;
  }
- return{pitch,staffPosition,staffSVG,prepareTimeline,controllerAt,rollSVG};
+ function timelineStaffSVG(timeline,options={}){
+  const start=options.start??0,end=options.end??Math.max(1000,timeline.duration),cursor=options.cursor??start;
+  const width=Math.max(240,Math.min(2000,options.width??800)),maxNotes=Math.max(1,Math.min(400,Math.floor(options.maxNotes??400))),spelling=options.spelling||'sharp',names=options.names!==false;
+  if(!finite(start)||!finite(end)||end<=start)throw new RangeError('Choose a valid timeline window.');
+  if(!finite(width)||!finite(maxNotes))throw new RangeError('View dimensions must be finite.');
+  pitch(60,spelling);
+  // An onset appears only at its original timestamp. Sustain never creates pressed notes.
+  const candidates=timeline.notes.filter(n=>n.start>=start&&n.start<end),visible=candidates.slice(0,maxNotes).map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
+  const left=80,right=64,plotW=width-left-right,x=t=>left+(t-start)/(end-start)*plotW;
+  // Merge true unisons only: distinct channels/releases remain in the accessible title.
+  const merged=new Map();
+  for(const n of visible){const key=n.start+':'+n.midi;if(merged.has(key))merged.get(key).voices.push(n);else merged.set(key,{...n,voices:[n]});}
+  const marks=[...merged.values()],chords=new Map();
+  for(const n of marks){if(!chords.has(n.start))chords.set(n.start,[]);chords.get(n.start).push(n);}
+  let minX=0,maxX=width;
+  for(const chord of chords.values()){
+   const columns=[],onsetX=x(chord[0].start),direction=width-onsetX-64>=onsetX-28?1:-1;
+   const step=names||chord.some(n=>n.voices.length>1)?80:30;
+   for(const n of [...chord].sort((a,b)=>a.y-b.y||a.midi-b.midi)){
+    let column=0;while(columns[column]?.some(y=>Math.abs(y-n.y)<20))column++;
+    (columns[column]||=[]).push(n.y);n.onsetX=onsetX;n.headX=onsetX+direction*column*step;
+    minX=Math.min(minX,n.headX-28);maxX=Math.max(maxX,n.headX+(names?72:32));
+   }
+  }
+  const minY=Math.min(30,...visible.map(n=>n.y-22)),maxY=Math.max(205,...visible.map(n=>n.y+18)),height=maxY-minY+26;
+  const label=`Pitch timeline, not rhythmic notation. Exact onset times, ${(start/1000).toFixed(2)} to ${(end/1000).toFixed(2)} seconds. Offset heads connect to their exact onset markers. Unisons are grouped with voice counts. ${visible.length} notes shown${omitted?', '+omitted+' omitted in this dense window':''}.`;
+  let body=staffFrameSVG(width);
+  for(let i=0;i<=4;i++){
+   const at=start+(end-start)*i/4,xx=x(at);
+   body+=`<line class="staffTimeGuide" x1="${xx}" x2="${xx}" y1="${minY+15}" y2="${maxY}" stroke="currentColor" opacity=".1"/><text x="${xx}" y="${maxY+18}" text-anchor="${i===0?'start':i===4?'end':'middle'}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${(at/1000).toFixed(2)}s</text>`;
+  }
+  for(const n of marks){
+   const xx=n.headX,active=finite(cursor)&&n.voices.some(v=>cursor>=v.start&&cursor<v.keyEnd);
+   const voiceLabel=n.voices.map(v=>`channel ${v.channel+1}, key release ${v.keyEnd}ms`).join('; ');
+   body+=`<g class="staffTimelineNote${active?' keyActive':''}" data-note-id="${esc(n.id)}" data-note-ids="${esc(n.voices.map(v=>v.id).join(','))}" data-voice-count="${n.voices.length}" data-onset-x="${n.onsetX}" data-midi="${n.midi}" data-channel="${esc(n.channel)}" data-clef="${n.clef}" data-diatonic="${n.diatonic}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(n.name)}, ${n.clef} staff; onset ${n.start}ms; ${n.voices.length} voice${n.voices.length===1?'':'s'}: ${esc(voiceLabel)}</title>`;
+   if(xx!==n.onsetX)body+=`<line class="staffOnsetConnector" x1="${n.onsetX}" x2="${xx}" y1="${n.y}" y2="${n.y}" stroke="currentColor" stroke-dasharray="2 2" opacity=".45"/>`;
+   body+=`<circle class="staffOnsetMarker" cx="${n.onsetX}" cy="${n.y}" r="1.8" fill="currentColor"/>`;
+   for(const yy of n.ledger)body+=`<line class="ledger" x1="${xx-10}" x2="${xx+10}" y1="${yy}" y2="${yy}" stroke="currentColor"/>`;
+   body+=accidentalSVG(n.accidental,xx-17,n.y)+`<ellipse class="staffNoteHead" cx="${xx}" cy="${n.y}" rx="6" ry="4" transform="rotate(-15 ${xx} ${n.y})" fill="${active?'#8e2525':'currentColor'}"${active?' stroke="#8e2525" stroke-width="1.5"':''}/>`;
+   if(names||n.voices.length>1)body+=`<text x="${xx+11}" y="${n.y+3}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${names?esc(n.name):''}${n.voices.length>1?' ×'+n.voices.length:''}</text>`;
+   body+='</g>';
+  }
+  if(finite(cursor)&&cursor>=start&&cursor<=end)body+=`<line class="staffTimelineCursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="${minY+15}" y2="${maxY}" stroke="#8e2525" stroke-width="2"/>`;
+  if(omitted)body+=`<text x="${left}" y="${minY+10}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">Dense window: ${omitted} more notes; zoom in.</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseTimelineStaffSVG" style="min-height:${height}px" viewBox="${minX} ${minY} ${maxX-minX} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
+ }
+ return{pitch,staffPosition,staffSVG,prepareTimeline,controllerAt,rollSVG,timelineStaffSVG};
 });

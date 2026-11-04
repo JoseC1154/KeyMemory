@@ -1,7 +1,7 @@
 // Local-only MIDI Phrase Trainer: no audio recording or network; only CC64, CC7 and CC11 are captured.
 "use strict";
 window.KeyMemoryPhrase={create(config={}){
- const {onChange=()=>{},onWrong=()=>{},onSound=()=>{},onBeat=()=>{},onControl=()=>{},onSilence=()=>{}}=config;
+ const {onChange=()=>{},onWrong=()=>{},onSound=()=>{},onBeat=()=>{},onControl=()=>{},onSilence=()=>{},onMetronomeSilence=()=>{}}=config;
  const now=config.now||(()=>Date.now()),later=config.setTimer||((f,t)=>setTimeout(f,t)),cancel=config.clearTimer||(id=>clearTimeout(id));
  const KEY='keymemory.phrase.v1',MAX=120000,LIMIT=10000,CONTROL_LIMIT=20000,GROUP=80;
  let storage;try{storage=config.storage===undefined?window.localStorage:config.storage;}catch{}
@@ -12,7 +12,7 @@ window.KeyMemoryPhrase={create(config={}){
  const ccIndex=(channel,controller)=>channel*3+[7,11,64].indexOf(controller);
  const validControl=c=>c&&[64,7,11].includes(c.controller)&&Number.isInteger(c.value)&&c.value>=0&&c.value<=127&&Number.isInteger(c.channel)&&c.channel>=0&&c.channel<16;
  const timers=new Set(),held=new Map(),recordHeld=new Map();
- let options={sourceBpm:120,playBpm:120,transpose:0,rhythm:false,tolerance:200,sectionStart:0,sectionEnd:MAX};
+ let options={metronome:true,sourceBpm:120,playBpm:120,transpose:0,rhythm:false,tolerance:200,sectionStart:0,sectionEnd:MAX};
  const finite=n=>typeof n==='number'&&Number.isFinite(n);
  function snapshot(){const viewDuration=state==='recording'?Math.min(MAX,Math.max(0,now()-start)):duration;
  const live=config.viewProjection===true&&state==='recording';const activeNotes=live?new Set(recordHeld.values()):null;
@@ -49,14 +49,14 @@ window.KeyMemoryPhrase={create(config={}){
  }
  function stop({releaseHeld=false}={}){if(state==='recording'){finishRecording();}else{halt();state='idle';emit();}if(releaseHeld){held.clear();observedControllers=baseline();}return true;}
  // A short lookahead hands absolute times to Web Audio instead of timing audio by JS dispatch.
- function audioPump(mode,origin,beatMs,trackStart,trackLength,list=[],controls=[]){
+ function audioPump(mode,origin,beatMs,trackStart,trackLength,list=[],controls=[],countBeats=3){
   let beatIndex=0,noteIndex=0,controlIndex=0;
   const end=trackStart+trackLength;
   const pump=()=>{
    const current=now(),horizon=current+100;
    while(origin+beatIndex*beatMs<=horizon&&origin+beatIndex*beatMs<end){
     const at=origin+beatIndex*beatMs;
-    if(at>=current-25)onBeat({beat:beatIndex<3?beatIndex+1:(beatIndex-3)%4+1,at,countIn:beatIndex<3,mode});
+    if(options.metronome&&at>=current-25)onBeat({beat:beatIndex<countBeats?beatIndex+1:(beatIndex-countBeats)%4+1,at,countIn:beatIndex<countBeats,mode});
     beatIndex++;
    }
    while(controlIndex<controls.length&&trackStart+controls[controlIndex].time<=horizon){const c=controls[controlIndex++];onControl({controller:c.controller,value:c.value,channel:c.channel,at:trackStart+c.time,initial:c.initial===true});}
@@ -82,8 +82,14 @@ window.KeyMemoryPhrase={create(config={}){
   schedule(()=>{if(state==='recording')finishRecording();},Math.max(0,start+MAX-now()));
  }
  function record(){stop();error='';recorded=[];recordedControllers=[];recordHeld.clear();progress=0;groups=[];countBefore('record',options.sourceBpm,beginRecording,MAX);return true;}
- function validOptions(o){return finite(o.sourceBpm)&&o.sourceBpm>=30&&o.sourceBpm<=300&&finite(o.playBpm)&&o.playBpm>=30&&o.playBpm<=300&&Number.isInteger(o.transpose)&&o.transpose>=-48&&o.transpose<=48&&typeof o.rhythm==='boolean'&&finite(o.tolerance)&&o.tolerance>=80&&o.tolerance<=1000&&finite(o.sectionStart)&&finite(o.sectionEnd)&&o.sectionStart>=0&&o.sectionEnd<=MAX&&o.sectionEnd>o.sectionStart;}
+ function validOptions(o){return (o.metronome===undefined||typeof o.metronome==='boolean')&&finite(o.sourceBpm)&&o.sourceBpm>=30&&o.sourceBpm<=300&&finite(o.playBpm)&&o.playBpm>=30&&o.playBpm<=300&&Number.isInteger(o.transpose)&&o.transpose>=-48&&o.transpose<=48&&typeof o.rhythm==='boolean'&&finite(o.tolerance)&&o.tolerance>=80&&o.tolerance<=1000&&finite(o.sectionStart)&&finite(o.sectionEnd)&&o.sectionStart>=0&&o.sectionEnd<=MAX&&o.sectionEnd>o.sectionStart;}
+ function setMetronome(enabled){
+  if(typeof enabled!=='boolean')return false;
+  options.metronome=enabled;if(!enabled)onMetronomeSilence();
+  if(notes.length)persist();emit();return true;
+ }
  function setOptions(patch={}){
+  if(Object.keys(patch).length===1&&Object.hasOwn(patch,'metronome'))return setMetronome(patch.metronome);
   const next={...options,...patch};
   if(!validOptions(next)){error='Use BPM 30–300, transpose ±48, tolerance 80–1000 ms, and a valid section.';emit();return false;}
   if(notes.some(n=>n.note+next.transpose<0||n.note+next.transpose>127)){error='That transposition exceeds the MIDI keyboard range.';emit();return false;}
@@ -120,10 +126,11 @@ window.KeyMemoryPhrase={create(config={}){
   },length,list,sectionControls());return true;
  }
  function lateGuard(){if(!options.rhythm)return;const group=groups[progress];if(!group)return;schedule(()=>{if(state==='practice'&&groups[progress]===group)fail(null,'Timing missed — restart from the beginning.');},start+group.end+options.tolerance-now()+1);}
- function beginPractice(){state='practice';error='';start=now();progress=0;answered.clear();countIn=0;emit();schedule(runningTick,100);lateGuard();}
- function count(){halt();error='';progress=0;answered.clear();state='countin';countIn=4;emit();const beat=60000/options.playBpm;
+ function beginPractice(at){state='practice';error='';start=at;progress=0;answered.clear();countIn=0;emit();schedule(runningTick,100);lateGuard();audioPump('practice',start,60000/options.playBpm,start,Infinity,[],[],0);}
+ function count(){halt();error='';progress=0;answered.clear();state='countin';countIn=4;emit();const beat=60000/options.playBpm,origin=now();
   for(let i=1;i<4;i++)schedule(()=>{countIn=4-i;emit();},beat*i);
-  schedule(()=>{if(held.size){state='wait-release';error='Release all keys, then the count-in restarts.';emit();}else beginPractice();},beat*4);}
+  schedule(()=>{if(held.size){state='wait-release';error='Release all keys, then the count-in restarts.';emit();}else beginPractice(origin+beat*4);},beat*4);
+  audioPump('practice',origin,beat,origin+beat*4,0,[],[],4);}
  function practice(){if(!prepare())return false;if(held.size){state='wait-release';error='Release all keys to start the count-in.';emit();}else count();return true;}
  function fail(note,message){halt();state='wait-release';error=message;answered.clear();progress=0;onWrong(note,message);emit();if(!held.size)count();}
  function controlInput(event){
@@ -169,5 +176,5 @@ window.KeyMemoryPhrase={create(config={}){
   emit();lateGuard();return true;
  }
  function clear(){stop();notes=[];controllers=[];initialControllers=baseline();duration=0;groups=[];progress=0;error='';saved=false;try{storage?.removeItem(KEY);}catch{error='Could not remove the saved phrase from this browser.';}emit();return true;}
- const api={record,stop,input,play,practice,setOptions,clear,snapshot,load};load();return api;
+ const api={record,stop,input,play,practice,setOptions,setMetronome,clear,snapshot,load};load();return api;
 }};
