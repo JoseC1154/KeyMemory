@@ -9,6 +9,7 @@ Test dependencies: Node.js, jsdom, and Playwright. Install test dependencies loc
 - `node tests/builder-lessons.cjs`
 - `node tests/layout-controls.cjs`
 - `node tests/audio-sustain.cjs`
+- `node tests/audio-pops.cjs`
 - `node tests/auto-audio.cjs`
 - `node tests/midi-input.cjs`
 - `node tests/phrase-engine.cjs`
@@ -26,6 +27,8 @@ The builder suite independently checks intervals and diatonic degrees for all 34
 The layout-controls suite verifies unique IDs, all seven compact mode choices, context-specific settings, immediate-apply behavior, modal Done/Escape/backdrop dismissal, focus trapping/return and inert state, live timer mirrors, unchanged prompts/notes/deadlines when inspecting settings or hints, dictionary answer isolation, and navigation cleanup. It tests DOM behavior, not rendered geometry, native focus/inert implementation, or touch usability.
 
 The audio-sustain suite uses a controllable fake AudioContext and clock to verify Chord Builder five-second gain sustain, release scheduling, repeated Hear cancellation, stale/rejected resume handling, navigation/manual-next cleanup, timed playback holds, and unchanged active-question deadlines. It also statically checks safe-area padding in the redesigned base/mobile/landscape cascade. These checks do not establish audible output, perceived loudness, actual device notches, or corner clipping.
+
+The audio-pops suite evaluates the scheduled gain ramps instead of only recording API calls. It checks 3,584 releases across all 128 MIDI pitches and attack/decay/tail/stop boundaries, with native cancel-and-hold and a reconstructed-ramp fallback. It verifies continuous gain on key-up, silence before natural or early oscillator stops, same-note reattacks, polyphonic resets, stale cleanup, canceled audio resumes, and the shared MIDI route in all eight non-Phrase modes. Ordinary taps retain their 15 ms attack, 700 ms exponential decay and 750 ms stop, with a final fade to zero. These are deterministic envelope tests; browser-rendered audio, listening on the user's device and physical MIDI remain unverified.
 
 The auto-audio suite checks untimed automatic success progression across answer modes, all 34 builder lessons without Next clicks, dictionary exact-set automatic completion and duplicate locking, same-chord practice restarts, contextual Hear notes/frequencies across all seven modes, empty selection, and success/timeout/audio-resume races. Timer changes and inspecting settings cannot cancel pending success. Like audio-sustain, this uses a fake AudioContext and deterministic clock rather than audible hardware output.
 
@@ -54,6 +57,15 @@ The Scale Builder suite independently checks all 12 interval/degree formulas in 
 - `node tests/phrase-timing-controls.cjs`
 - `node tests/phrase-timing-browser.cjs`
 
-The loop suite checks exact absolute onset scheduling over multiple passes, one count-in, leading/trailing rests, fractional durations, section/tempo/transpose/pedal behavior, controller ordering and per-pass baselines, long timer stalls, generation cancellation, wrapped cursor snapshots, and the 50 ms loop minimum. The timing-controls suite checks staff-opened numeric/range/reset editing, invalid values, persistence, untouched source data, section duration, zoom/tolerance independence, pointer/keyboard silent note inspection, held-versus-pedal highlights, loop toggle/count-in/pending-audio cancellation and lifecycle cleanup. The staff timeline suite also checks earlier still-sounding continuation marks.
+The loop suite checks exact absolute onset scheduling over multiple passes, one count-in, leading/trailing rests, fractional durations, section/tempo/transpose/pedal behavior, controller ordering and per-pass baselines, long timer stalls, generation cancellation, wrapped cursor snapshots, and the 50 ms loop minimum. The timing-controls suite checks staff-opened single speed dial, mouse/touch/keyboard adjustment and reset, bounds, invalid advanced settings, persistence, untouched source data, duration scaling, zoom/tolerance independence, pointer/keyboard silent note inspection, held-versus-pedal highlights, loop toggle/count-in/pending-audio cancellation and lifecycle cleanup. The staff timeline suite also checks earlier still-sounding continuation marks.
 
 The new browser suite targets desktop, touch portrait and landscape layout, real SVG point mapping, keyboard/focus, controls and repeated playback. In the November 6 cloud validation, Chromium launch was blocked by the environment (`socket() failed: Operation not permitted`) both normally and after escalation, so this suite was authored but not verified there. Physical MIDI, audible seamlessness/device latency and Safari/iOS behavior are not covered by deterministic tests. The existing `phrase-keyboard.cjs` first-black-key geometry assertion also fails on the unchanged main commit 7dab516 in that environment; it is not a newly introduced failure.
+
+
+`node tests/phrase-transpose-controls.cjs` checks the added MIDI transpose actions through synthetic input: exact channels, held-note edge triggering, CC assignment, conflict retention, disabled/remove/mode cleanup, extreme pitches and transpose bounds. It verifies matching badges, split colors and channel labels for overlapping pitches, coexistence with silent inspection, practice-card collapse without losing transport or changing timers, saved visibility, and staff/roll DOM order. This is DOM/math coverage, not physical MIDI or visual QA. The updated real-browser timing suite additionally checks speed-dial interaction, collapse, vertical staff/roll geometry and mapped-key badges at desktop, portrait and landscape sizes.
+- `node tests/wrong-key-feedback.cjs`
+- `node tests/wrong-key-browser.cjs`
+
+The shared wrong-key suite checks all graded modes, including both Scale Builder piano stages and Phrase practice, through screen clicks and simulated raw MIDI. It verifies the same 950 ms feedback lifetime, rerender continuity, repeated mistakes, immediate cleanup, ignored ungraded input and off-screen MIDI safety. Scale Builder's correct answer, progress and Continue gate persist after the wrong key fades. The Chromium suite checks the computed red color and hold/fade/clear animation opacity through mouse, native Enter, synthetic MIDI and mobile touch. Physical MIDI latency and audio require separate device validation.
+
+The same November 6 cloud Chromium launch restriction described above prevented execution of `wrong-key-browser.cjs`; its browser matrix is authored but not verified in that environment. The deterministic shared-feedback test passed, and the pre-existing `phrase-keyboard.cjs` geometry failure was reproduced again on unchanged c15e315.

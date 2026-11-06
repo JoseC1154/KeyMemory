@@ -7,8 +7,10 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.04.40";
+const APP_VERSION = "2026.11.06.42";
 let midiController = null;
+let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
+try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
 let phraseEngine = null, phraseSnapshot = null;
 const phraseRawHeld=new Set();
 let phraseSeenLow=21,phraseSeenHigh=108;
@@ -20,6 +22,10 @@ const WRONG_KEY_DURATION = 950;
 function clearWrongKeyFeedback() {
   for (const feedback of wrongKeyFeedback.values()) clearTimeout(feedback.timer);
   wrongKeyFeedback.clear();
+  piano.querySelectorAll(".wrongAnswer").forEach(key => {
+    key.classList.remove("wrongAnswer");
+    key.style.removeProperty("--wrong-key-delay");
+  });
 }
 const achievement = document.getElementById("achievement");
 const achievementText = document.getElementById("achievementText");
@@ -1194,21 +1200,27 @@ function chooseChallenge() {
 }
 // Keep feedback separate from selection so a resize cannot erase the red flash.
 // Each callback owns a feedback record and cannot clear a later question.
-function flashWrongKey(key) {
-  const midi = Number(key.dataset.midi);
+function flashWrongKey(midi) {
+  // Every graded mode uses the same note-based feedback, even when its answer
+  // handler rerenders the keyboard. Missing/timeout answers have no wrong key.
+  if (!Number.isInteger(midi) || midi < 0 || midi > 127) return;
   const previous = wrongKeyFeedback.get(midi);
   if (previous) clearTimeout(previous.timer);
-  const feedback = { started: Date.now(), timer: null, persistent: activeMode==="scale"&&scalePhase==="correction" };
+  const feedback = { started: Date.now(), timer: null };
   wrongKeyFeedback.set(midi, feedback);
-  key.classList.remove("wrongAnswer");
-  void key.offsetWidth; // Restart the visible hold/fade on rapid repeat mistakes.
-  key.style.setProperty("--wrong-key-delay", "0ms");
-  key.classList.add("wrongAnswer");
-  if(feedback.persistent)return;
+  piano.querySelectorAll('[data-midi="' + midi + '"]').forEach(key => {
+    key.classList.remove("wrongAnswer");
+    void key.offsetWidth; // Restart the visible hold/fade on rapid repeat mistakes.
+    key.style.setProperty("--wrong-key-delay", "0ms");
+    key.classList.add("wrongAnswer");
+  });
   feedback.timer = setTimeout(() => {
     if (wrongKeyFeedback.get(midi) !== feedback) return;
     wrongKeyFeedback.delete(midi);
-    piano.querySelectorAll('[data-midi="' + midi + '"]').forEach(button => button.classList.remove("wrongAnswer"));
+    piano.querySelectorAll('[data-midi="' + midi + '"]').forEach(key => {
+      key.classList.remove("wrongAnswer");
+      key.style.removeProperty("--wrong-key-delay");
+    });
   }, WRONG_KEY_DURATION);
 }
 function answerKey(midi) {
@@ -1272,6 +1284,7 @@ function activateMode(mode) {
   if (mode !== "free") chooseChallenge();
   updatePracticeChrome();
   if(mode==="phrase")refreshPhraseUI();
+  refreshPhrasePracticePanel();
   renderPhraseView();
 }
 
@@ -1285,6 +1298,7 @@ function dictionaryKeyboardRange() {
 }
 function phraseKeyboardRange(){
   const notes=(phraseSnapshot?.notes||[]).map(n=>n.note+(phraseSnapshot?.options.transpose||0));
+  if(midiTransportState.enabled)for(const action of ["transposeDown","transposeUp"]){const m=midiTransportState.mappings[action];if(m?.kind==="note")notes.push(m.number);}
   const low=Math.max(0,Math.min(21,phraseSeenLow,...notes)),high=Math.min(127,Math.max(108,phraseSeenHigh,...notes));
   // A standard piano starts on A, not C. Only extend when real MIDI needs it.
   const start=low<21?Math.floor(low/12)*12:21;
@@ -1324,7 +1338,7 @@ function handlePianoKey(midi,fromMidi=false) {
   }
   if(activeMode==="scale"){
     const correct=answerScaleKey(midi);
-    if(correct===false){const wrong=piano.querySelector('[data-midi="'+midi+'"]');if(wrong)flashWrongKey(wrong);}
+    if(correct===false)flashWrongKey(midi);
     if(correct===true){renderPiano();updateStatusFromPiano();}
     return;
   }
@@ -1333,7 +1347,7 @@ function handlePianoKey(midi,fromMidi=false) {
   if (activeMode === "dictionary") {
     if (!dictionaryPractice || dictionaryTimedOut || checkChordAnswer.disabled) return;
     if (!dictionaryVoicing.includes(midi)) {
-      if(button)flashWrongKey(button);
+      flashWrongKey(midi);
       incorrect("That key is not in this voicing — try another key.");
       return;
     }
@@ -1354,7 +1368,7 @@ function handlePianoKey(midi,fromMidi=false) {
     selected.clear();
     const correct = answerKey(midi);
     if (correct) selected.add(midi);
-    else if(button)flashWrongKey(button);
+    else if(correct===false)flashWrongKey(midi);
     piano.querySelectorAll(".key.selected").forEach(key => {
       key.classList.remove("selected");
       key.setAttribute("aria-pressed", "false");
@@ -1442,7 +1456,7 @@ function renderPiano() {
     button.setAttribute("aria-pressed", String(selected.has(midi)));
     if (selected.has(midi)) button.classList.add("selected");
     const feedback = wrongKeyFeedback.get(midi);
-    if (feedback && (feedback.persistent || Date.now() - feedback.started < WRONG_KEY_DURATION)) {
+    if (feedback && Date.now() - feedback.started < WRONG_KEY_DURATION) {
       button.classList.add("wrongAnswer");
       button.style.setProperty("--wrong-key-delay", -(Date.now() - feedback.started) + "ms");
     }
@@ -1468,6 +1482,7 @@ function renderPiano() {
     label.className = "noteLabel";
     label.textContent = activeMode==="phrase"?phraseDisplayName(midi,midi%12===0||midi===21):activeMode==="scale"?scaleNoteName(midi):NAMES[midi % 12];
     button.append(label);
+    decorateTransposeKey(button,midi);
     button.addEventListener("click",event=>{
       // Native double-click continuations are one screen-key gesture. Separate
       // clicks and genuine MIDI release/reattack still grade normally.
@@ -1652,14 +1667,35 @@ document.getElementById("buildVersion").textContent = "Build " + APP_VERSION;
 // MIDI key taps use short, releaseable voices, separate from contextual Hear.
 let midiAudioContext=null, midiVoiceGeneration=0;
 const midiVoices=new Map(), midiNoteRequests=new Map();
+const MIDI_TAP_ENVELOPE={attack:.015,decay:.7,tail:.73,stop:.75,peak:.07,floor:.001,release:.1};
 const phraseMonitorVoices=new Map(),phraseMonitorRequests=new Map(),phraseMonitorAll=new Set(),phraseMonitorChannels=new Map();
 let phraseMonitorRequest=0;
 let midiNoteRequest=0;
+function holdMidiTapEnvelope(voice,now){
+  const gain=voice.gain.gain;
+  if(typeof gain.cancelAndHoldAtTime==="function"){gain.cancelAndHoldAtTime(now);return;}
+  // Removing a ramp's future endpoint alone snaps back to its previous value.
+  // Older browsers need the interrupted ramp restored up to the current time;
+  // AudioParam.value is not a reliable snapshot of a scheduled envelope.
+  const e=MIDI_TAP_ENVELOPE,start=voice.startedAt,elapsed=Math.max(0,now-start);
+  gain.cancelScheduledValues(now);
+  if(now<=start)gain.setValueAtTime(0,now);
+  else if(now<=start+e.attack)gain.linearRampToValueAtTime(e.peak*elapsed/e.attack,now);
+  else if(now<=start+e.decay)gain.exponentialRampToValueAtTime(e.peak*(e.floor/e.peak)**((elapsed-e.attack)/(e.decay-e.attack)),now);
+  else if(now<=start+e.tail)gain.linearRampToValueAtTime(Math.max(0,e.floor*(1-(elapsed-e.decay)/(e.tail-e.decay))),now);
+  else gain.setValueAtTime(0,now);
+}
 function releaseMidiNote(note) {
   midiNoteRequests.delete(note);
   const voice=midiVoices.get(note);if(!voice)return;
   midiVoices.delete(note);
-  try{const now=midiAudioContext.currentTime;voice.gain.gain.cancelScheduledValues(now);voice.gain.gain.setTargetAtTime(0,now,.025);voice.osc.stop(now+.12);}catch{}
+  try{
+    const now=midiAudioContext.currentTime;
+    holdMidiTapEnvelope(voice,now);
+    // Reach actual silence before stopping; an exponential target never reaches 0.
+    voice.gain.gain.linearRampToValueAtTime(0,now+MIDI_TAP_ENVELOPE.release);
+    voice.osc.stop(now+MIDI_TAP_ENVELOPE.release+.02);
+  }catch{}
 }
 function monitorChannel(channel){
   if(phraseMonitorChannels.has(channel))return phraseMonitorChannels.get(channel);
@@ -1716,15 +1752,17 @@ async function soundMidiNote(note){
     releaseMidiNote(note);
     const now=midiAudioContext.currentTime,osc=midiAudioContext.createOscillator(),gain=midiAudioContext.createGain();
     osc.type="triangle";osc.frequency.value=440*2**((note-69)/12);
-    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(.07,now+.015);gain.gain.exponentialRampToValueAtTime(.001,now+.7);
-    osc.connect(gain);gain.connect(midiAudioContext.destination);osc.start(now);osc.stop(now+.75);
-    const voice={osc,gain};midiVoices.set(note,voice);
+    const e=MIDI_TAP_ENVELOPE;
+    gain.gain.setValueAtTime(0,now);gain.gain.linearRampToValueAtTime(e.peak,now+e.attack);gain.gain.exponentialRampToValueAtTime(e.floor,now+e.decay);gain.gain.linearRampToValueAtTime(0,now+e.tail);
+    osc.connect(gain);gain.connect(midiAudioContext.destination);osc.start(now);osc.stop(now+e.stop);
+    const voice={osc,gain,startedAt:now};midiVoices.set(note,voice);
     osc.onended=()=>{osc.disconnect();gain.disconnect();if(midiVoices.get(note)===voice)midiVoices.delete(note);};
   }catch{}
 }
-const transportLabels={record:"Record",stop:"Stop",play:"Play",practice:"Start practice",continue:"Continue / Start"};
+const transportLabels={record:"Record",stop:"Stop",play:"Play",practice:"Start practice",continue:"Continue / Start",transposeDown:"Transpose down",transposeUp:"Transpose up"};
 let midiTransport=null;
 function refreshTransportUI(state){
+  midiTransportState=state;
   const toggle=document.getElementById("midiTransportEnabled");if(!toggle)return;
   toggle.checked=state.enabled;
   document.getElementById("midiTransportStatus").textContent=state.error||(state.learning?"Play one note or move one controller for "+transportLabels[state.learning]+". This input will not be recorded.":state.enabled?"Transport enabled. Assigned inputs are reserved, not musical notes.":"Transport disabled. All keys play normally.");
@@ -1734,7 +1772,40 @@ function refreshTransportUI(state){
     label.textContent=m?(m.kind==="note"?noteName(m.number)+" · MIDI "+m.number:"CC "+m.number)+" · channel "+(m.channel+1):"Not assigned";
     document.getElementById("midiRemove-"+action).disabled=!m;
   }
+  const noteMappings=Object.values(state.mappings).filter(m=>m.kind==="note");
+  if(state.enabled&&new Set(noteMappings.map(m=>m.number)).size<noteMappings.length&&!state.error&&!state.learning)document.getElementById("midiTransportStatus").textContent+=" A note has shortcuts on different channels. Key labels identify each channel; two transpose directions show both colors.";
+  refreshTransposeShortcuts();if(activeMode==="phrase")renderPiano();
 }
+function transposeNoteMappings(midi){return activeMode==="phrase"&&midiTransportState.enabled?Object.entries(midiTransportState.mappings).filter(([,m])=>m.kind==="note"&&m.number===midi):[];}
+function decorateTransposeKey(button,midi){
+  const mappings=transposeNoteMappings(midi),down=mappings.some(([a])=>a==="transposeDown"),up=mappings.some(([a])=>a==="transposeUp");if(!down&&!up)return;
+  button.classList.toggle("transposeDownKey",down);button.classList.toggle("transposeUpKey",up);
+  const details=mappings.map(([action,m])=>transportLabels[action]+" on MIDI channel "+(m.channel+1)).join("; ");
+  button.title+=" · MIDI shortcuts: "+details;button.setAttribute("aria-label",button.title);
+  const badge=document.createElement("span");badge.className="transposeKeyBadge";badge.setAttribute("aria-hidden","true");badge.textContent=down&&up?"−/+":down?"−":"+";
+  if(mappings.some(([a])=>a!=="transposeDown"&&a!=="transposeUp"))badge.textContent+="·";
+  button.append(badge);
+}
+function refreshTransposeShortcuts(){
+  const labels=[];
+  for(const [action,id,direction]of[["transposeDown","phraseDown","down"],["transposeUp","phraseUp","up"]]){
+    const m=midiTransportState.enabled?midiTransportState.mappings[action]:null;
+    const label=m?(m.kind==="note"?phraseDisplayName(m.number):"CC "+m.number)+" / ch "+(m.channel+1):"";
+    const button=document.getElementById(id);button.title="Transpose "+direction+" one semitone"+(label?" · MIDI: "+label:"");
+    button.setAttribute("aria-label",button.title);if(label)labels.push((direction==="down"?"− ":"+ ")+label);
+  }
+  document.getElementById("phraseTransposeShortcuts").textContent=labels.join(" · ");
+}
+function refreshPhrasePracticePanel(){
+  const phrase=activeMode==="phrase",toggle=document.getElementById("phrasePracticeToggle");
+  document.getElementById("practicePanel").hidden=phrase&&!phrasePracticeVisible;
+  toggle.hidden=!phrase;toggle.setAttribute("aria-expanded",String(phrasePracticeVisible));toggle.textContent=phrasePracticeVisible?"Hide practice":"Show practice";
+  const status=document.getElementById("phraseCollapsedStatus");status.hidden=!phrase||phrasePracticeVisible;status.textContent=trainingPrompt.textContent;
+}
+document.getElementById("phrasePracticeToggle").addEventListener("click",()=>{
+  phrasePracticeVisible=!phrasePracticeVisible;try{localStorage.setItem("keymemory.phrase.practicePanel",phrasePracticeVisible?"show":"hidden");}catch{}
+  refreshPhrasePracticePanel();
+});
 function midiTransportAction(action){
   if(document.hidden)return;
   const click=id=>{const button=document.getElementById(id);if(button&&!button.hidden&&!button.disabled&&button.getClientRects().length)button.click();};
@@ -1744,7 +1815,7 @@ function midiTransportAction(action){
     click("nextChallenge");return;
   }
   if(activeMode!=="phrase"||currentDialog)return;
-  const id={record:"phraseRecord",stop:"phraseStop",play:"phrasePlay",practice:"phrasePractice"}[action];if(id)click(id);
+  const id={record:"phraseRecord",stop:"phraseStop",play:"phrasePlay",practice:"phrasePractice",transposeDown:"phraseDown",transposeUp:"phraseUp"}[action];if(id)click(id);
 }
 if(window.KeyMemoryMidiTransport){
   midiTransport=window.KeyMemoryMidiTransport.create({onAction:midiTransportAction,onChange:refreshTransportUI});
@@ -1895,11 +1966,12 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   if(s.state==="practice"&&o.rhythm&&Number.isFinite(s.targetTime)){const delta=s.targetTime-s.elapsed;prompt+=" · "+(delta>80?"in "+(delta/1000).toFixed(1)+"s":"now");}
   if(s.error)prompt=s.error;
   trainingPrompt.textContent=prompt;
+  refreshPhrasePracticePanel();refreshTransposeShortcuts();
   document.getElementById("practiceSummary").textContent=(o.rhythm?"Notes + rhythm":"Notes only")+" · "+(["record-countin","recording"].includes(s.state)?o.sourceBpm:o.playBpm)+" BPM";
   renderPiano();
 }
 if(window.KeyMemoryPhrase){
-  phraseEngine=window.KeyMemoryPhrase.create({viewProjection:true,onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onMetronomeSilence:silencePhraseMetronome,onWrong:(note,message)=>{const key=piano.querySelector('[data-midi="'+note+'"]');if(key)flashWrongKey(key);selected.clear();resetMidiAudio();incorrect(message);}});
+  phraseEngine=window.KeyMemoryPhrase.create({viewProjection:true,onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onMetronomeSilence:silencePhraseMetronome,onWrong:(note,message)=>{flashWrongKey(note);selected.clear();resetMidiAudio();incorrect(message);}});
   refreshPhraseUI(phraseEngine.snapshot());
 }
 function phraseAction(action){if(!phraseEngine)return;phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
@@ -1926,39 +1998,55 @@ document.getElementById("phraseTap").addEventListener("click",()=>{const now=Dat
 
 // Timing is non-destructive: only the playback/practice tempo changes.
 function setPhraseTimingOpen(open){
-  phraseTimingOpen=open;refreshPhraseTiming();
+  phraseTimingOpen=open;if(!open){phraseDialDrag=null;phraseDialLastTap=null;}refreshPhraseTiming();
 }
 function refreshPhraseTiming(){
-  const s=phraseSnapshot;if(!s)return;const o=s.options,has=s.notes.length>0,sourceLength=Math.max(0,Math.min(s.duration,o.sectionEnd)-o.sectionStart),length=sourceLength*o.sourceBpm/o.playBpm;
-  const disabled=!has||sourceLength<=0||phraseTransportPending||["recording","record-countin"].includes(s.state)||phraseViewExample;
+  const s=phraseSnapshot;if(!s)return;const o=s.options,has=s.notes.length>0;
+  const disabled=!has||Math.min(s.duration,o.sectionEnd)<=o.sectionStart||phraseTransportPending||["recording","record-countin"].includes(s.state)||phraseViewExample;
   document.getElementById("phraseTimingEditor").hidden=!phraseTimingOpen;
   document.getElementById("phraseScore").classList.toggle("timingExpanded",phraseTimingOpen);
   for(const id of ["phraseTimingToggle","phraseStaff"])document.getElementById(id).setAttribute("aria-expanded",String(phraseTimingOpen));
-  const lengthInput=document.getElementById("phraseLength");lengthInput.min=String(o.sourceBpm/300*100);lengthInput.max=String(o.sourceBpm/30*100);lengthInput.value=String(o.sourceBpm/o.playBpm*100);
-  lengthInput.setAttribute("aria-valuetext",(o.sourceBpm/o.playBpm*100).toFixed(1)+" percent of recorded duration, "+(length/1000).toFixed(2)+" seconds");
-  document.getElementById("phraseLengthValue").textContent=(o.sourceBpm/o.playBpm*100).toFixed(1)+"%";
-  const bpm=document.getElementById("phraseTimingBpm"),seconds=document.getElementById("phraseTimingDuration");
-  if(document.activeElement!==bpm)bpm.value=String(Math.round(o.playBpm*1000)/1000);
-  if(document.activeElement!==seconds)seconds.value=String(Math.round(length)/1000);
-  seconds.min=String(sourceLength*o.sourceBpm/300/1000);seconds.max=String(sourceLength*o.sourceBpm/30/1000);
-  for(const id of ["phraseLength","phraseTimingBpm","phraseTimingDuration","phraseTimingReset"])document.getElementById(id).disabled=disabled;
-  const summary=!has?"Record a phrase to adjust timing.":phraseViewExample?"Return to your phrase to change its timing.":"Selected source: "+(o.sectionStart/1000).toFixed(2)+"–"+(Math.min(s.duration,o.sectionEnd)/1000).toFixed(2)+" s at "+o.sourceBpm+" recorded BPM. Playback: "+(length/1000).toFixed(2)+" s per loop at "+Number(o.playBpm.toFixed(2))+" BPM.";
-  document.getElementById("phraseTimingSummary").textContent=summary;
+  const dial=document.getElementById("phraseTimingDial"),speed=o.playBpm/o.sourceBpm*100,min=30/o.sourceBpm*100,max=300/o.sourceBpm*100,percent=Number(speed.toFixed(1));
+  dial.setAttribute("aria-valuemin",String(min));dial.setAttribute("aria-valuemax",String(max));dial.setAttribute("aria-valuenow",String(speed));
+  dial.setAttribute("aria-valuetext",speed===100?"Normal speed":percent+" percent speed, "+(speed<100?"slower":"faster"));dial.setAttribute("aria-disabled",String(disabled));dial.tabIndex=disabled?-1:0;
+  dial.style.setProperty("--dial-angle",(speed<=100?-135*(100-speed)/Math.max(.001,100-min):135*(speed-100)/Math.max(.001,max-100))+"deg");
+  document.getElementById("phraseTimingValue").textContent=percent+"%";
+  document.getElementById("phraseTimingSummary").textContent=phraseViewExample?"Example only":!has?"Record a phrase first":speed===100?"Normal speed":(speed<100?"Slower":"Faster");
   document.getElementById("phraseTimingError").textContent=s.error||"";
 }
-function applyPhraseTiming(bpm){
+function applyPhraseSpeed(percent){
+  const dial=document.getElementById("phraseTimingDial");if(activeMode!=="phrase"||currentDialog||document.hidden||!phraseTimingOpen||dial.getAttribute("aria-disabled")==="true"||!Number.isFinite(percent))return;
+  const o=phraseSnapshot.options,min=30/o.sourceBpm*100,max=300/o.sourceBpm*100;
+  const speed=Math.max(min,Math.min(max,percent)),bpm=Math.max(30,Math.min(300,speed*o.sourceBpm/100));
+  if(Math.abs(bpm-o.playBpm)<1e-8)return;
   phraseEngine?.setOptions({playBpm:bpm});
-  // Restore sanitized values on invalid/empty input, including the focused field.
-  document.getElementById("phraseTimingBpm").value=String(Number(phraseSnapshot.options.playBpm.toFixed(3)));
-  document.getElementById("phraseTimingDuration").value=String(Math.round(phraseSnapshot.playbackDuration)/1000);
 }
 document.getElementById("phraseTimingToggle").addEventListener("click",()=>setPhraseTimingOpen(!phraseTimingOpen));
 document.getElementById("phraseTimingClose").addEventListener("click",()=>{setPhraseTimingOpen(false);document.getElementById("phraseTimingToggle").focus();});
 document.getElementById("phraseTimingEditor").addEventListener("keydown",event=>{if(event.key==="Escape"){event.stopPropagation();setPhraseTimingOpen(false);document.getElementById("phraseTimingToggle").focus();}});
-document.getElementById("phraseTimingBpm").addEventListener("change",event=>applyPhraseTiming(Number(event.target.value)));
-document.getElementById("phraseTimingDuration").addEventListener("change",event=>{const o=phraseSnapshot.options,sourceLength=Math.max(0,Math.min(phraseSnapshot.duration,o.sectionEnd)-o.sectionStart);applyPhraseTiming(sourceLength*o.sourceBpm/(Number(event.target.value)*1000));});
-document.getElementById("phraseLength").addEventListener("input",event=>applyPhraseTiming(phraseSnapshot.options.sourceBpm/(Number(event.target.value)/100)));
-document.getElementById("phraseTimingReset").addEventListener("click",()=>applyPhraseTiming(phraseSnapshot.options.sourceBpm));
+const phraseTimingDial=document.getElementById("phraseTimingDial");let phraseDialDrag=null,phraseDialLastTap=null;
+phraseTimingDial.addEventListener("keydown",event=>{
+  if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","Enter"].includes(event.key))return;
+  event.preventDefault();const speed=Number(phraseTimingDial.getAttribute("aria-valuenow")),step=event.shiftKey?10:1;
+  applyPhraseSpeed(event.key==="Enter"?100:event.key==="Home"?Number(phraseTimingDial.getAttribute("aria-valuemin")):event.key==="End"?Number(phraseTimingDial.getAttribute("aria-valuemax")):speed+(["ArrowRight","ArrowUp"].includes(event.key)?step:-step));
+});
+phraseTimingDial.addEventListener("dblclick",()=>applyPhraseSpeed(100));
+phraseTimingDial.addEventListener("pointerdown",event=>{
+  if(event.button!==0||phraseTimingDial.getAttribute("aria-disabled")==="true"||phraseDialDrag)return;
+  event.preventDefault();phraseTimingDial.focus();phraseDialDrag={id:event.pointerId,y:event.clientY,speed:Number(phraseTimingDial.getAttribute("aria-valuenow")),moved:false};phraseTimingDial.setPointerCapture?.(event.pointerId);
+});
+phraseTimingDial.addEventListener("pointermove",event=>{
+  if(!phraseDialDrag||phraseDialDrag.id!==event.pointerId)return;
+  if(Math.abs(phraseDialDrag.y-event.clientY)>3)phraseDialDrag.moved=true;
+  if(!phraseDialDrag.moved)return;
+  const value=phraseDialDrag.speed+(phraseDialDrag.y-event.clientY);applyPhraseSpeed(Math.abs(value-100)<2?100:value);
+});
+phraseTimingDial.addEventListener("pointerup",event=>{
+  if(phraseDialDrag?.id!==event.pointerId)return;
+  if(event.pointerType==="touch"&&!phraseDialDrag.moved){const at=Date.now();if(phraseDialLastTap!==null&&at-phraseDialLastTap<400){applyPhraseSpeed(100);phraseDialLastTap=null;}else phraseDialLastTap=at;}else phraseDialLastTap=null;
+  phraseDialDrag=null;
+});
+for(const name of ["pointercancel","lostpointercapture"])phraseTimingDial.addEventListener(name,event=>{if(phraseDialDrag?.id===event.pointerId){phraseDialDrag=null;phraseDialLastTap=null;}});
 function canInspectPhrase(){return phraseSnapshot&&["idle","complete"].includes(phraseSnapshot.state)&&!phraseTransportPending;}
 function inspectPhraseTime(time){
   if(!canInspectPhrase())return;
@@ -2047,7 +2135,7 @@ function renderPhraseViewContent(){
     const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; loop ends at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
     document.getElementById("phraseControllerText").textContent=sectionContext+(channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
   }
-  refreshPhraseTiming();
+  refreshPhraseTiming();refreshTransposeShortcuts();
   if((playing||recording||(s.state==="practice"&&s.options.rhythm))&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
 }
 for(const [id,apply]of[

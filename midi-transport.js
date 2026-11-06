@@ -2,7 +2,7 @@
 "use strict";
 window.KeyMemoryMidiTransport = {
   create({storage, onAction=()=>{}, onChange=()=>{}}={}) {
-    const actions=["record","stop","play","practice","continue"], storageKey="keymemory.midiTransport.v1";
+    const actions=["record","stop","play","practice","continue","transposeDown","transposeUp"], storageKey="keymemory.midiTransport.v1";
     const down=new Set(), quarantined=new Set(), boundaries=new Set();
     let enabled=false, learning=null, mappings={}, error="";
     if(storage===undefined){try{storage=window.localStorage;}catch{storage=null;}}

@@ -61,5 +61,41 @@ const map=(kind,number,channel=0)=>({kind,number,channel});
  for(const malformed of ['{','null',JSON.stringify({version:1,enabled:true,mappings:{record:map('note',40),stop:map('note',40),play:map('control',122),practice:map('note',2,16)}})]){
   h=setup(malformed);const m=h.transport.getState().mappings;assert(!m.stop&&!m.play&&!m.practice);h.close();
  }
- console.log('PASS MIDI transport: 16 channels; reserved on/off and CC edges before raw/grading; learn/edit/remove/disable; conflicts; repeats; threshold; persisted validation; held-edit quarantine; blur/visibility; disconnect/stale callback.');
+ // Transpose bindings extend v1 without changing existing mappings or opting users in.
+ h=setup(JSON.stringify({version:1,enabled:false,mappings:{record:map('note',36),play:map('control',21)}}));await h.connect();
+ assert.equal(h.transport.getState().mappings.record.number,36);assert.equal(h.transport.getState().mappings.play.number,21);
+ assert(!h.transport.getState().mappings.transposeDown&&!h.transport.getState().mappings.transposeUp);
+ assert(h.transport.learn('transposeDown'));h.send(48,100,2);
+ assert.equal(h.transport.getState().mappings.transposeDown.channel,2);assert.equal(h.actions.length,0,'learning never transposes');
+ h.send(48,0,2);assert.equal(h.raw.length,0,'learned release remains isolated while disabled');
+ h.send(48,100,2);h.send(48,0,2);assert.equal(h.actions.length,0);assert.equal(h.raw.length,2,'disabled transpose note is musical');
+ h.transport.setEnabled(true);
+ assert.equal(h.transport.setMapping('transposeUp',map('note',48,2)),false,'opposite actions cannot share the same channel/input');
+ assert(h.transport.setMapping('transposeUp',map('note',48,3)),'same pitch on another channel is distinct');
+ for(const [channel,action] of [[2,'transposeDown'],[3,'transposeUp']]){
+  const count=h.actions.length,rawCount=h.raw.length;
+  h.send(48,100,channel);h.send(48,110,channel);h.send(48,0,channel,0x80);
+  assert.equal(h.actions.length,count+1,'held transpose note only steps once');assert.equal(h.actions.at(-1)[0],action);
+  assert.equal(h.raw.length,rawCount,'transpose note on/off stays reserved');
+ }
+ assert.equal(h.transport.setMapping('record',map('note',48,2)),false,'transpose conflicts with existing transport actions');
+ assert(h.transport.learn('transposeUp'));h.send(36);assert.equal(h.transport.getState().learning,'transposeUp');assert.match(h.transport.getState().error,/already assigned/);h.send(36,0);
+ h.send(119,64,15,0xb0);assert.equal(h.transport.getState().mappings.transposeUp.kind,'control');h.send(119,0,15,0xb0);
+ const ccActions=h.actions.length,ccRaw=h.raw.length;
+ h.send(119,63,15,0xb0);h.send(119,64,15,0xb0);h.send(119,127,15,0xb0);h.send(119,63,15,0xb0);h.send(119,64,15,0xb0);h.send(119,0,15,0xb0);
+ assert.equal(h.actions.length,ccActions+2);assert.equal(h.actions.at(-1)[0],'transposeUp');assert.equal(h.raw.length,ccRaw);
+ for(const invalid of [map('note',-1),map('note',128),map('note',60,16),map('control',120)])assert.equal(h.transport.setMapping('transposeDown',invalid),false);
+ // MIDI note bounds are inclusive, independent of phrase transposition limits.
+ for(const number of [0,127]){
+  assert(h.transport.setMapping('transposeDown',map('note',number)));const count=h.actions.length;
+  h.send(number);h.send(number,0);assert.equal(h.actions.length,count+1);
+ }
+ const transposeSaved=h.w.localStorage.getItem('keymemory.midiTransport.v1');assert.equal(JSON.parse(transposeSaved).version,1);h.close();
+ h=setup(transposeSaved);await h.connect();assert.equal(h.transport.getState().mappings.transposeDown.number,127);assert.equal(h.transport.getState().mappings.transposeUp.number,119);assert.equal(h.transport.getState().mappings.record.number,36);
+ h.send(127);const heldCount=h.actions.length,heldRaw=h.raw.length;h.transport.setEnabled(false);h.send(127);h.send(127,0);
+ assert.equal(h.actions.length,heldCount);assert.equal(h.raw.length,heldRaw);h.send(127);h.send(127,0);assert.equal(h.raw.length,heldRaw+2);
+ h.transport.removeMapping('transposeDown');assert(!h.transport.getState().mappings.transposeDown);h.close();
+ h=setup(JSON.stringify({version:1,enabled:true,mappings:{record:map('note',0),transposeDown:map('note',0),transposeUp:map('control',127)}}));
+ assert(h.transport.getState().mappings.record);assert(!h.transport.getState().mappings.transposeDown&&!h.transport.getState().mappings.transposeUp,'invalid and conflicting saved transpose mappings are rejected');h.close();
+ console.log('PASS MIDI transport: transpose note/CC learn, channel identity, disabled passthrough, bounds and v1 persistence; 16 channels; reserved on/off and CC edges before raw/grading; learn/edit/remove/disable; conflicts; repeats; threshold; persisted validation; held-edit quarantine; blur/visibility; disconnect/stale callback.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

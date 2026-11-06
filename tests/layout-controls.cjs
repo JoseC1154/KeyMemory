@@ -51,8 +51,8 @@ for(const exit of ['done','escape','backdrop']){
 assert(d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));advance(650);assert(!d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));assert.equal(s().targetMidi,before.targetMidi);
 // Dialog interiors never count as backdrop clicks. Focus trap wraps visible controls.
 open('openSettings');el('settingsOverlay').querySelector('.modalPanel').click();assert(!el('settingsOverlay').hidden);
-el('closeSettings').focus();keyboard('Tab',true);assert.equal(d.activeElement,el('midiRemove-continue'));keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));
-change('builderSelection','custom');el('builderTypes').open=true;const lastInput=el('builderTypes').querySelector('label:last-child input');assert(lastInput);el('midiRemove-continue').focus();keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));keyboard('Tab',true);assert.equal(d.activeElement,el('midiRemove-continue'));
+el('closeSettings').focus();keyboard('Tab',true);assert.equal(d.activeElement,el('midiRemove-transposeUp'));keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));
+change('builderSelection','custom');el('builderTypes').open=true;const lastInput=el('builderTypes').querySelector('label:last-child input');assert(lastInput);el('midiRemove-transposeUp').focus();keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));keyboard('Tab',true);assert.equal(d.activeElement,el('midiRemove-transposeUp'));
 // Immediate settings changes take effect in place; closing does not roll them back.
 change('builderLevel','extended');assert.equal(s().notes.length,1);assert.match(el('practiceSummary').textContent,/Level 4/);assert(s().targetMidi!==null);
 change('builderSelection','random');change('timerDuration','15');assert.equal(s().deadline,now+15000);const afterSetting=s();el('closeSettings').click();assert.equal(s().targetMidi,afterSetting.targetMidi);assert.equal(s().deadline,afterSetting.deadline);
