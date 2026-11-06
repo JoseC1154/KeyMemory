@@ -61,3 +61,11 @@ for(const spelling of ['sharp','flat'])for(const width of [240,800])for(const na
  }
 }
 console.log('PASS: sharp/flat chromatic clusters, exact onset markers/connectors, grouped channel unisons with counts/releases and narrow-view horizontal bounds.');
+// Silent inspection distinguishes held/pedal notes and retains earlier sounding notes.
+const long=view.prepareTimeline({duration:12000,notes:[{note:60,start:0,duration:11000},{note:64,start:300,duration:200},{note:64,start:1000,duration:1000}],controllers:[{channel:0,controller:64,value:127,time:400},{channel:0,controller:64,value:0,time:11000}]});
+doc=svg(view.timelineStaffSVG(long,{start:8500,end:12000,cursor:10000,inspecting:true,width:400}));
+assert.equal(doc.querySelectorAll('.staffSelectedKey').length,1);assert.equal(doc.querySelectorAll('.staffSelectedTail').length,2);assert.equal(doc.querySelectorAll('.staffContinuation').length,3);
+assert.deepEqual([...doc.querySelectorAll('.staffTimelineNote')].map(g=>Number(g.dataset.start)),[0,300,1000]);
+assert.equal(new Set([...doc.querySelectorAll('[data-midi="64"] .staffNoteHead')].map(x=>x.getAttribute('cx'))).size,2,'earlier same-pitch notes remain distinguishable at left edge');
+assert.equal(doc.documentElement.dataset.timeStart,'8500');assert.equal(doc.documentElement.dataset.timeRight,'336');
+console.log('PASS: inspection includes earlier held and pedal-only notes with separate continuation marks and unmodified source timestamps.');

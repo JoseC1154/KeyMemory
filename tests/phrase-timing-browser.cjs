@@ -1,0 +1,28 @@
+// Real Chromium layout and interaction checks; no physical MIDI or audible-device claims.
+const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),server=http.createServer((req,res)=>{const file=path.join(root,new URL(req.url,'http://localhost').pathname==='/'?'index.html':new URL(req.url,'http://localhost').pathname);res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');fs.readFile(file,(error,data)=>{res.statusCode=error?404:200;res.end(error?'':data);});});
+(async()=>{await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});try{
+ for(const [width,height,mobile]of[[1280,900,false],[390,844,true],[844,390,true]]){
+  const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile});
+  await context.addInitScript(()=>{localStorage.setItem('keymemory.phrase.v1',JSON.stringify({version:1,sourceBpm:120,duration:2000,notes:[{note:60,velocity:90,channel:0,start:0,duration:1500},{note:64,velocity:90,channel:0,start:0,duration:1500},{note:67,velocity:90,channel:0,start:1000,duration:500}]}));});
+  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${server.address().port}`);await page.evaluate(()=>activateMode('phrase'));await page.locator('#phraseViewVisibility').selectOption('show');
+  const mark=page.locator('.staffTimelineNote[data-midi="60"] .staffNoteHead');if(mobile)await mark.tap();else await mark.click();
+  assert(await page.locator('#phraseTimingEditor').isVisible());assert.equal(await page.locator('.key.phraseInspectKey').count(),2);assert.equal(await page.locator('.staffSelectedKey').count(),2);assert.equal(await page.evaluate(()=>phraseSnapshot.state),'idle');
+  await page.locator('#phraseTimingBpm').fill('60');await page.locator('#phraseTimingBpm').press('Tab');assert.equal(await page.locator('#phraseTimingDuration').inputValue(),'4');
+  await page.locator('#phraseTimingDuration').fill('1');await page.locator('#phraseTimingDuration').press('Tab');assert.equal(await page.locator('#phraseTimingBpm').inputValue(),'240');
+  await page.locator('#phraseLength').focus();await page.locator('#phraseLength').press('Home');assert.equal(await page.locator('#phraseTimingBpm').inputValue(),'300');await page.locator('#phraseTimingReset').click();assert.equal(await page.locator('#phraseTimingBpm').inputValue(),'120');
+  // Real geometry mapping of empty space to a source-time point (not a note click).
+  await page.locator('#phraseStaff').scrollIntoViewIfNeeded();
+  const point=await page.locator('#phraseStaff svg').evaluate(svg=>{const b=svg.getBoundingClientRect(),v=svg.viewBox.baseVal,x=+svg.dataset.timeLeft+(+svg.dataset.timeRight- +svg.dataset.timeLeft)*.75/6;return{x:b.x+(x-v.x)/v.width*b.width,y:b.y+15};});
+  await page.mouse.click(point.x,point.y);assert(Math.abs(Number(await page.locator('#phraseViewTime').inputValue())-.75)<.03);assert.equal(await page.locator('.key.phraseInspectKey').count(),2);
+  const fits=await page.evaluate(()=>{const panel=document.getElementById('phraseTimingEditor').getBoundingClientRect();return{body:document.documentElement.scrollWidth,window:innerWidth,left:panel.left,right:panel.right,fields:[...document.querySelectorAll('#phraseTimingEditor input')].map(x=>({width:x.getBoundingClientRect().width,right:x.getBoundingClientRect().right}))};});
+  assert(fits.body<=fits.window+1,JSON.stringify(fits));assert(fits.left>=0&&fits.right<=fits.window+1);assert(fits.fields.every(x=>x.width>=40&&x.right<=fits.window+1));
+  await page.locator('#phraseTimingEditor').screenshot({path:path.join(__dirname,`phrase-timing-${width}x${height}.png`)});
+  await page.locator('#phraseTimingBpm').focus();await page.locator('#phraseTimingBpm').press('Escape');assert(!await page.locator('#phraseTimingEditor').isVisible());assert.equal(await page.evaluate(()=>document.activeElement.id),'phraseTimingToggle');
+  await page.locator('#phraseStaff').focus();await page.locator('#phraseStaff').press('Home');await page.locator('#phraseStaff').press('Shift+ArrowRight');assert.equal(Number(await page.locator('#phraseViewTime').inputValue()),1);assert.equal(await page.locator('.key.phraseInspectKey').count(),3);
+  await page.locator('#phraseTimingBpm').fill('300');await page.locator('#phraseTimingBpm').press('Tab');await page.locator('#phrasePlay').click();await page.waitForFunction(()=>phraseSnapshot.state==='playing'&&phraseSnapshot.loop>=3);assert.equal(await page.locator('#phrasePlay').getAttribute('aria-pressed'),'true');await page.locator('#phrasePlay').click();assert.equal(await page.evaluate(()=>phraseSnapshot.state),'idle');await page.waitForTimeout(900);assert.equal(await page.evaluate(()=>phraseSnapshot.state),'idle');
+  await page.locator('#phrasePlay').click();await page.locator('#phrasePlay').click();assert.equal(await page.evaluate(()=>phraseSnapshot.state),'idle');
+  assert.deepEqual(errors,[]);await context.close();
+ }
+ console.log('PASS: real Chromium desktop 1280×900, touch portrait 390×844 and landscape 844×390: staff tap/point/keyboard inspection, editor numeric/range/reset/Escape/focus, responsive bounds, three loop passes, Play stop/count-in cancellation. No physical MIDI/audible-device verification.');
+ }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

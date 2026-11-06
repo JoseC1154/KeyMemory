@@ -5,7 +5,7 @@ window.KeyMemoryPhrase={create(config={}){
  const now=config.now||(()=>Date.now()),later=config.setTimer||((f,t)=>setTimeout(f,t)),cancel=config.clearTimer||(id=>clearTimeout(id));
  const KEY='keymemory.phrase.v1',MAX=120000,LIMIT=10000,CONTROL_LIMIT=20000,GROUP=80;
  let storage;try{storage=config.storage===undefined?window.localStorage:config.storage;}catch{}
- let notes=[],duration=0,state='idle',error='',saved=false,start=0,countIn=0,progress=0,groups=[],answered=new Set(),generation=0,recorded=[],chordTimer=null,plannedStart=0;
+ let notes=[],duration=0,state='idle',error='',saved=false,start=0,countIn=0,progress=0,groups=[],answered=new Set(),generation=0,recorded=[],chordTimer=null,plannedStart=0,looping=false;
  const CC_DEFAULTS={64:0,7:100,11:127};
  const baseline=()=>Array.from({length:16},(_,channel)=>Object.entries(CC_DEFAULTS).map(([controller,value])=>({controller:Number(controller),value,channel}))).flat();
  let controllers=[],initialControllers=baseline(),observedControllers=baseline(),recordedControllers=[],recordBaseline=baseline();
@@ -14,13 +14,15 @@ window.KeyMemoryPhrase={create(config={}){
  const timers=new Set(),held=new Map(),recordHeld=new Map();
  let options={metronome:true,sourceBpm:120,playBpm:120,transpose:0,rhythm:false,tolerance:200,sectionStart:0,sectionEnd:MAX};
  const finite=n=>typeof n==='number'&&Number.isFinite(n);
+ const playbackDuration=()=>Math.max(0,Math.min(duration,options.sectionEnd)-options.sectionStart)*options.sourceBpm/options.playBpm;
+ const playbackElapsed=()=>{const elapsed=Math.max(0,now()-start),length=playbackDuration();return looping&&length>0?elapsed%length:elapsed;};
  function snapshot(){const viewDuration=state==='recording'?Math.min(MAX,Math.max(0,now()-start)):duration;
  const live=config.viewProjection===true&&state==='recording';const activeNotes=live?new Set(recordHeld.values()):null;
- return{viewNotes:live?recorded.map(n=>({...n,duration:activeNotes.has(n)?Math.max(0,viewDuration-n.start):n.duration})):null,viewControllers:live?recordedControllers.map(c=>({...c})):null,viewInitialControllers:live?recordBaseline.map(c=>({...c})):null,viewDuration,state,error,saved,notes:notes.map(n=>({...n})),controllers:controllers.map(c=>({...c})),initialControllers:initialControllers.map(c=>({...c})),recordedControllerCount:state==='recording'?recordedControllers.length:controllers.length,duration,elapsed:state==='recording'?Math.min(MAX,Math.max(0,now()-start)):state==='playing'||state==='practice'?Math.max(0,now()-start):0,countIn,countInMode:state==='record-countin'?'record':state==='play-countin'?'play':state==='countin'?'practice':null,targetTime:state==='practice'?groups[progress]?.start??null:null,target:state==='practice'||state==='countin'?(groups[progress]?.notes||[]).filter(n=>!answered.has(n)):[],progress,total:groups.length,options:{...options},recordedCount:state==='recording'?recorded.length:notes.length};}
+ return{viewNotes:live?recorded.map(n=>({...n,duration:activeNotes.has(n)?Math.max(0,viewDuration-n.start):n.duration})):null,viewControllers:live?recordedControllers.map(c=>({...c})):null,viewInitialControllers:live?recordBaseline.map(c=>({...c})):null,viewDuration,state,error,saved,notes:notes.map(n=>({...n})),controllers:controllers.map(c=>({...c})),initialControllers:initialControllers.map(c=>({...c})),recordedControllerCount:state==='recording'?recordedControllers.length:controllers.length,duration,playbackDuration:playbackDuration(),looping,loop:state==='playing'&&looping?Math.floor(Math.max(0,now()-start)/playbackDuration())+1:0,elapsed:state==='recording'?Math.min(MAX,Math.max(0,now()-start)):state==='playing'?playbackElapsed():state==='practice'?Math.max(0,now()-start):0,countIn,countInMode:state==='record-countin'?'record':state==='play-countin'?'play':state==='countin'?'practice':null,targetTime:state==='practice'?groups[progress]?.start??null:null,target:state==='practice'||state==='countin'?(groups[progress]?.notes||[]).filter(n=>!answered.has(n)):[],progress,total:groups.length,options:{...options},recordedCount:state==='recording'?recorded.length:notes.length};}
  const emit=()=>onChange(snapshot());
  function schedule(fn,delay){const token=generation;let id;id=later(()=>{timers.delete(id);if(token===generation)fn();},Math.max(0,delay));timers.add(id);return id;}
  function unschedule(id){if(id!==null){cancel(id);timers.delete(id);}}
- function halt(){generation++;for(const id of timers)cancel(id);timers.clear();chordTimer=null;countIn=0;onSilence();}
+ function halt(){generation++;looping=false;for(const id of timers)cancel(id);timers.clear();chordTimer=null;countIn=0;onSilence();}
  function persist(){saved=false;try{if(!storage)throw Error();storage.setItem(KEY,JSON.stringify({version:2,notes,controllers,initialControllers,duration,sourceBpm:options.sourceBpm,options}));saved=true;}catch{error='Phrase kept for this session; local saving is unavailable.';}}
  function load(){
   if(state==='recording')return false;
@@ -49,31 +51,41 @@ window.KeyMemoryPhrase={create(config={}){
  }
  function stop({releaseHeld=false}={}){if(state==='recording'){finishRecording();}else{halt();state='idle';emit();}if(releaseHeld){held.clear();observedControllers=baseline();}return true;}
  // A short lookahead hands absolute times to Web Audio instead of timing audio by JS dispatch.
- function audioPump(mode,origin,beatMs,trackStart,trackLength,list=[],controls=[],countBeats=3){
-  let beatIndex=0,noteIndex=0,controlIndex=0;
+ function audioPump(mode,origin,beatMs,trackStart,trackLength,list=[],controls=[],countBeats=3,repeat=false){
+  let beatIndex=0,noteIndex=0,controlIndex=0,cycle=0;
   const end=trackStart+trackLength;
   const pump=()=>{
    const current=now(),horizon=current+100;
-   while(origin+beatIndex*beatMs<=horizon&&origin+beatIndex*beatMs<end){
+   if(repeat)beatIndex=Math.max(beatIndex,Math.ceil((current-25-origin)/beatMs));
+   while(origin+beatIndex*beatMs<=horizon&&(repeat||origin+beatIndex*beatMs<end)){
     const at=origin+beatIndex*beatMs;
     if(options.metronome&&at>=current-25)onBeat({beat:beatIndex<countBeats?beatIndex+1:(beatIndex-countBeats)%4+1,at,countIn:beatIndex<countBeats,mode});
     beatIndex++;
    }
-   while(controlIndex<controls.length&&trackStart+controls[controlIndex].time<=horizon){const c=controls[controlIndex++];onControl({controller:c.controller,value:c.value,channel:c.channel,at:trackStart+c.time,initial:c.initial===true});}
-   while(noteIndex<list.length&&trackStart+list[noteIndex].start<=horizon){
-    const n=list[noteIndex++],at=trackStart+n.start;
-    // Preserve the planned onset even after a late pump; the synth can retain its planned end.
-    onSound(n.note,n.velocity,n.duration,at,{channel:n.channel,keyDuration:n.keyDuration??n.duration});
+   // One pump owns every pass. Drain earlier controls before the next baseline so
+   // channel volume × expression automation always reaches Web Audio in time order.
+   // After a stalled tab, resume at the current pass, never burst missed loops.
+   if(repeat&&current>=trackStart){const currentCycle=Math.floor((current-trackStart)/trackLength);if(currentCycle>cycle){cycle=currentCycle;noteIndex=0;controlIndex=0;}}
+   for(;;){
+    const cycleStart=trackStart+(repeat?cycle*trackLength:0);
+    while(controlIndex<controls.length&&cycleStart+controls[controlIndex].time<=horizon){const c=controls[controlIndex++];onControl({controller:c.controller,value:c.value,channel:c.channel,at:cycleStart+c.time,initial:c.initial===true});}
+    while(noteIndex<list.length&&cycleStart+list[noteIndex].start<=horizon){
+     const n=list[noteIndex++],at=cycleStart+n.start;
+     // Keep planned onset/end on a late pump; do not stretch missed notes.
+     if(!repeat||at+n.duration>current)onSound(n.note,n.velocity,n.duration,at,{channel:n.channel,keyDuration:n.keyDuration??n.duration});
+    }
+    if(!repeat||cycleStart+trackLength>horizon)break;
+    cycle++;noteIndex=0;controlIndex=0;
    }
-   if(current<end)schedule(pump,25);
+   if(repeat||current<end)schedule(pump,25);
   };pump();
  }
- function countBefore(mode,bpm,begin,length,list=[],controls=[]){
+ function countBefore(mode,bpm,begin,length,list=[],controls=[],repeat=false){
   const origin=now(),beat=60000/bpm;plannedStart=origin+3*beat;
   state=mode==='record'?'record-countin':'play-countin';countIn=1;emit();
   for(let i=1;i<3;i++)schedule(()=>{if(state===(mode==='record'?'record-countin':'play-countin')){countIn=i+1;emit();}},i*beat);
   schedule(()=>{if(state===(mode==='record'?'record-countin':'play-countin'))begin(plannedStart);},3*beat);
-  audioPump(mode,origin,beat,plannedStart,length,list,controls);
+  audioPump(mode,origin,beat,plannedStart,length,list,controls,3,repeat);
  }
  function beginRecording(at){
   state='recording';countIn=0;start=at;recordBaseline=observedControllers.map(c=>({...c}));emit();
@@ -118,12 +130,15 @@ window.KeyMemoryPhrase={create(config={}){
   if(list.some(n=>n.note<0||n.note>127)){state='idle';error='That transposition exceeds the MIDI keyboard range.';emit();return null;}
   groups=[];for(const n of list){let g=groups.at(-1);if(!g||n.start-g.start>GROUP*options.sourceBpm/options.playBpm){g={start:n.start,end:n.start,notes:[]};groups.push(g);}g.end=Math.max(g.end,n.start);if(!g.notes.includes(n.note))g.notes.push(n.note);}return list;
  }
- function runningTick(){if(state!=='playing'&&state!=='practice')return;if(state==='playing'){const index=groups.findIndex(g=>g.start>now()-start);progress=index<0?groups.length-1:Math.max(0,index-1);}emit();schedule(runningTick,100);}
- function play(){const list=prepare(true);if(!list)return false;
-  const length=(Math.min(duration,options.sectionEnd)-options.sectionStart)*options.sourceBpm/options.playBpm;
+ function runningTick(){if(state!=='playing'&&state!=='practice')return;if(state==='playing'){const index=groups.findIndex(g=>g.start>playbackElapsed());progress=index<0?groups.length-1:Math.max(0,index-1);}emit();schedule(runningTick,100);}
+ function play({loop=false}={}){const list=prepare(true);if(!list)return false;
+  const length=playbackDuration();
+  // Sub-50ms loops can flood the audio graph. Keep one-shot tiny taps supported.
+  if(loop&&length<50){state='idle';error='Choose a section at least 0.05 seconds long at this tempo to loop.';emit();return false;}
+  looping=loop;
   countBefore('play',options.playBpm,at=>{state='playing';countIn=0;start=at;emit();schedule(runningTick,100);
-   schedule(()=>{halt();state='idle';progress=0;emit();},Math.max(0,start+length+100-now()));
-  },length,list,sectionControls());return true;
+   if(!loop)schedule(()=>{halt();state='idle';progress=0;emit();},Math.max(0,start+length+100-now()));
+  },length,list,sectionControls(),loop);return true;
  }
  function lateGuard(){if(!options.rhythm)return;const group=groups[progress];if(!group)return;schedule(()=>{if(state==='practice'&&groups[progress]===group)fail(null,'Timing missed — restart from the beginning.');},start+group.end+options.tolerance-now()+1);}
  function beginPractice(at){state='practice';error='';start=at;progress=0;answered.clear();countIn=0;emit();schedule(runningTick,100);lateGuard();audioPump('practice',start,60000/options.playBpm,start,Infinity,[],[],0);}

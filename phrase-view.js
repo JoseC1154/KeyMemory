@@ -120,22 +120,23 @@
   if(!finite(start)||!finite(end)||end<=start)throw new RangeError('Choose a valid timeline window.');
   if(!finite(width)||!finite(maxNotes))throw new RangeError('View dimensions must be finite.');
   pitch(60,spelling);
-  // An onset appears only at its original timestamp. Sustain never creates pressed notes.
-  const candidates=timeline.notes.filter(n=>n.start>=start&&n.start<end),visible=candidates.slice(0,maxNotes).map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
+  // Original onsets stay exact. Inspection includes left-edge continuation marks
+  // for earlier sounding notes; pedal tails never become pressed keys.
+  const candidates=timeline.notes.filter(n=>(n.start>=start&&n.start<end)||(options.inspecting&&n.start<start&&n.start<=cursor&&n.soundEnd>cursor)),visible=candidates.slice(0,maxNotes).map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
   const left=80,right=64,plotW=width-left-right,x=t=>left+(t-start)/(end-start)*plotW;
   // Merge true unisons only: distinct channels/releases remain in the accessible title.
   const merged=new Map();
   for(const n of visible){const key=n.start+':'+n.midi;if(merged.has(key))merged.get(key).voices.push(n);else merged.set(key,{...n,voices:[n]});}
   const marks=[...merged.values()],chords=new Map();
-  for(const n of marks){if(!chords.has(n.start))chords.set(n.start,[]);chords.get(n.start).push(n);}
+  for(const n of marks){const placementTime=Math.max(start,n.start);if(!chords.has(placementTime))chords.set(placementTime,[]);chords.get(placementTime).push(n);}
   let minX=0,maxX=width;
   for(const chord of chords.values()){
-   const columns=[],onsetX=x(chord[0].start),direction=width-onsetX-64>=onsetX-28?1:-1;
+   const columns=[],onsetX=x(Math.max(start,chord[0].start)),direction=width-onsetX-64>=onsetX-28?1:-1;
    const step=names||chord.some(n=>n.voices.length>1)?80:30;
    for(const n of [...chord].sort((a,b)=>a.y-b.y||a.midi-b.midi)){
     let column=0;while(columns[column]?.some(y=>Math.abs(y-n.y)<20))column++;
     (columns[column]||=[]).push(n.y);n.onsetX=onsetX;n.headX=onsetX+direction*column*step;
-    minX=Math.min(minX,n.headX-28);maxX=Math.max(maxX,n.headX+(names?72:32));
+    minX=Math.min(minX,n.headX-(n.start<start?40:28));maxX=Math.max(maxX,n.headX+(names?72:32));
    }
   }
   const minY=Math.min(30,...visible.map(n=>n.y-22)),maxY=Math.max(205,...visible.map(n=>n.y+18)),height=maxY-minY+26;
@@ -146,10 +147,11 @@
    body+=`<line class="staffTimeGuide" x1="${xx}" x2="${xx}" y1="${minY+15}" y2="${maxY}" stroke="currentColor" opacity=".1"/><text x="${xx}" y="${maxY+18}" text-anchor="${i===0?'start':i===4?'end':'middle'}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${(at/1000).toFixed(2)}s</text>`;
   }
   for(const n of marks){
-   const xx=n.headX,active=finite(cursor)&&n.voices.some(v=>cursor>=v.start&&cursor<v.keyEnd);
+   const xx=n.headX,active=finite(cursor)&&n.voices.some(v=>cursor>=v.start&&cursor<v.keyEnd),tail=options.inspecting&&!active&&finite(cursor)&&n.voices.some(v=>cursor>=v.keyEnd&&cursor<v.soundEnd);
    const voiceLabel=n.voices.map(v=>`channel ${v.channel+1}, key release ${v.keyEnd}ms`).join('; ');
-   body+=`<g class="staffTimelineNote${active?' keyActive':''}" data-note-id="${esc(n.id)}" data-note-ids="${esc(n.voices.map(v=>v.id).join(','))}" data-voice-count="${n.voices.length}" data-onset-x="${n.onsetX}" data-midi="${n.midi}" data-channel="${esc(n.channel)}" data-clef="${n.clef}" data-diatonic="${n.diatonic}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(n.name)}, ${n.clef} staff; onset ${n.start}ms; ${n.voices.length} voice${n.voices.length===1?'':'s'}: ${esc(voiceLabel)}</title>`;
+   body+=`<g class="staffTimelineNote${active?' keyActive':''}${options.inspecting&&active?' staffSelectedKey':tail?' staffSelectedTail':''}" data-note-id="${esc(n.id)}" data-note-ids="${esc(n.voices.map(v=>v.id).join(','))}" data-voice-count="${n.voices.length}" data-onset-x="${n.onsetX}" data-midi="${n.midi}" data-channel="${esc(n.channel)}" data-clef="${n.clef}" data-diatonic="${n.diatonic}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(n.name)}, ${n.clef} staff; onset ${n.start}ms; ${n.voices.length} voice${n.voices.length===1?'':'s'}: ${esc(voiceLabel)}</title>`;
    if(xx!==n.onsetX)body+=`<line class="staffOnsetConnector" x1="${n.onsetX}" x2="${xx}" y1="${n.y}" y2="${n.y}" stroke="currentColor" stroke-dasharray="2 2" opacity=".45"/>`;
+   if(n.start<start)body+=`<text class="staffContinuation" x="${xx-34}" y="${n.y+3}" font-size="12" fill="currentColor"><title>Note began before this window at ${n.start}ms</title>←</text>`;
    body+=`<circle class="staffOnsetMarker" cx="${n.onsetX}" cy="${n.y}" r="1.8" fill="currentColor"/>`;
    for(const yy of n.ledger)body+=`<line class="ledger" x1="${xx-10}" x2="${xx+10}" y1="${yy}" y2="${yy}" stroke="currentColor"/>`;
    body+=accidentalSVG(n.accidental,xx-17,n.y)+`<ellipse class="staffNoteHead" cx="${xx}" cy="${n.y}" rx="6" ry="4" transform="rotate(-15 ${xx} ${n.y})" fill="${active?'#8e2525':'currentColor'}"${active?' stroke="#8e2525" stroke-width="1.5"':''}/>`;
@@ -158,7 +160,7 @@
   }
   if(finite(cursor)&&cursor>=start&&cursor<=end)body+=`<line class="staffTimelineCursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="${minY+15}" y2="${maxY}" stroke="#8e2525" stroke-width="2"/>`;
   if(omitted)body+=`<text x="${left}" y="${minY+10}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">Dense window: ${omitted} more notes; zoom in.</text>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseTimelineStaffSVG" style="min-height:${height}px;min-width:${maxX-minX}px" viewBox="${minX} ${minY} ${maxX-minX} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseTimelineStaffSVG" data-time-start="${start}" data-time-end="${end}" data-time-left="${left}" data-time-right="${width-right}" style="min-height:${height}px;min-width:${maxX-minX}px" viewBox="${minX} ${minY} ${maxX-minX} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
  }
  return{pitch,staffPosition,staffSVG,prepareTimeline,controllerAt,rollSVG,timelineStaffSVG};
 });

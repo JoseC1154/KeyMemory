@@ -416,3 +416,26 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .phraseStaff:has(.phraseTimelineStaffSVG){max-height:260px}
 .phraseStaff .phraseTimelineStaffSVG{height:auto;min-width:320px}
 @media(max-width:600px){.midiTransportRow{grid-template-columns:1fr 1fr}.midiTransportRow button{min-height:40px}.phraseStaff:has(.phraseTimelineStaffSVG){max-height:230px}.phraseActions{gap:4px}#phraseMetronome{padding:7px;font-size:12px}}
+
+/* Editable timing is separate from source-time zoom and silent note inspection. */
+#phrasePlay[aria-pressed="true"]{background:#a61f2b;color:#fff;border-color:#d76d77}
+.phraseStaff[role="button"]{cursor:crosshair;touch-action:pan-x pan-y}
+.phraseStaff:focus-visible{outline:3px solid #8ad8ff;outline-offset:3px}
+.phraseStaffHelp{grid-column:1/-1;font-size:11px;line-height:1.45;margin:5px 0;color:var(--muted)}
+.phraseTimingEditor{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #718e78;border-radius:8px;background:#24362b;min-width:0}
+.phraseTimingEditor[hidden]{display:none}
+.phraseTimingHeading,.phraseTimingFields{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.phraseTimingEditor p,.phraseTimingEditor small{font-size:12px;line-height:1.45;margin:0}
+.phraseTimingFields label{display:flex;flex:1 1 200px;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.phraseTimingFields input{width:100px;min-height:40px;padding:6px;border:1px solid #718e78;border-radius:6px;background:#18231c;color:#fff}
+.phraseLengthSlider{display:flex;align-items:center;gap:10px;font-size:13px}
+.phraseLengthSlider input{min-width:40px;flex:1;min-height:44px;accent-color:#8ad8ff}
+.phraseLengthSlider output{min-width:64px;font-variant-numeric:tabular-nums;text-align:right}
+#phraseTimingError{color:#ffd8a6}
+.phraseScore.timingExpanded .phraseStaff{max-height:320px}
+.staffSelectedKey .staffNoteHead{fill:#146eaa!important;stroke:#146eaa!important;stroke-width:3}
+.staffSelectedTail .staffNoteHead{fill:none!important;stroke:#a66a00!important;stroke-width:3}
+.key.phraseInspectKey{outline:3px solid #146eaa;outline-offset:-3px;background:#b8e3ff!important}
+.key.phraseInspectTail{outline:3px dashed #c48512;outline-offset:-4px}
+.key.phraseInspectKey::after,.key.phraseInspectTail::after{position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:10px;content:"●";color:#146eaa}
+.key.phraseInspectTail::after{content:"○";color:#c48512}
