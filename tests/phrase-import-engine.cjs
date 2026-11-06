@@ -60,7 +60,7 @@ bad.push(phrase({notes:[note(),Object.defineProperty(note(),'velocity',{get(){th
 bad.forEach((payload,i)=>rejectsWithoutMutation(h,payload,`invalid payload ${i}`));
 
 // Invalid imports do not stop a playing loop, its lookahead or pending callback identities.
-assert(h.engine.play({loop:true}));h.advance(1100);
+assert(h.engine.play({loop:true}));h.advance(1400);
 assert.equal(h.s().state,'playing');const oldSounds=h.sounds.length;
 rejectsWithoutMutation(h,phrase({notes:[note(),note({velocity:0})]}),'invalid while looping');
 h.advance(600);assert(h.sounds.length>oldSounds);assert(h.s().looping);h.engine.stop();
@@ -77,11 +77,11 @@ poly.notes.forEach(Object.freeze);Object.freeze(poly.notes);Object.freeze(poly);
 let beforeChanges=h.changes.length,beforeWrites=h.storage.writes,beforeSilences=h.silences;
 assert(h.engine.importPhrase(poly));
 assert.deepEqual(h.s().notes,expectedNotes);assert.equal(h.s().duration,1000.875);assertNeutral(h.s());
-assert.deepEqual(h.s().options,{metronome:false,sourceBpm:120,playBpm:120,transpose:0,rhythm:false,tolerance:333,sectionStart:0,sectionEnd:1000.875});
+assert.deepEqual(h.s().options,{meterNumerator:4,meterDenominator:4,gridOriginMs:0,gridConfirmed:false,loopSnap:'free',countInBars:1,loopPadEnd:false,metronome:false,sourceBpm:120,playBpm:120,transpose:0,rhythm:false,tolerance:333,sectionStart:0,sectionEnd:1000.875});
 assert.equal(h.s().state,'idle');assert.equal(h.s().error,'');assert.equal(h.s().progress,0);assert.equal(h.s().total,0);assert.equal(h.s().elapsed,0);
 assert.equal(h.s().countIn,0);assert.deepEqual(h.s().target,[]);assert.equal(h.s().looping,false);
 assert.equal(h.changes.length,beforeChanges+1);assert.equal(h.storage.writes,beforeWrites+1);assert.equal(h.silences,beforeSilences+1);assert.equal(h.s().saved,true);
-assert.equal(JSON.parse(h.storage.value).version,2);assert.equal(JSON.parse(h.storage.value).sourceBpm,120);
+assert.equal(JSON.parse(h.storage.value).version,3);assert.equal(JSON.parse(h.storage.value).sourceBpm,120);
 assert.equal(h.s().origin,'audio');assert.equal(JSON.parse(h.storage.value).origin,'audio');
 
 // Decimal-seconds edits tolerate <=1e-6 ms end overflow, clipping only the copied duration.
@@ -117,7 +117,7 @@ for(const sourceBpm of [undefined,30,120.5,300]){
  const reload=setup(h.storage);assert.deepEqual(reload.s().notes,h.s().notes);assert.deepEqual(reload.s().options,h.s().options);assertNeutral(reload.s());assert(reload.s().saved);assert.equal(reload.s().origin,'audio');
 }
 assert(h.engine.importPhrase(phrase({duration:.125,notes:[note({note:0,velocity:1,channel:0,duration:.125})]})));
-assert.equal(h.s().duration,.125);assert(h.engine.play());h.advance(1601);assert.equal(h.sounds.at(-1).duration,.125);
+assert.equal(h.s().duration,.125);assert(h.engine.play());h.advance(2101);assert.equal(h.sounds.at(-1).duration,.125);
 
 // Maximum 10,000 notes / 120 seconds persist and reload; one extra rejects atomically.
 const maximum=phrase({duration:120000,sourceBpm:30,notes:Array.from({length:10000},(_,i)=>note({note:i%128,velocity:i%127+1,channel:i%16,start:i*11+.125,duration:1.625}))});
@@ -135,16 +135,16 @@ for(const version of [1,2]){
  const storage=memory(JSON.stringify(legacy));h=setup(storage);assert.equal(h.s().notes[0].note,55);assert.equal(h.s().options.transpose,7);assert.equal(h.s().origin,'midi');
  assert(h.engine.importPhrase(poly));assertNeutral(h.s());assert.equal(h.s().options.tolerance,456);assert.equal(h.s().options.metronome,false);
  assert.equal(h.s().options.sourceBpm,120);assert.equal(h.s().options.transpose,0);assert.equal(h.s().options.rhythm,false);
- const reloaded=setup(storage);assert.deepEqual(reloaded.s().notes,expectedNotes);assertNeutral(reloaded.s());assert.equal(JSON.parse(storage.value).version,2);assert.equal(storage.writes,1);assert.equal(reloaded.s().origin,'audio');
+ const reloaded=setup(storage);assert.deepEqual(reloaded.s().notes,expectedNotes);assertNeutral(reloaded.s());assert.equal(JSON.parse(storage.value).version,3);assert.equal(storage.writes,1);assert.equal(reloaded.s().origin,'audio');
 }
 h=setup();h.cc(64,127,2);h.cc(7,25,2);assert(h.engine.importPhrase(phrase()));assertNeutral(h.s());
-h.engine.record();h.advance(1500);h.on(62,2);h.advance(100);h.off(62,2);h.engine.stop();
+h.engine.record();h.advance(2000);h.on(62,2);h.advance(100);h.off(62,2);h.engine.stop();
 assert.equal(h.s().origin,'midi');assert.equal(JSON.parse(h.storage.value).origin,'midi');assert.equal(setup(h.storage).s().origin,'midi');
 assert.equal(h.s().initialControllers.find(c=>c.controller===64&&c.channel===2).value,127,'live pedal state still seeds the next real recording');
 assert.equal(h.s().initialControllers.find(c=>c.controller===7&&c.channel===2).value,25);
 
 // Provenance follows the saved phrase, survives empty/cancelled takes, and resets only with new content.
-h=setup();h.engine.importPhrase(phrase());h.engine.record();h.advance(1500);h.advance(100);h.engine.stop();
+h=setup();h.engine.importPhrase(phrase());h.engine.record();h.advance(2000);h.advance(100);h.engine.stop();
 assert.equal(h.s().origin,'audio');assert.equal(JSON.parse(h.storage.value).origin,'audio');
 h.engine.record();h.advance(500);h.engine.stop();assert.equal(h.s().origin,'audio');
 h.engine.clear();assert.equal(h.s().origin,'midi');assert.equal(h.s().notes.length,0);assert.equal(setup(h.storage).s().origin,'midi');
@@ -158,12 +158,12 @@ for(const origin of [null,'unknown','',42,{},[]]){
 }
 
 // Import cannot replace a recording or its count-in, including a delayed transition callback.
-for(const elapsed of [0,500,1499]){
+for(const elapsed of [0,500,1999]){
  h=setup();h.engine.importPhrase(phrase());h.engine.record();h.advance(elapsed);
- rejectsWithoutMutation(h,poly,'record count-in rejects replacement');h.advance(1500-elapsed);h.on(67);h.advance(250);h.off(67);h.engine.stop();
+ rejectsWithoutMutation(h,poly,'record count-in rejects replacement');h.advance(2000-elapsed);h.on(67);h.advance(250);h.off(67);h.engine.stop();
  assert.deepEqual(h.s().notes,[note({note:67,velocity:100,duration:250})]);
 }
-h=setup();h.engine.importPhrase(phrase());h.engine.record();h.jump(1600);rejectsWithoutMutation(h,poly,'late record count-in remains protected');h.advance(0);
+h=setup();h.engine.importPhrase(phrase());h.engine.record();h.jump(2100);rejectsWithoutMutation(h,poly,'late record count-in remains protected');h.advance(0);
 assert.equal(h.s().state,'recording');h.on(65);h.advance(99.25);rejectsWithoutMutation(h,poly,'live recording remains protected');
 h.advance(.75);h.off(65);h.engine.stop();assert.deepEqual(h.s().notes,[note({note:65,velocity:100,start:100,duration:100})]);
 
@@ -171,7 +171,7 @@ h.advance(.75);h.off(65);h.engine.stop();assert.deepEqual(h.s().notes,[note({not
 for(const action of ['play-countin','playing','looping','practice-countin','practice','wait-release','complete']){
  h=setup();h.engine.importPhrase(phrase({notes:[note(),note({note:64,start:0})]}));
  if(action==='play-countin'||action==='playing'||action==='looping'){
-  h.engine.play({loop:action==='looping'});h.advance(action==='play-countin'?1400:1600);
+  h.engine.play({loop:action==='looping'});h.advance(action==='play-countin'?1900:2100);
  }else if(action==='wait-release'){h.on(65);h.engine.practice();}
  else{h.engine.practice();h.advance(action==='practice-countin'?400:2000);if(action==='practice')h.on(60);if(action==='complete'){h.on(60);h.on(64);}}
  const queued=[...h.timers.values()].map(t=>t.fn),counts=[h.sounds.length,h.controls.length,h.beats.length];
@@ -185,22 +185,22 @@ for(const action of ['play-countin','playing','looping','practice-countin','prac
 // A physically held key survives import, including per-channel duplicate pitches.
 h=setup();h.on(60,0);h.on(60,1);assert(h.engine.importPhrase(phrase()));assert(h.engine.practice());assert.equal(h.s().state,'wait-release');
 h.off(60,0);assert.equal(h.s().state,'wait-release');h.off(60,1);assert.equal(h.s().state,'countin');h.advance(2000);
-assert.equal(h.on(60),true);assert.equal(h.s().state,'complete');h.engine.importPhrase(phrase());h.engine.record();h.advance(1500);
+assert.equal(h.on(60),true);assert.equal(h.s().state,'complete');h.engine.importPhrase(phrase());h.engine.record();h.advance(2000);
 assert.equal(h.on(60),undefined,'preheld key does not become a recorded attack');assert.equal(h.s().recordedCount,0);
 h.off(60);h.on(60);h.advance(100);h.off(60);h.engine.stop();assert.equal(h.s().notes.length,1);
 
 // Polyphonic playback preserves rests, independent releases and channels; no pedal extension.
 h=setup();assert(h.engine.importPhrase(poly));const stored=h.storage.value;
-h.engine.play();h.advance(2500);
-assert.deepEqual(h.sounds.map(s=>[s.note,s.velocity,s.at,s.duration,s.meta.channel,s.meta.keyDuration]),expectedNotes.map(n=>[n.note,n.velocity,1500+n.start,n.duration,n.channel,n.duration]));
+h.engine.play();h.advance(3000);
+assert.deepEqual(h.sounds.map(s=>[s.note,s.velocity,s.at,s.duration,s.meta.channel,s.meta.keyDuration]),expectedNotes.map(n=>[n.note,n.velocity,2000+n.start,n.duration,n.channel,n.duration]));
 assert.equal(h.controls.length,48);assert(h.controls.every(c=>c.initial));assert.deepEqual(h.s().notes,expectedNotes);assert.equal(h.storage.value,stored);
 h.advance(102);assert.equal(h.s().state,'idle');
 
 // Tempo, transposition and sections use the same engine as MIDI-recorded phrases.
 assert(h.engine.setOptions({playBpm:240,transpose:2,sectionStart:200,sectionEnd:800}));h.sounds.length=0;const origin=h.time;
-assert(h.engine.play({loop:true}));h.advance(1400);
+assert(h.engine.play({loop:true}));h.advance(1650);
 const firstPass=h.sounds.slice(0,4);
-assert.deepEqual(firstPass.map(s=>[s.note,s.at-origin,s.duration,s.meta.keyDuration,s.meta.channel]),[[62,750,100.375,100.375,0],[66,750,.1875,.1875,2],[62,750,210.25,210.25,3],[74,1000.0625,5.1875,5.1875,15]]);
+assert.deepEqual(firstPass.map(s=>[s.note,s.at-origin,s.duration,s.meta.keyDuration,s.meta.channel]),[[62,1000,100.375,100.375,0],[66,1000,.1875,.1875,2],[62,1000,210.25,210.25,3],[74,1250.0625,5.1875,5.1875,15]]);
 assert.deepEqual(h.sounds.slice(4,8).map(s=>s.at),firstPass.map(s=>s.at+300));assert.equal(h.s().playbackDuration,300);assert.deepEqual(h.s().notes,expectedNotes);
 h.engine.stop();assert.equal(h.timers.size,0);
 assert(h.engine.setOptions({playBpm:120,sectionStart:0,sectionEnd:poly.duration}));assert(h.engine.practice());h.advance(2000);
@@ -218,9 +218,9 @@ const failing=memory(JSON.stringify({version:1,notes:[note({note:55})],duration:
 failing.setItem=function(){this.writes++;throw Error('quota exceeded');};h=setup(failing);const oldStored=failing.value;
 assert(h.engine.importPhrase(poly));assert.deepEqual(h.s().notes,expectedNotes);assertNeutral(h.s());assert.equal(h.s().saved,false);assert.match(h.s().error,/kept for this session.*saving is unavailable/i);
 assert.equal(h.s().origin,'audio');
-assert.equal(failing.writes,1);assert.equal(failing.value,oldStored);assert(h.engine.play());h.advance(2500);assert.equal(h.sounds.length,4);h.engine.stop();assert(h.engine.practice());h.advance(2000);assert.deepEqual(h.s().target,[60,64]);
+assert.equal(failing.writes,1);assert.equal(failing.value,oldStored);assert(h.engine.play());h.advance(3000);assert.equal(h.sounds.length,4);h.engine.stop();assert(h.engine.practice());h.advance(2000);assert.deepEqual(h.s().target,[60,64]);
 for(const storage of [null,{getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}}]){
- h=setup(storage);assert(h.engine.importPhrase(phrase()));assert.equal(h.s().notes.length,1);assert.equal(h.s().saved,false);assert.match(h.s().error,/session/);assert(h.engine.play());h.advance(1600);assert.equal(h.sounds.length,1);
+ h=setup(storage);assert(h.engine.importPhrase(phrase()));assert.equal(h.s().notes.length,1);assert.equal(h.s().saved,false);assert.match(h.s().error,/session/);assert(h.engine.play());h.advance(2100);assert.equal(h.sounds.length,1);
 }
 
 console.log(`PASS: phrase import complete validation (${bad.length} malformed payloads), atomic rejection, protected recording/count-in, fractional polyphony/copy isolation, 10k/120s bounds, neutral controllers, musical option reset and personal option preservation, v1/v2 reload and origin provenance, playback/loop/section/transpose/practice, all transport and stale callback cleanup, held keys/live MIDI state, and storage failure. Deterministic engine only; no model accuracy or audible/device claims.`);

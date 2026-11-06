@@ -25,7 +25,8 @@ function setup(saved,prefs){
 async function beginPlay(h){
  h.click('phrasePlay');await flush();if(h.snapshot().state!=='play-countin')return;
  const beat=60000/h.snapshot().options.playBpm;
- assert.equal(h.snapshot().countIn,1);h.advance(beat);assert.equal(h.snapshot().countIn,2);h.advance(beat);assert.equal(h.snapshot().countIn,3);h.advance(beat);assert.equal(h.snapshot().state,'playing');
+ // Section count-ins preserve source beat phase; duration remains one 4/4 bar.
+ h.advance(4*beat);assert.equal(h.snapshot().state,'playing');
 }
 // Regression: absolute audio onset, interpolated source cursor, staff activity and
 // keyboard activity must agree. Fake clocks/audio, not physical latency testing.

@@ -25,7 +25,8 @@ function setup(saved,prefs){
 async function beginPlay(h){
  h.click('phrasePlay');await flush();if(h.snapshot().state!=='play-countin')return;
  const beat=60000/h.snapshot().options.playBpm;
- assert.equal(h.snapshot().countIn,1);h.advance(beat);assert.equal(h.snapshot().countIn,2);h.advance(beat);assert.equal(h.snapshot().countIn,3);h.advance(beat);assert.equal(h.snapshot().state,'playing');
+ // Section count-ins preserve source beat phase; duration remains one 4/4 bar.
+ h.advance(4*beat);assert.equal(h.snapshot().state,'playing');
 }
 const fixture={version:2,sourceBpm:120,duration:4000,notes:[
  {note:60,velocity:90,channel:0,start:0,duration:500},
@@ -102,7 +103,7 @@ test('source loop bounds schedule clipped notes, pedal baseline and exact repeat
 });
 test('empty, example and recording states cannot edit loops or delete recording',async()=>{
  const empty=setup();try{empty.mode('phrase');assert(empty.el('phraseLoopStart').disabled);assert(empty.el('phraseDelete').disabled);}finally{empty.close();}
- const h=ready();try{h.click('phraseViewExample');assert(h.el('phraseLoopStart').disabled);assert(h.el('phraseLoopEndHandle').disabled);h.change('phraseLoopStart',1);turn(h,'End','Home');assert.deepEqual(bounds(h),[0,4000]);h.click('phraseViewExample');await h.connect();h.click('phraseRecord');await flush();for(const state of ['record-countin','recording']){assert.equal(h.snapshot().state,state);assert(h.el('phraseLoopStart').disabled);assert(h.el('phraseDelete').disabled);h.change('phraseLoopStart',1);turn(h,'End','Home');assert.deepEqual(bounds(h),[0,4000]);if(state==='record-countin')h.advance(1500);}}finally{h.close();}
+ const h=ready();try{h.click('phraseViewExample');assert(h.el('phraseLoopStart').disabled);assert(h.el('phraseLoopEndHandle').disabled);h.change('phraseLoopStart',1);turn(h,'End','Home');assert.deepEqual(bounds(h),[0,4000]);h.click('phraseViewExample');await h.connect();h.click('phraseRecord');await flush();for(const state of ['record-countin','recording']){assert.equal(h.snapshot().state,state);assert(h.el('phraseLoopStart').disabled);assert(h.el('phraseDelete').disabled);h.change('phraseLoopStart',1);turn(h,'End','Home');assert.deepEqual(bounds(h),[0,4000]);if(state==='record-countin')h.advance(2000);}}finally{h.close();}
 });
 test('both delete entry points confirm; cancellation preserves playback/source/options; accept removes stale selection',async()=>{
  for(const button of ['phraseDelete','phraseClear']){const h=ready();try{h.change('phraseLoopStart',.5);h.change('phraseLoopEnd',2);h.change('phraseViewTime',1);await beginPlay(h);let asked=0;h.w.confirm=message=>{asked++;assert.match(message,/Delete the saved phrase from this browser/);return false;};const source=h.w.localStorage.getItem('keymemory.phrase.v1'),options=plain(h.snapshot().options);h.click(button);assert.equal(asked,1);assert.equal(h.snapshot().state,'playing');assert.equal(h.w.localStorage.getItem('keymemory.phrase.v1'),source);assert.deepEqual(plain(h.snapshot().options),options);

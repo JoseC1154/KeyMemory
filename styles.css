@@ -503,3 +503,8 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 .phraseForgivenessControls label{display:inline-flex;align-items:center;gap:3px}
 #phraseForgiveness{width:100px;min-height:32px;accent-color:#8ad8ff}
 #phraseForgivenessValue{min-width:64px;font-variant-numeric:tabular-nums}
+
+.phraseMeterControls{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 0;font-size:12px}.phraseMeterControls label{display:inline-flex;align-items:center;gap:4px}.phraseMeterControls input[type=number]{width:68px}.phraseMeterControls select,.phraseMeterControls button,.phraseMeterControls input[type=number]{min-height:32px;font:inherit}.phraseMeterControls #phraseGridHint{flex-basis:100%;color:#c4d5c8;font-size:11px}.phraseMeterControls input[type=checkbox]{accent-color:#087449}@media(max-width:600px){.phraseMeterControls{gap:6px 10px}.phraseMeterControls select,.phraseMeterControls button{min-height:36px}}
+
+.phraseMeterControls[hidden]{display:none}.phraseMeterControls select,.phraseMeterControls input[type=number]{background:#24362b;color:white;border:1px solid #55775f;border-radius:5px;padding:4px}.phraseMeterControls #phraseGridHint{max-width:100%;overflow-wrap:anywhere}
+.phraseMeterControls label{max-width:100%;flex-wrap:wrap}.scoreSeek{flex-wrap:wrap}.scoreSeek output{max-width:100%;overflow-wrap:anywhere}

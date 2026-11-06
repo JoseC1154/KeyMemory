@@ -1,0 +1,23 @@
+// Native layout/input verification. No physical MIDI or audible-device claims.
+const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname,file=path.join(root,pathname==='/'?'index.html':pathname);res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html');fs.readFile(file,(err,data)=>{res.statusCode=err?404:200;res.end(err?'':data);});});
+(async()=>{let browser;await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));try{
+ browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ for(const [width,height,mobile]of [[1280,900,false],[390,844,true],[320,740,true],[844,390,true]]){
+  const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile});await context.addInitScript(()=>localStorage.setItem('keymemory.phrase.v1',JSON.stringify({version:1,sourceBpm:120,duration:4100,notes:[{note:60,velocity:90,channel:0,start:100.25,duration:400},{note:64,velocity:90,channel:0,start:2300.5,duration:500}]})));
+  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto(`http://127.0.0.1:${server.address().port}`);await page.evaluate(()=>activateMode('phrase'));
+  await page.locator('#phraseViewVisibility').selectOption('hide');assert(await page.locator('#phraseMeterControls').isVisible());assert(!await page.locator('#phraseScore').isVisible());
+  await page.locator('#phraseMeterNumerator').selectOption('6');await page.locator('#phraseMeterDenominator').selectOption('8');assert.equal(await page.locator('#phrasePulseUnit').innerText(),'dotted quarter BPM');assert.equal(await page.locator('#phrasePulseBpm').inputValue(),'80');
+  await page.locator('#phrasePulseBpm').fill('100');await page.locator('#phrasePulseBpm').press('Tab');assert.equal(await page.evaluate(()=>phraseSnapshot.options.sourceBpm),150);assert.equal(await page.evaluate(()=>phraseSnapshot.options.playBpm),150);
+  await page.locator('#phrasePulseBpm').fill('80');await page.locator('#phrasePulseBpm').press('Tab');await page.locator('#phraseViewVisibility').selectOption('show');
+  await page.locator('#phraseLoopSnap').selectOption('beat');await page.locator('#phraseLoopStart').fill('0.8');await page.locator('#phraseLoopStart').press('Tab');assert.equal(await page.evaluate(()=>phraseSnapshot.options.sectionStart),750);
+  await page.locator('#phraseLoopStartHandle').focus();await page.locator('#phraseLoopStartHandle').press('ArrowRight');assert.equal(await page.evaluate(()=>phraseSnapshot.options.sectionStart),1500);
+  await page.locator('#phraseLoopPadEnd').check();assert.equal(await page.evaluate(()=>phraseSnapshot.options.sectionEnd),4500);assert.equal(await page.evaluate(()=>phraseSnapshot.duration),4100);assert.equal(await page.locator('#phraseViewTime').getAttribute('max'),'4.5');
+  await page.locator('#phraseViewTime').focus();await page.locator('#phraseViewTime').press('End');assert.equal(Number(await page.locator('#phraseViewTime').inputValue()),4.5);assert.equal(await page.locator('.key.phraseInspectKey,.key.phraseInspectTail').count(),0);
+  await page.locator('#phraseCountInBars').selectOption('0');await page.locator('#phrasePlay').click();await page.waitForFunction(()=>phraseSnapshot.state==='playing');await page.locator('#phrasePlay').click();assert.equal(await page.evaluate(()=>phraseSnapshot.state),'idle');
+  const geometry=await page.evaluate(()=>({width:innerWidth,elements:[...document.querySelectorAll('#phraseMeterControls input,#phraseMeterControls select,#phraseMeterControls button,#phraseScore .phraseMeterControls select,#phraseScore .phraseMeterControls button,.scoreSeek output')].filter(el=>el.getClientRects().length).map(el=>({id:el.id,text:el.textContent,left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right}))}));
+  assert(geometry.elements.every(el=>el.left>=-1&&el.right<=geometry.width+1),JSON.stringify(geometry));assert.deepEqual(errors,[]);
+  await context.close();
+ }
+ console.log('PASS: native meter/pulse tempo, hidden-score controls, snapped numeric/keyboard loops, padding/silent inspection, no-count transport and control bounds at four viewport sizes.');
+ }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}})().catch(error=>{console.error(error);process.exitCode=1;});

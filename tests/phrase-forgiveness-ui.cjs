@@ -25,7 +25,8 @@ function setup(saved,prefs){
 async function beginPlay(h){
  h.click('phrasePlay');await flush();if(h.snapshot().state!=='play-countin')return;
  const beat=60000/h.snapshot().options.playBpm;
- assert.equal(h.snapshot().countIn,1);h.advance(beat);assert.equal(h.snapshot().countIn,2);h.advance(beat);assert.equal(h.snapshot().countIn,3);h.advance(beat);assert.equal(h.snapshot().state,'playing');
+ // Section count-ins preserve source beat phase; duration remains one 4/4 bar.
+ h.advance(4*beat);assert.equal(h.snapshot().state,'playing');
 }
 const fixture={version:2,sourceBpm:120,duration:4000,notes:[
  {note:60,velocity:90,channel:0,start:0,duration:500},
@@ -66,7 +67,7 @@ test('cancel, Escape and blur restore uncommitted preview',()=>{
 });
 test('empty, example, recording/count-in and pending audio disable both controls',async()=>{
  let h=setup();try{h.mode('phrase');disabled(h,true);}finally{h.close();}
- h=ready();try{disabled(h,false);h.click('phraseViewExample');disabled(h,true);h.click('phraseViewExample');disabled(h,false);await h.connect();h.click('phraseRecord');await flush();assert.equal(h.snapshot().state,'record-countin');disabled(h,true);h.advance(1500);assert.equal(h.snapshot().state,'recording');disabled(h,true);h.click('phraseStop');disabled(h,false);}finally{h.close();}
+ h=ready();try{disabled(h,false);h.click('phraseViewExample');disabled(h,true);h.click('phraseViewExample');disabled(h,false);await h.connect();h.click('phraseRecord');await flush();assert.equal(h.snapshot().state,'record-countin');disabled(h,true);h.advance(2000);assert.equal(h.snapshot().state,'recording');disabled(h,true);h.click('phraseStop');disabled(h,false);}finally{h.close();}
  h=ready();try{h.defer(true);h.click('phrasePlay');disabled(h,true);h.click('phraseStop');await flush();disabled(h,false);for(const resolve of h.resumes)resolve();await flush();assert.equal(h.snapshot().state,'idle');}finally{h.close();}
 });
 test('forgiving mode still rejects wrong MIDI pitch and preserves source',async()=>{

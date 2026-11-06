@@ -36,7 +36,7 @@ const stored=h=>h.w.localStorage.getItem('keymemory.phrase.v1');
 (async()=>{
  const h=setup();await configure(h);h.mode('phrase');
  h.send(36);await flush();assert.equal(h.snapshot().state,'record-countin');assert(!h.el('phraseRecordIndicator').hidden);assert.match(h.el('phraseRecordIndicator').textContent,/Ready/);
- h.send(36);h.advance(1500);assert.equal(h.snapshot().state,'recording');assert.match(h.el('phraseRecordIndicator').textContent,/REC/);h.off(36);
+ h.send(36);h.advance(2000);assert.equal(h.snapshot().state,'recording');assert.match(h.el('phraseRecordIndicator').textContent,/REC/);h.off(36);
  h.send(60);h.advance(300);h.off(60);h.advance(700);h.send(64);h.advance(300);h.off(64);
  assert(h.el('phraseStaff').querySelector('.staffTimelineCursor'),'recording staff has timeline cursor');assert(+h.el('phraseViewTime').value>=1.2,'recording cursor advances');
  h.cc(22,63);assert.equal(h.snapshot().state,'recording');h.cc(22,64);assert.equal(h.snapshot().state,'idle');h.cc(22,127);h.cc(22,0);
@@ -52,9 +52,9 @@ const stored=h=>h.w.localStorage.getItem('keymemory.phrase.v1');
  h.click('openSettings');h.click('midiLearn-play');tap(h,36);assert.match(h.el('midiTransportStatus').textContent,/already assigned/);assert.match(h.el('midiMap-play').textContent,/MIDI 38/);h.click('midiTransportCancel');
  checked(h,'midiTransportEnabled',false);h.click('closeSettings');tap(h,38);assert.equal(h.snapshot().state,'idle');
  h.click('openSettings');h.click('midiRemove-play');assert.equal(h.el('midiMap-play').textContent,'Not assigned');checked(h,'midiTransportEnabled',true);h.click('closeSettings');
- h.w.confirm=()=>true;tap(h,36);await flush();h.advance(1500);tap(h,38);h.advance(300);stop(h);assert.deepEqual(Array.from(h.snapshot().notes,n=>n.note),[38],'removed command records as musical data');
+ h.w.confirm=()=>true;tap(h,36);await flush();h.advance(2000);tap(h,38);h.advance(300);stop(h);assert.deepEqual(Array.from(h.snapshot().notes,n=>n.note),[38],'removed command records as musical data');
  // Disabled bindings become ordinary MIDI notes, including their release durations.
- h.click('openSettings');checked(h,'midiTransportEnabled',false);h.click('closeSettings');h.click('phraseRecord');await flush();h.advance(1500);h.send(36);h.advance(250);h.off(36);h.click('phraseStop');assert.equal(h.snapshot().notes[0].note,36);assert.equal(h.snapshot().notes[0].duration,250);h.close();
+ h.click('openSettings');checked(h,'midiTransportEnabled',false);h.click('closeSettings');h.click('phraseRecord');await flush();h.advance(2000);h.send(36);h.advance(250);h.off(36);h.click('phraseStop');assert.equal(h.snapshot().notes[0].note,36);assert.equal(h.snapshot().notes[0].duration,250);h.close();
  // Continue accepts existing Scale Start, ready, Resume and correction prompts, never an answer.
  const scale=setup();await configure(scale);scale.mode('scale');assert.equal(scale.get().scalePhase,'preview');scale.send(40);assert.equal(scale.get().scalePhase,'ready');scale.send(40);assert.equal(scale.get().scalePhase,'ready','held Continue cannot dismiss the next prompt');scale.off(40);tap(scale,40);assert.equal(scale.get().scalePhase,'race');
  const race=JSON.stringify(scale.get());tap(scale,40);assert.equal(JSON.stringify(scale.get()),race,'Continue during a race cannot grade');
@@ -63,9 +63,9 @@ const stored=h=>h.w.localStorage.getItem('keymemory.phrase.v1');
  for(let run=0;run<4;run++){tap(scale,40);assert.equal(scale.get().scalePhase,'race');for(const n of scale.get().scaleNotes)tap(scale,n);if(scale.get().scalePhase==='levelup')break;assert.equal(scale.get().scalePhase,'ready');}
  assert.equal(scale.get().scalePhase,'levelup');scale.advance(2500);assert.equal(scale.get().scalePhase,'degree-preview');tap(scale,40);assert.equal(scale.get().scalePhase,'degrees');const degree=JSON.stringify(scale.get());tap(scale,40);assert.equal(JSON.stringify(scale.get()),degree,'Continue cannot answer a scale degree');scale.close();
  // Click runs with notes muted, and muting Click leaves active note voices and transport intact.
- const audio=setup(saved);await audio.connect();audio.mode('phrase');audio.click('phrasePlay');await flush();audio.advance(1500);assert.equal(audio.snapshot().state,'playing');
+ const audio=setup(saved);await audio.connect();audio.mode('phrase');audio.click('phrasePlay');await flush();audio.advance(2000);assert.equal(audio.snapshot().state,'playing');
  assert.equal(audio.get().soundEnabled,false);let clicks=audio.oscillators.filter(o=>[1000,1400].includes(o.frequency.value)).length;assert(clicks>=4,'audible click oscillators exist with Sound off');audio.advance(500);assert(audio.oscillators.filter(o=>[1000,1400].includes(o.frequency.value)).length>clicks);
- audio.click('phraseStop');audio.click('soundToggle');await flush();audio.click('phrasePlay');await flush();audio.advance(1500);await flush();
+ audio.click('phraseStop');audio.click('soundToggle');await flush();audio.click('phrasePlay');await flush();audio.advance(2000);await flush();
  const notes=audio.oscillators.filter(o=>o.frequency.value>0&&![1000,1400].includes(o.frequency.value));assert(notes.length,'note voice exists');const note=notes.at(-1),stops=note.stops.length;audio.click('phraseMetronome');assert.equal(note.stops.length,stops,'Click off does not silence note voice');assert.equal(audio.snapshot().state,'playing');clicks=audio.oscillators.filter(o=>[1000,1400].includes(o.frequency.value)).length;audio.advance(500);assert.equal(audio.oscillators.filter(o=>[1000,1400].includes(o.frequency.value)).length,clicks);assert.equal(audio.snapshot().state,'playing');
  audio.click('phraseMetronome');await flush();audio.click('soundToggle');assert.equal(audio.get().soundEnabled,false);assert.equal(audio.snapshot().state,'playing');clicks=audio.oscillators.filter(o=>[1000,1400].includes(o.frequency.value)).length;audio.advance(500);assert(audio.oscillators.filter(o=>[1000,1400].includes(o.frequency.value)).length>clicks,'turning Sound off during playback preserves click');audio.close();
  console.log('PASS real DOM MIDI Learn/action mappings, reserved notes/CC edges, duplicate commands, conflicts/removal/disable, replacement confirmation, all-mode isolation, Scale Start/Continue/Resume/correction, independent click audio, REC indicator and record/practice staff cursors. Synthetic MIDI/audio only.');

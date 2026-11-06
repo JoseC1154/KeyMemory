@@ -25,7 +25,8 @@ function setup(saved,prefs){
 async function beginPlay(h){
  h.click('phrasePlay');await flush();if(h.snapshot().state!=='play-countin')return;
  const beat=60000/h.snapshot().options.playBpm;
- assert.equal(h.snapshot().countIn,1);h.advance(beat);assert.equal(h.snapshot().countIn,2);h.advance(beat);assert.equal(h.snapshot().countIn,3);h.advance(beat);assert.equal(h.snapshot().state,'playing');
+ // Section count-ins preserve source beat phase; duration remains one 4/4 bar.
+ h.advance(4*beat);assert.equal(h.snapshot().state,'playing');
 }
 const fixture={version:2,sourceBpm:120,duration:4000,notes:[
  {note:60,velocity:90,channel:0,start:0,duration:500},
@@ -69,11 +70,11 @@ function notes(h,selector){return [...h.d.querySelectorAll(selector)].map(n=>Num
   h=setupReady();if(action==='pending')h.defer(true);h.click('phrasePlay');if(action!=='pending')await flush();
   if(action==='pending'){assert(!h.el('phrasePlay').disabled);assert.equal(h.el('phrasePlay').textContent,'Stop loop');h.click('phrasePlay');for(const resolve of h.resumes)resolve();await flush();}
   else if(action==='countin')h.click('phrasePlay');
-  else{h.advance(1500);if(action==='blur')h.w.dispatchEvent(new h.w.Event('blur'));if(action==='hidden'){Object.defineProperty(h.d,'hidden',{configurable:true,value:true});h.d.dispatchEvent(new h.w.Event('visibilitychange'));}if(action==='mode')h.mode('free');if(action==='settings')h.click('openSettings');if(action==='stop')h.click('phraseStop');}
+  else{h.advance(2000);if(action==='blur')h.w.dispatchEvent(new h.w.Event('blur'));if(action==='hidden'){Object.defineProperty(h.d,'hidden',{configurable:true,value:true});h.d.dispatchEvent(new h.w.Event('visibilitychange'));}if(action==='mode')h.mode('free');if(action==='settings')h.click('openSettings');if(action==='stop')h.click('phraseStop');}
   assert.equal(h.snapshot().state,'idle',action);const count=h.sounds.length;h.advance(20000);assert.equal(h.sounds.length,count,action);h.close();
  }
  // Empty, example and recording states make timing editing clearly unavailable.
  h=setup();h.mode('phrase');assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');assert.match(h.el('phraseTimingSummary').textContent,/Record a phrase/);h.close();
- h=setupReady();h.click('phraseViewExample');assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');assert.match(h.el('phraseTimingSummary').textContent,/Example only/);h.click('phraseViewExample');await h.connect();h.click('phraseRecord');await flush();assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');assert(h.el('phraseViewTime').disabled);h.advance(1500);assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');h.close();
+ h=setupReady();h.click('phraseViewExample');assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');assert.match(h.el('phraseTimingSummary').textContent,/Example only/);h.click('phraseViewExample');await h.connect();h.click('phraseRecord');await flush();assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');assert(h.el('phraseViewTime').disabled);h.advance(2000);assert(h.el('phraseTimingDial').getAttribute('aria-disabled')==='true');h.close();
  console.log('PASS: non-destructive compact inline speed dial; keyboard/mouse/touch reset, bounds, persistence and source preservation; section/zoom/tolerance separation; silent pointer/keyboard simultaneous-note and pedal inspection; loop toggle/count-in/pending/cleanup and exact source cursor wrap. Synthetic DOM/MIDI/audio only.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

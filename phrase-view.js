@@ -85,6 +85,18 @@
   for(const c of timeline.controllers||[]){if(c.time>time)break;if(finite(c.time))apply(c);}
   return result;
  }
+ // Musical reference ticks never participate in note positioning.
+ function musicalGridSVG(options,start,end,x,top,bottom){
+  if(!Array.isArray(options.grid))return '';
+  let body='',lastLabel=-Infinity,lastLine=-Infinity;
+  const ticks=options.grid.slice(0,200).filter(t=>finite(t.time)&&t.time>=start&&t.time<=end).sort((a,b)=>a.time-b.time);
+  for(const tick of ticks){const xx=x(tick.time),bar=tick.kind==='bar';if(xx-lastLine<(bar?2:8))continue;lastLine=xx;
+   body+=`<g class="musicalGridTick" data-time="${round(tick.time)}" data-kind="${esc(tick.kind)}"><title>${esc(tick.label)}; ${(tick.time/1000).toFixed(3)} source seconds${options.gridConfirmed?'':' (unconfirmed reference)'}</title><line x1="${round(xx)}" x2="${round(xx)}" y1="${top}" y2="${bottom}" stroke="currentColor" opacity="${bar?'.32':'.13'}"${options.gridConfirmed?'':' stroke-dasharray="3 4"'}/>`;
+   if(xx-lastLabel>=48&&xx<=x(end)-38){body+=`<text x="${round(xx)}" y="${top-3}" font-size="9" font-family="system-ui,sans-serif" fill="currentColor">${esc(String(tick.label).replace(/Bar (\d+) · beat (\d+)(?: · (\d+))?/,(_,b,n,u)=>b+'.'+n+(u?'.'+u:'')).replace('Pickup · beat ','P.'))}</text>`;lastLabel=xx;}
+   body+='</g>';
+  }
+  return body;
+ }
  function rollSVG(timeline,options={}){
   const start=options.start??0,end=options.end??Math.max(1000,timeline.duration),cursor=options.cursor??start,width=Math.max(240,Math.min(2000,options.width??800)),height=Math.max(120,Math.min(800,options.height??220)),maxNotes=Math.max(1,Math.min(1000,Math.floor(options.maxNotes??500))),spelling=options.spelling||'sharp';
   if(!finite(start)||!finite(end)||end<=start)throw new RangeError('Choose a valid timeline window.');
@@ -102,6 +114,7 @@
    if(options.names!==false&&(row>=12||m%12===0))body+=`<text x="${left-5}" y="${round(y(m)+3)}" font-size="10" text-anchor="end" font-family="system-ui,sans-serif" fill="currentColor">${esc(pitch(m,spelling).name)}</text>`;
   }
   for(let i=0;i<=4;i++){const at=start+(end-start)*i/4;body+=`<line x1="${round(x(at))}" x2="${round(x(at))}" y1="${top}" y2="${height-bottom}" stroke="currentColor" opacity=".15"/><text x="${round(x(at))}" y="${height-7}" text-anchor="${i===0?'start':i===4?'end':'middle'}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${(at/1000).toFixed(2)}s</text>`;}
+  body+=musicalGridSVG(options,start,end,x,top,height-bottom);
   for(const n of visible){if(n.midi<low||n.midi>high)continue;
    const lanes=laneEnds.get(n.midi).length,yy=y(n.midi)+((n.lane+.5)/lanes-.5)*row*.8,h=Math.min(12,Math.max(.3,row*.65/lanes)),keyStart=Math.max(start,n.start),keyEnd=Math.min(end,n.keyEnd),tailStart=Math.max(start,n.keyEnd),tailEnd=Math.min(end,n.soundEnd),color=`hsl(${(n.channel*47+160)%360} 68% 34%)`;
    const active=cursor>=n.start&&cursor<n.keyEnd?'keyActive':cursor>=n.keyEnd&&cursor<n.soundEnd?'tailActive':'';
@@ -152,6 +165,7 @@
    const at=start+(end-start)*i/4,xx=x(at);
    body+=`<line class="staffTimeGuide" x1="${xx}" x2="${xx}" y1="${minY+15}" y2="${maxY}" stroke="currentColor" opacity=".1"/><text x="${xx}" y="${maxY+18}" text-anchor="${i===0?'start':i===4?'end':'middle'}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${(at/1000).toFixed(2)}s</text>`;
   }
+  body+=musicalGridSVG(options,start,end,x,minY+12,maxY);
   for(const n of marks){
    const xx=n.headX,active=finite(cursor)&&n.voices.some(v=>cursor>=v.start&&cursor<v.keyEnd),tail=options.inspecting&&!active&&finite(cursor)&&n.voices.some(v=>cursor>=v.keyEnd&&cursor<v.soundEnd);
    const voiceLabel=n.voices.map(v=>`channel ${v.channel+1}, key release ${v.keyEnd}ms`).join('; ');
