@@ -13,7 +13,7 @@ const root=path.resolve(__dirname,'..'),server=http.createServer((req,res)=>{con
   await dial.press('End');assert.equal(await page.evaluate(()=>phraseSnapshot.options.playBpm),300);await dial.press('Home');assert.equal(await page.evaluate(()=>phraseSnapshot.options.playBpm),30);await dial.press('Enter');assert.equal(await dial.getAttribute('aria-valuenow'),'100');
   if(!mobile){const box=await dial.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2,box.y+box.height/2+50,{steps:5});await page.mouse.up();assert.equal(await dial.getAttribute('aria-valuenow'),'50');await dial.dblclick();assert.equal(await dial.getAttribute('aria-valuenow'),'100');}
   else{await dial.press('Home');await dial.tap();await dial.tap();assert.equal(await dial.getAttribute('aria-valuenow'),'100');}
-  assert.equal(await page.locator('.key.transposeDownKey.transposeUpKey').count(),1);assert.match(await page.locator('.transposeKeyBadge').innerText(),/−\/\+/);
+  assert.equal(await page.locator('.key[data-midi-actions="transposeDown transposeUp"]').count(),1);assert.match(await page.locator('.key[data-midi="60"]').getAttribute('style'),/linear-gradient/);
   await page.locator('#phrasePracticeToggle').click();assert(!await page.locator('#practicePanel').isVisible());assert(await page.locator('#phrasePlay').isVisible());await page.locator('#phrasePracticeToggle').click();assert(await page.locator('#practicePanel').isVisible());
   // Real geometry mapping of empty space to a source-time point (not a note click).
   await page.locator('#phraseStaff').scrollIntoViewIfNeeded();
@@ -28,5 +28,5 @@ const root=path.resolve(__dirname,'..'),server=http.createServer((req,res)=>{con
   await page.locator('#phrasePlay').click();await page.locator('#phrasePlay').click();assert.equal(await page.evaluate(()=>phraseSnapshot.state),'idle');
   assert.deepEqual(errors,[]);await context.close();
  }
- console.log('PASS: real Chromium desktop 1280×900, touch portrait 390×844/320×740 and landscape 844×390: staff tap/point/keyboard inspection, single speed dial/keyboard/drag/touch reset/Escape/focus, matching mapped-key badges, practice collapse, stacked score/roll and responsive bounds, three loop passes, Play stop/count-in cancellation. No physical MIDI/audible-device verification.');
+ console.log('PASS: real Chromium desktop 1280×900, touch portrait 390×844/320×740 and landscape 844×390: staff tap/point/keyboard inspection, single speed dial/keyboard/drag/touch reset/Escape/focus, matching mapped-key body colors, practice collapse, stacked score/roll and responsive bounds, three loop passes, Play stop/count-in cancellation. No physical MIDI/audible-device verification.');
  }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

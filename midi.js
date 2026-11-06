@@ -1,7 +1,7 @@
 // Input-only Web MIDI adapter. Permission is requested only by Connect MIDI.
 "use strict";
 window.KeyMemoryMidi = {
-  create({transport=null, onNote, onRelease=()=>{}, onReset=()=>{}, onConnect=()=>{}, onRaw=()=>false, onSuspend=()=>{}, onConnection=()=>{}, status, select, connect, disconnect}) {
+  create({transport=null, onNote, onRelease=()=>{}, onReset=()=>{}, onConnect=()=>{}, onRaw=()=>false, onSuspend=()=>{}, onConnection=()=>{}, onKeyState=()=>{}, status, select, connect, disconnect}) {
     let access=null, input=null, desiredId=null, generation=0, pending=false, binding=0;
     let waitingForRelease=false, boundary=performance.now(), failedPort=null, focused=true;
     const held=new Set();
@@ -39,6 +39,8 @@ window.KeyMemoryMidi = {
         }
         if(kind!==0x80&&kind!==0x90)return;
         const eventData={kind:kind===0x80||velocity===0?"off":"on",note,velocity,channel,focused,active,time};
+        // Observe physical presses before a reserved shortcut consumes the event.
+        onKeyState(eventData);
         if(transport?.handle(eventData))return;
         const key=channel+":"+note;
         const intercepted=onRaw(eventData);

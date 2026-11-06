@@ -81,8 +81,12 @@ function setup() {
       h.press(wrong, source);
       assert(h.key(wrong).classList.contains('wrongAnswer'), `${mode}/${source}: wrong note uses shared feedback`);
       assert(!h.key(wrong).classList.contains('selected'), `${mode}/${source}: not selected as correct`);
+      const retained=h.key(wrong);
       h.advance(300); h.api.render();
-      assert.equal(h.key(wrong).style.getPropertyValue('--wrong-key-delay'), '-300ms', `${mode}: rerender keeps elapsed animation time`);
+      assert.equal(h.key(wrong),retained,`${mode}: rerender retains the live animation element`);
+      assert.equal(h.key(wrong).style.getPropertyValue('--wrong-key-delay'), '0ms', `${mode}: retained animation does not double-count elapsed time`);
+      retained.remove();h.api.render();
+      assert.equal(h.key(wrong).style.getPropertyValue('--wrong-key-delay'), '-300ms', `${mode}: a newly visible key resumes at elapsed time`);
       h.advance(649); assert(h.key(wrong).classList.contains('wrongAnswer'), `${mode}: remains through 949ms`);
       h.advance(1); assert(!h.key(wrong).classList.contains('wrongAnswer'), `${mode}: clears at 950ms`);
       assert.equal(h.key(wrong).style.getPropertyValue('--wrong-key-delay'), '');

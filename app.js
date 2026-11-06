@@ -7,12 +7,14 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.06.43";
+const APP_VERSION = "2026.11.06.44";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
 let phraseEngine = null, phraseSnapshot = null, phraseImporter = null;
 const phraseRawHeld=new Set();
+// Physical presses are independent of musical grading and reserved MIDI shortcuts.
+const physicalMidiHeld=new Set();
 let phraseSeenLow=21,phraseSeenHigh=108;
 let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false,phrasePianoScroll=0;
 let phraseViewModel=null,phraseViewSignature="",phraseViewTick=null,phraseViewStamp=0,phraseTimingOpen=false,phraseInspectSelected=false;
@@ -1299,7 +1301,7 @@ function dictionaryKeyboardRange() {
 }
 function phraseKeyboardRange(){
   const notes=(phraseSnapshot?.notes||[]).map(n=>n.note+(phraseSnapshot?.options.transpose||0));
-  if(midiTransportState.enabled)for(const action of ["transposeDown","transposeUp"]){const m=midiTransportState.mappings[action];if(m?.kind==="note")notes.push(m.number);}
+  if(midiTransportState.enabled)for(const m of Object.values(midiTransportState.mappings)){if(m.kind==="note")notes.push(m.number);}
   const low=Math.max(0,Math.min(21,phraseSeenLow,...notes)),high=Math.min(127,Math.max(108,phraseSeenHigh,...notes));
   // A standard piano starts on A, not C. Only extend when real MIDI needs it.
   const start=low<21?Math.floor(low/12)*12:21;
@@ -1440,14 +1442,19 @@ function renderPiano() {
   root.setProperty("--black-h", whiteH * .62 + "px");
   root.setProperty("--key-radius", Math.max(3, Math.min(10, whiteW * .15)) + "px");
   root.setProperty("--black-radius", Math.max(2, Math.min(8, whiteW * .12)) + "px");
-  piano.replaceChildren();
-  const whiteRow = document.createElement("div");
-  whiteRow.className = "whiteRow";
-  piano.append(whiteRow);
+  // Preserve existing key elements so MIDI down/up transitions survive UI refreshes.
+  const previousKeys=new Map([...piano.querySelectorAll(".key")].map(key=>[Number(key.dataset.midi),key]));
+  const whiteRow=piano.querySelector(".whiteRow")||document.createElement("div");
+  whiteRow.className="whiteRow";
+  if(!whiteRow.isConnected)piano.append(whiteRow);
   let whiteIndex = 0;
   const blackKeys = [];
   function makeKey(midi, color) {
-    const button = document.createElement("button");
+    const button=previousKeys.get(midi)||document.createElement("button");
+    previousKeys.delete(midi);
+    const existing=button.isConnected;
+    const wrongDelay=existing&&button.classList.contains("wrongAnswer")?button.style.getPropertyValue("--wrong-key-delay"):null;
+    button.replaceChildren();button.removeAttribute("style");button.removeAttribute("title");button.removeAttribute("data-midi-actions");button.removeAttribute("aria-describedby");
     button.type = "button";
     button.className = "key " + color;
     button.dataset.midi = String(midi);
@@ -1459,7 +1466,7 @@ function renderPiano() {
     const feedback = wrongKeyFeedback.get(midi);
     if (feedback && Date.now() - feedback.started < WRONG_KEY_DURATION) {
       button.classList.add("wrongAnswer");
-      button.style.setProperty("--wrong-key-delay", -(Date.now() - feedback.started) + "ms");
+      button.style.setProperty("--wrong-key-delay", wrongDelay??(-(Date.now() - feedback.started) + "ms"));
     }
     if (activeMode === "dictionary" ? !dictionaryPractice && dictionaryVoicing.includes(midi) :
       activeMode === "builder" ? builderNotes.includes(midi) : activeMode==="phrase" ? (phraseSnapshot?.target||[]).includes(midi) : displayedChord.includes(midi % 12)) button.classList.add("chordTone");
@@ -1483,8 +1490,9 @@ function renderPiano() {
     label.className = "noteLabel";
     label.textContent = activeMode==="phrase"?phraseDisplayName(midi,midi%12===0||midi===21):activeMode==="scale"?scaleNoteName(midi):NAMES[midi % 12];
     button.append(label);
-    decorateTransposeKey(button,midi);
-    button.addEventListener("click",event=>{
+    decorateTransportKey(button,midi);
+    button.classList.toggle("midiKeyDown",isPhysicalMidiDown(midi));
+    if(!existing)button.addEventListener("click",event=>{
       // Native double-click continuations are one screen-key gesture. Separate
       // clicks and genuine MIDI release/reattack still grade normally.
       if(activeMode==="scale"&&event.detail>1)return;
@@ -1496,15 +1504,17 @@ function renderPiano() {
     if (BLACK.has(midi % 12)) {
       blackKeys.push({midi, anchor: whiteIndex - 1});
     } else {
-      whiteRow.append(makeKey(midi, "white"));
+      const white=makeKey(midi,"white");
+      if(whiteRow.children[whiteIndex]!==white)whiteRow.insertBefore(white,whiteRow.children[whiteIndex]||null);
       whiteIndex++;
     }
   }
   for (const {midi, anchor} of blackKeys) {
     const black = makeKey(midi, "black");
     black.style.left = (pad + edgeSpace + anchor * (whiteW + gap) + whiteW - blackW / 2) + "px";
-    piano.append(black);
+    if(!black.isConnected)piano.append(black);
   }
+  for(const key of previousKeys.values())key.remove();
   if(compactScale)container.scrollLeft=0;
   if(activeMode==="scale"&&["reverse-show","correction"].includes(scalePhase)){
     const key=piano.querySelector(scalePhase==="correction"?".correctionTarget":".reverseTarget"),view=container.getBoundingClientRect(),rect=key?.getBoundingClientRect();
@@ -1763,6 +1773,7 @@ async function soundMidiNote(note){
   }catch{}
 }
 const transportLabels={record:"Record",stop:"Stop",play:"Play",practice:"Start practice",continue:"Continue / Start",transposeDown:"Transpose down",transposeUp:"Transpose up"};
+const transportButtons={record:["phraseRecord"],stop:["phraseStop"],play:["phrasePlay"],practice:["phrasePractice"],continue:["nextChallenge","scaleStart","continueScaleCorrection","confirmScaleRun","confirmScaleDegree","resumeScale"],transposeDown:["phraseDown"],transposeUp:["phraseUp"]};
 let midiTransport=null;
 function refreshTransportUI(state){
   midiTransportState=state;
@@ -1772,33 +1783,60 @@ function refreshTransportUI(state){
   document.getElementById("midiTransportCancel").hidden=!state.learning;
   for(const action of Object.keys(transportLabels)){
     const m=state.mappings[action],label=document.getElementById("midiMap-"+action);
-    label.textContent=m?(m.kind==="note"?noteName(m.number)+" · MIDI "+m.number:"CC "+m.number)+" · channel "+(m.channel+1):"Not assigned";
+    label.textContent=m?(m.kind==="note"?phraseDisplayName(m.number)+" · MIDI "+m.number:"CC "+m.number)+" · channel "+(m.channel+1):"Not assigned";
+    label.previousElementSibling.dataset.midiAction=action;
+    document.getElementById("midiLearn-"+action).setAttribute("aria-label","Learn MIDI "+transportLabels[action]);
+    document.getElementById("midiRemove-"+action).setAttribute("aria-label","Remove MIDI "+transportLabels[action]);
     document.getElementById("midiRemove-"+action).disabled=!m;
+    for(const id of transportButtons[action])document.getElementById(id).dataset.midiAction=action;
   }
   const noteMappings=Object.values(state.mappings).filter(m=>m.kind==="note");
-  if(state.enabled&&new Set(noteMappings.map(m=>m.number)).size<noteMappings.length&&!state.error&&!state.learning)document.getElementById("midiTransportStatus").textContent+=" A note has shortcuts on different channels. Key labels identify each channel; two transpose directions show both colors.";
-  refreshTransposeShortcuts();if(activeMode==="phrase")renderPiano();
+  if(state.enabled&&new Set(noteMappings.map(m=>m.number)).size<noteMappings.length&&!state.error&&!state.learning)document.getElementById("midiTransportStatus").textContent+=" A note has shortcuts on different channels. Its key is split into matching colors; labels identify each action and channel.";
+  refreshTransportShortcuts();renderPiano();
 }
-function transposeNoteMappings(midi){return activeMode==="phrase"&&midiTransportState.enabled?Object.entries(midiTransportState.mappings).filter(([,m])=>m.kind==="note"&&m.number===midi):[];}
-function decorateTransposeKey(button,midi){
-  const mappings=transposeNoteMappings(midi),down=mappings.some(([a])=>a==="transposeDown"),up=mappings.some(([a])=>a==="transposeUp");if(!down&&!up)return;
-  button.classList.toggle("transposeDownKey",down);button.classList.toggle("transposeUpKey",up);
+function transportNoteMappings(midi){return midiTransportState.enabled?Object.entries(midiTransportState.mappings).filter(([,m])=>m.kind==="note"&&m.number===midi):[];}
+function decorateTransportKey(button,midi){
+  const mappings=transportNoteMappings(midi);if(!mappings.length)return;
+  button.classList.add("midiMappedKey");
+  button.dataset.midiActions=mappings.map(([action])=>action).join(" ");
+  const colors=mappings.map(([action],i)=>`var(--midi-${action}) ${100*i/mappings.length}% ${100*(i+1)/mappings.length}%`);
+  button.style.setProperty("--midi-key-fill",mappings.length===1?`var(--midi-${mappings[0][0]})`:`linear-gradient(90deg,${colors.join(",")})`);
   const details=mappings.map(([action,m])=>transportLabels[action]+" on MIDI channel "+(m.channel+1)).join("; ");
-  button.title+=" · MIDI shortcuts: "+details;button.setAttribute("aria-label",button.title);
-  const badge=document.createElement("span");badge.className="transposeKeyBadge";badge.setAttribute("aria-hidden","true");badge.textContent=down&&up?"−/+":down?"−":"+";
-  if(mappings.some(([a])=>a!=="transposeDown"&&a!=="transposeUp"))badge.textContent+="·";
-  button.append(badge);
+  button.title=button.getAttribute("aria-label")+" · MIDI shortcuts: "+details;
+  button.setAttribute("aria-label",button.title);
 }
-function refreshTransposeShortcuts(){
-  const labels=[];
-  for(const [action,id,direction]of[["transposeDown","phraseDown","down"],["transposeUp","phraseUp","up"]]){
-    const m=midiTransportState.enabled?midiTransportState.mappings[action]:null;
+function refreshTransportShortcuts(){
+  const legend=document.getElementById("midiShortcutLegend");legend.replaceChildren();
+  const enabled=midiTransportState.enabled,transposeLabels=[];
+  for(const [action,ids]of Object.entries(transportButtons)){
+    const m=enabled?midiTransportState.mappings[action]:null;
     const label=m?(m.kind==="note"?phraseDisplayName(m.number):"CC "+m.number)+" / ch "+(m.channel+1):"";
-    const button=document.getElementById(id);button.title="Transpose "+direction+" one semitone"+(label?" · MIDI: "+label:"");
-    button.setAttribute("aria-label",button.title);if(label)labels.push((direction==="down"?"− ":"+ ")+label);
+    for(const id of ids){
+      const button=document.getElementById(id);
+      // Keep state-dependent Start/Continue and Play/Stop loop wording intact.
+      const base=action==="transposeDown"?"Transpose phrase down one semitone":action==="transposeUp"?"Transpose phrase up one semitone":button.textContent.trim();
+      button.title=base+(label?" · MIDI: "+label:"");
+      if(action.startsWith("transpose"))button.setAttribute("aria-label",button.title);
+      if(label)button.setAttribute("aria-description","MIDI shortcut: "+label);else button.removeAttribute("aria-description");
+    }
+    if(!label)continue;
+    if(action.startsWith("transpose"))transposeLabels.push((action==="transposeDown"?"− ":"+ ")+label);
+    const item=document.createElement("span"),swatch=document.createElement("span");
+    item.className="midiShortcutItem";swatch.className="midiShortcutSwatch";swatch.dataset.midiAction=action;swatch.setAttribute("aria-hidden","true");
+    item.append(swatch,transportLabels[action]+": "+label);legend.append(item);
   }
-  document.getElementById("phraseTransposeShortcuts").textContent=labels.join(" · ");
+  legend.hidden=!legend.childElementCount;
+  document.getElementById("phraseTransposeShortcuts").textContent=transposeLabels.join(" · ");
 }
+function isPhysicalMidiDown(note){return [...physicalMidiHeld].some(key=>Number(key.split(":")[1])===note);}
+function refreshPhysicalMidiKey(note){piano.querySelector('[data-midi="'+note+'"]')?.classList.toggle("midiKeyDown",isPhysicalMidiDown(note));}
+function handlePhysicalMidiKey(event){
+  const key=event.channel+":"+event.note;
+  if(event.kind==="off")physicalMidiHeld.delete(key);
+  else if(event.active!==false&&event.focused!==false&&!document.hidden)physicalMidiHeld.add(key);
+  refreshPhysicalMidiKey(event.note);
+}
+function clearPhysicalMidiKeys(){physicalMidiHeld.clear();piano.querySelectorAll(".midiKeyDown").forEach(key=>key.classList.remove("midiKeyDown"));}
 function refreshPhrasePracticePanel(){
   const phrase=activeMode==="phrase",toggle=document.getElementById("phrasePracticeToggle");
   document.getElementById("practicePanel").hidden=phrase&&!phrasePracticeVisible;
@@ -1834,8 +1872,8 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
   transport:midiTransport,
   status:document.getElementById("midiStatus"),select:document.getElementById("midiInput"),
   connect:document.getElementById("connectMidi"),disconnect:document.getElementById("disconnectMidi"),
-  onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,
-  onSuspend:()=>{phraseRawHeld.clear();resetMidiAudio();resetMonitorControllers();phraseEngine?.stop({releaseHeld:true});if(activeMode==="phrase"){selected.clear();renderPiano();}},
+  onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,onKeyState:handlePhysicalMidiKey,
+  onSuspend:()=>{clearPhysicalMidiKeys();phraseRawHeld.clear();resetMidiAudio();resetMonitorControllers();phraseEngine?.stop({releaseHeld:true});if(activeMode==="phrase"){selected.clear();renderPiano();}},
   onConnection:()=>{if(activeMode==="phrase")refreshPhraseUI();if(activeMode==="scale")renderPiano();},
   onRaw:event=>{
     if(!phraseEngine)return false;
@@ -1971,7 +2009,7 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   if(s.state==="practice"&&o.rhythm&&Number.isFinite(s.targetTime)){const delta=s.targetTime-s.elapsed;prompt+=" · "+(delta>80?"in "+(delta/1000).toFixed(1)+"s":"now");}
   if(s.error)prompt=s.error;
   trainingPrompt.textContent=prompt;
-  refreshPhrasePracticePanel();refreshTransposeShortcuts();
+  refreshPhrasePracticePanel();refreshTransportShortcuts();
   document.getElementById("practiceSummary").textContent=(o.rhythm?"Notes + rhythm":"Notes only")+" · "+(["record-countin","recording"].includes(s.state)?o.sourceBpm:o.playBpm)+" BPM";
   renderPiano();
 }
@@ -2157,7 +2195,7 @@ function renderPhraseViewContent(){
     const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; loop ends at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
     document.getElementById("phraseControllerText").textContent=sectionContext+(imported?"Estimated note durations from audio. No pedal data; neutral playback velocity. Tempo is not detected.":channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
   }
-  refreshPhraseTiming();refreshTransposeShortcuts();
+  refreshPhraseTiming();refreshTransportShortcuts();
   if((playing||recording||(s.state==="practice"&&s.options.rhythm))&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
 }
 for(const [id,apply]of[
