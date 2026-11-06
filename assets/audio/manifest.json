@@ -1,0 +1,45 @@
+{
+  "versions": {
+    "@spotify/basic-pitch": "1.0.1",
+    "@tensorflow/tfjs-backend-cpu": "4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "4.22.0",
+    "@tensorflow/tfjs-converter": "4.22.0",
+    "@tensorflow/tfjs-core": "4.22.0",
+    "@tonejs/midi": "2.0.28",
+    "array-flatten": "3.0.0",
+    "long": "4.0.0",
+    "midi-file": "1.2.4",
+    "node-fetch": "2.6.13",
+    "seedrandom": "3.0.5"
+  },
+  "files": {
+    "THIRD_PARTY_NOTICES.txt": {
+      "bytes": 86769,
+      "sha256": "120c2cbbb19d5eb7d1b968149fab94a6cce33aff3e9339fcb1a70500af25bbd2"
+    },
+    "audio-transcription-worker.js": {
+      "bytes": 542157,
+      "sha256": "0f0f966af6d5c81ce843c5b64c58930ac418caedd8cd421e4546c71348e6d189"
+    },
+    "audio-transcription-worker.js.LEGAL.txt": {
+      "bytes": 40412,
+      "sha256": "d6d1c167dc9a54065dcfd087ed95679eba05f4f0506d7195aad8ce62f6109bc4"
+    },
+    "group1-shard1of1.bin": {
+      "bytes": 742392,
+      "sha256": "b142a95737a52e1e412d5f92e73d8bb80dfe8d04941acc0702f11f4524fb377c"
+    },
+    "model.json": {
+      "bytes": 174537,
+      "sha256": "1ed1aaee3409ec1dc098c8b01f430c0911f6fe9412e7af8086750f9e8f302f68"
+    },
+    "tfjs-backend-wasm-simd.wasm": {
+      "bytes": 424594,
+      "sha256": "77ebb28a6d34f371dbbf2086b7f2de8994acd8ea5a3cf1fa24d2c26c840cac7b"
+    },
+    "tfjs-backend-wasm.wasm": {
+      "bytes": 311123,
+      "sha256": "70a5d516060464e5269f01c74bac1772d6b8ab6cb612acf16b5cdaf61f78d892"
+    }
+  }
+}

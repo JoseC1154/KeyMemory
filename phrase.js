@@ -1,11 +1,11 @@
-// Local-only MIDI Phrase Trainer: no audio recording or network; only CC64, CC7 and CC11 are captured.
+// Local-only Phrase Trainer engine: MIDI recording and reviewed note import; only CC64, CC7 and CC11 are captured.
 "use strict";
 window.KeyMemoryPhrase={create(config={}){
  const {onChange=()=>{},onWrong=()=>{},onSound=()=>{},onBeat=()=>{},onControl=()=>{},onSilence=()=>{},onMetronomeSilence=()=>{}}=config;
  const now=config.now||(()=>Date.now()),later=config.setTimer||((f,t)=>setTimeout(f,t)),cancel=config.clearTimer||(id=>clearTimeout(id));
  const KEY='keymemory.phrase.v1',MAX=120000,LIMIT=10000,CONTROL_LIMIT=20000,GROUP=80;
  let storage;try{storage=config.storage===undefined?window.localStorage:config.storage;}catch{}
- let notes=[],duration=0,state='idle',error='',saved=false,start=0,countIn=0,progress=0,groups=[],answered=new Set(),generation=0,recorded=[],chordTimer=null,plannedStart=0,looping=false;
+ let notes=[],duration=0,origin='midi',state='idle',error='',saved=false,start=0,countIn=0,progress=0,groups=[],answered=new Set(),generation=0,recorded=[],chordTimer=null,plannedStart=0,looping=false;
  const CC_DEFAULTS={64:0,7:100,11:127};
  const baseline=()=>Array.from({length:16},(_,channel)=>Object.entries(CC_DEFAULTS).map(([controller,value])=>({controller:Number(controller),value,channel}))).flat();
  let controllers=[],initialControllers=baseline(),observedControllers=baseline(),recordedControllers=[],recordBaseline=baseline();
@@ -18,17 +18,51 @@ window.KeyMemoryPhrase={create(config={}){
  const playbackElapsed=()=>{const elapsed=Math.max(0,now()-start),length=playbackDuration();return looping&&length>0?elapsed%length:elapsed;};
  function snapshot(){const viewDuration=state==='recording'?Math.min(MAX,Math.max(0,now()-start)):duration;
  const live=config.viewProjection===true&&state==='recording';const activeNotes=live?new Set(recordHeld.values()):null;
- return{viewNotes:live?recorded.map(n=>({...n,duration:activeNotes.has(n)?Math.max(0,viewDuration-n.start):n.duration})):null,viewControllers:live?recordedControllers.map(c=>({...c})):null,viewInitialControllers:live?recordBaseline.map(c=>({...c})):null,viewDuration,state,error,saved,notes:notes.map(n=>({...n})),controllers:controllers.map(c=>({...c})),initialControllers:initialControllers.map(c=>({...c})),recordedControllerCount:state==='recording'?recordedControllers.length:controllers.length,duration,playbackDuration:playbackDuration(),looping,loop:state==='playing'&&looping?Math.floor(Math.max(0,now()-start)/playbackDuration())+1:0,elapsed:state==='recording'?Math.min(MAX,Math.max(0,now()-start)):state==='playing'?playbackElapsed():state==='practice'?Math.max(0,now()-start):0,countIn,countInMode:state==='record-countin'?'record':state==='play-countin'?'play':state==='countin'?'practice':null,targetTime:state==='practice'?groups[progress]?.start??null:null,target:state==='practice'||state==='countin'?(groups[progress]?.notes||[]).filter(n=>!answered.has(n)):[],progress,total:groups.length,options:{...options},recordedCount:state==='recording'?recorded.length:notes.length};}
+ return{viewNotes:live?recorded.map(n=>({...n,duration:activeNotes.has(n)?Math.max(0,viewDuration-n.start):n.duration})):null,viewControllers:live?recordedControllers.map(c=>({...c})):null,viewInitialControllers:live?recordBaseline.map(c=>({...c})):null,viewDuration,state,error,saved,origin,notes:notes.map(n=>({...n})),controllers:controllers.map(c=>({...c})),initialControllers:initialControllers.map(c=>({...c})),recordedControllerCount:state==='recording'?recordedControllers.length:controllers.length,duration,playbackDuration:playbackDuration(),looping,loop:state==='playing'&&looping?Math.floor(Math.max(0,now()-start)/playbackDuration())+1:0,elapsed:state==='recording'?Math.min(MAX,Math.max(0,now()-start)):state==='playing'?playbackElapsed():state==='practice'?Math.max(0,now()-start):0,countIn,countInMode:state==='record-countin'?'record':state==='play-countin'?'play':state==='countin'?'practice':null,targetTime:state==='practice'?groups[progress]?.start??null:null,target:state==='practice'||state==='countin'?(groups[progress]?.notes||[]).filter(n=>!answered.has(n)):[],progress,total:groups.length,options:{...options},recordedCount:state==='recording'?recorded.length:notes.length};}
  const emit=()=>onChange(snapshot());
  function schedule(fn,delay){const token=generation;let id;id=later(()=>{timers.delete(id);if(token===generation)fn();},Math.max(0,delay));timers.add(id);return id;}
  function unschedule(id){if(id!==null){cancel(id);timers.delete(id);}}
  function halt(){generation++;looping=false;for(const id of timers)cancel(id);timers.clear();chordTimer=null;countIn=0;onSilence();}
- function persist(){saved=false;try{if(!storage)throw Error();storage.setItem(KEY,JSON.stringify({version:2,notes,controllers,initialControllers,duration,sourceBpm:options.sourceBpm,options}));saved=true;}catch{error='Phrase kept for this session; local saving is unavailable.';}}
+ function persist(){saved=false;try{if(!storage)throw Error();storage.setItem(KEY,JSON.stringify({version:2,origin,notes,controllers,initialControllers,duration,sourceBpm:options.sourceBpm,options}));saved=true;}catch{error='Phrase kept for this session; local saving is unavailable.';}}
+ function importPhrase(data){
+  // An import is a replacement, never an implicit Stop/Save of an active take.
+  if(state==='recording'||state==='record-countin'){error='Stop recording before importing a phrase.';emit();return false;}
+  let nextNotes,nextDuration,nextBpm;
+  try{
+   if(!data||typeof data!=='object'||Array.isArray(data))throw Error();
+   const inputNotes=data.notes;nextDuration=data.duration;nextBpm=data.sourceBpm;
+   if(nextBpm===undefined)nextBpm=120;
+   if(!Array.isArray(inputNotes)||!inputNotes.length||inputNotes.length>LIMIT||!finite(nextDuration)||nextDuration<=0||nextDuration>MAX||!finite(nextBpm)||nextBpm<30||nextBpm>300)throw Error();
+   nextNotes=[];const noteCount=inputNotes.length;
+   for(let i=0;i<noteCount;i++){
+    const input=inputNotes[i];
+    if(!input||typeof input!=='object'||Array.isArray(input))throw Error();
+    const {note,velocity,channel,start,duration}=input;
+    if(!Number.isInteger(note)||note<0||note>127||!Number.isInteger(velocity)||velocity<1||velocity>127||!Number.isInteger(channel)||channel<0||channel>15||!finite(start)||start<0||start>=nextDuration||!finite(duration)||duration<=0||start+duration-nextDuration>1e-6)throw Error();
+    // Decimal seconds can round just past the selection end when converted to ms.
+    // Clip only that tiny overflow, preserving every other fractional timestamp.
+    let importedDuration=duration;
+    if(start+duration>nextDuration){
+     importedDuration=nextDuration-start;
+     if(start+importedDuration>nextDuration)importedDuration-=Math.max(Number.MIN_VALUE,Number.EPSILON*nextDuration);
+     if(importedDuration<=0||start+importedDuration>nextDuration)throw Error();
+    }
+    nextNotes.push({note,velocity,channel,start,duration:importedDuration});
+   }
+   nextNotes.sort((a,b)=>a.start-b.start);
+  }catch{error='Import requires 1–10,000 valid notes within a phrase of at most 120 seconds, and BPM 30–300.';emit();return false;}
+  // Commit only after the complete payload has passed validation. Keep physical
+  // held keys and observed controllers intact for the next MIDI input/recording.
+  halt();state='idle';notes=nextNotes;duration=nextDuration;origin='audio';controllers=[];initialControllers=baseline();
+  options={...options,sourceBpm:nextBpm,playBpm:nextBpm,transpose:0,rhythm:false,sectionStart:0,sectionEnd:duration};
+  groups=[];progress=0;answered.clear();recorded=[];recordedControllers=[];recordHeld.clear();start=0;plannedStart=0;error='';
+  persist();emit();return true;
+ }
  function load(){
   if(state==='recording')return false;
   // V2's bounded10k notes +20k controllers can exceed the legacy1.5MB envelope.
   try{const text=storage?.getItem(KEY);if(!text)return false;if(text.length>4000000)throw Error();const data=JSON.parse(text);
-   if(![1,2].includes(data.version)||!Array.isArray(data.notes)||data.notes.length>LIMIT||!finite(data.duration)||data.duration<0||data.duration>MAX||!finite(data.sourceBpm)||data.sourceBpm<30||data.sourceBpm>300)throw Error();
+   if(![1,2].includes(data.version)||(data.origin!==undefined&&!['audio','midi'].includes(data.origin))||!Array.isArray(data.notes)||data.notes.length>LIMIT||!finite(data.duration)||data.duration<0||data.duration>MAX||!finite(data.sourceBpm)||data.sourceBpm<30||data.sourceBpm>300)throw Error();
    for(const n of data.notes)if(!Number.isInteger(n.note)||n.note<0||n.note>127||!Number.isInteger(n.velocity)||n.velocity<1||n.velocity>127||!Number.isInteger(n.channel)||n.channel<0||n.channel>15||!finite(n.start)||n.start<0||!finite(n.duration)||n.duration<0||n.start+n.duration>data.duration+.01)throw Error();
    let loadedControls=[],loadedBaseline=baseline();
    if(data.version===2){
@@ -36,7 +70,7 @@ window.KeyMemoryPhrase={create(config={}){
     const keys=new Set();for(const c of data.initialControllers){if(!validControl(c)||keys.has(c.channel+':'+c.controller))throw Error();keys.add(c.channel+':'+c.controller);loadedBaseline[ccIndex(c.channel,c.controller)]={controller:c.controller,value:c.value,channel:c.channel};}
     for(const c of data.controllers){if(!validControl(c)||!finite(c.time)||c.time<0||c.time>data.duration)throw Error();loadedControls.push({controller:c.controller,value:c.value,channel:c.channel,time:c.time});}loadedControls.sort((a,b)=>a.time-b.time);
    }
-   halt();controllers=loadedControls;initialControllers=loadedBaseline;notes=data.notes.map(n=>({note:n.note,velocity:n.velocity,channel:n.channel,start:n.start,duration:n.duration})).sort((a,b)=>a.start-b.start);duration=data.duration;options.sourceBpm=data.sourceBpm;options.playBpm=data.sourceBpm;options.sectionEnd=duration||MAX;if(data.options){const o=data.options;if(validOptions(o)&&!notes.some(n=>n.note+o.transpose<0||n.note+o.transpose>127))options={...options,...o};}saved=true;state='idle';error='';emit();return true;
+   halt();controllers=loadedControls;initialControllers=loadedBaseline;notes=data.notes.map(n=>({note:n.note,velocity:n.velocity,channel:n.channel,start:n.start,duration:n.duration})).sort((a,b)=>a.start-b.start);duration=data.duration;origin=data.origin??'midi';options.sourceBpm=data.sourceBpm;options.playBpm=data.sourceBpm;options.sectionEnd=duration||MAX;if(data.options){const o=data.options;if(validOptions(o)&&!notes.some(n=>n.note+o.transpose<0||n.note+o.transpose>127))options={...options,...o};}saved=true;state='idle';error='';emit();return true;
   }catch{error='Saved phrase could not be read. You can record a new phrase.';emit();return false;}
  }
  function finishRecording(){
@@ -45,7 +79,7 @@ window.KeyMemoryPhrase={create(config={}){
   for(const n of recorded)n.duration=Math.min(MAX-n.start,Math.max(1,n.duration));
   if(recorded.length)end=Math.min(MAX,Math.max(end,...recorded.map(n=>n.start+n.duration)));recordHeld.clear();
   halt();state='idle';
-  if(recorded.length){notes=recorded.map(n=>({...n})).sort((a,b)=>a.start-b.start);duration=end;controllers=recordedControllers.filter(c=>c.time<=end).map(c=>({...c})).sort((a,b)=>a.time-b.time);initialControllers=recordBaseline.map(c=>({...c}));options.sectionStart=0;options.sectionEnd=end||MAX;persist();}
+  if(recorded.length){notes=recorded.map(n=>({...n})).sort((a,b)=>a.start-b.start);duration=end;origin='midi';controllers=recordedControllers.filter(c=>c.time<=end).map(c=>({...c})).sort((a,b)=>a.time-b.time);initialControllers=recordBaseline.map(c=>({...c}));options.sectionStart=0;options.sectionEnd=end||MAX;persist();}
   else error='No notes recorded. Your previous phrase was kept.';
   recorded=[];recordedControllers=[];emit();return notes.length>0;
  }
@@ -190,6 +224,6 @@ window.KeyMemoryPhrase={create(config={}){
   if(progress>=groups.length){halt();state='complete';error='';emit();return true;}
   emit();lateGuard();return true;
  }
- function clear(){stop();notes=[];controllers=[];initialControllers=baseline();duration=0;groups=[];progress=0;error='';saved=false;try{storage?.removeItem(KEY);}catch{error='Could not remove the saved phrase from this browser.';}emit();return true;}
- const api={record,stop,input,play,practice,setOptions,setMetronome,clear,snapshot,load};load();return api;
+ function clear(){stop();notes=[];controllers=[];initialControllers=baseline();duration=0;origin='midi';groups=[];progress=0;error='';saved=false;try{storage?.removeItem(KEY);}catch{error='Could not remove the saved phrase from this browser.';}emit();return true;}
+ const api={record,stop,input,play,practice,setOptions,setMetronome,importPhrase,clear,snapshot,load};load();return api;
 }};

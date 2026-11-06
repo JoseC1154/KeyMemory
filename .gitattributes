@@ -1,0 +1,3 @@
+# Preserve vendored/runtime bytes and upstream license formatting exactly.
+assets/audio/** -text -whitespace
+scripts/licenses/** -text -whitespace

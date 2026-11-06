@@ -7,11 +7,11 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.06.42";
+const APP_VERSION = "2026.11.06.43";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
-let phraseEngine = null, phraseSnapshot = null;
+let phraseEngine = null, phraseSnapshot = null, phraseImporter = null;
 const phraseRawHeld=new Set();
 let phraseSeenLow=21,phraseSeenHigh=108;
 let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false,phrasePianoScroll=0;
@@ -1260,6 +1260,7 @@ function answerKey(midi) {
 }
 
 function activateMode(mode) {
+  if(currentDialog?.id==="phraseImportOverlay")closePracticeDialog();
   resetMidiAudio();
   if(["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog?.id))closePracticeDialog({cancelScaleRun:false});
   dismissAchievement();
@@ -1578,13 +1579,14 @@ document.getElementById("scalePauseOverlay").addEventListener("click",event=>{if
 function closePracticeDialog(options={}) {
   if(scaleUserPause){resumeScaleUserPause();return;}
   if (!currentDialog) return;
+  if(currentDialog.id==="phraseImportOverlay")phraseImporter?.close();
   if(currentDialog.id==="settingsOverlay")midiTransport?.cancelLearn();
   const cancelRun=["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog.id)&&options.cancelScaleRun!==false;
   currentDialog.hidden=true;
   currentDialog=null;
   shell.inert=false;
   document.body.style.overflow="";
-  for(const id of ["openModes","openSettings","openHint","scaleStart"]) document.getElementById(id).setAttribute("aria-expanded","false");
+  for(const id of ["openModes","openSettings","openHint","scaleStart","phraseImport"]) document.getElementById(id).setAttribute("aria-expanded","false");
   if(cancelRun&&activeMode==="scale")startScalePreview();
   if(dialogReturnFocus?.isConnected) dialogReturnFocus.focus();
   dialogReturnFocus=null;
@@ -1640,6 +1642,7 @@ document.addEventListener("keydown",event=>{
 });
 function updatePracticeChrome() {
   document.getElementById("phraseActions").hidden=activeMode!=="phrase";
+  document.getElementById("phraseAudioOrigin").hidden=activeMode!=="phrase"||phraseSnapshot?.origin!=="audio";
   document.getElementById("phraseControls").hidden=activeMode!=="phrase";
   const summary=document.getElementById("practiceSummary");
   let text="";
@@ -1944,6 +1947,8 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   recordingIndicator.hidden=!["recording","record-countin"].includes(s.state);
   recordingIndicator.textContent=s.state==="recording"?"● REC":"○ Ready to record";
   const metro=document.getElementById("phraseMetronome");metro.setAttribute("aria-pressed",String(o.metronome));metro.textContent="Click "+(o.metronome?"on":"off");
+  document.getElementById("phraseImport").disabled=!phraseImporter||phraseTransportPending||s.state==="recording"||s.state==="record-countin";
+  document.getElementById("phraseAudioOrigin").hidden=activeMode!=="phrase"||s.origin!=="audio"||s.state==="recording";
   document.getElementById("phraseRecord").disabled=phraseTransportPending||s.state==="recording"||s.state==="record-countin";
   const playButton=document.getElementById("phrasePlay"),playOn=s.state==="playing"||s.state==="play-countin"||(phraseTransportPending&&phraseTransportAction==="play");
   playButton.disabled=(phraseTransportPending&&!playOn)||!has||s.state==="recording"||s.state==="record-countin";
@@ -1962,7 +1967,7 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   let prompt=phraseTransportPending?"Preparing audio…":s.state==="record-countin"?"Record count-in: "+s.countIn+" · start after 3":s.state==="play-countin"?"Playback count-in: "+s.countIn+" · starts after 3":s.state==="recording"?"Recording MIDI — play your phrase. Stop when finished.":s.state==="playing"?"Loop "+s.loop+" · note group "+(s.progress+1)+" / "+s.total+" · press Stop loop to finish":
     s.state==="countin"?"Count in: "+s.countIn+" · release the keys":s.state==="wait-release"?"Release all keys — restarting from the beginning":
     s.state==="practice"?"Play "+names.join(" + ")+" · "+(s.progress+1)+" / "+s.total:
-    s.state==="complete"?"Phrase complete! Practice again or transpose.":has?"Your phrase is ready. Play it, transpose, or practice.":"Connect MIDI in Settings, then Record your phrase.";
+    s.state==="complete"?"Phrase complete! Practice again or transpose.":has?"Your phrase is ready. Play it, transpose, or practice.":"Import an audio clip, or connect MIDI in Settings and Record your phrase.";
   if(s.state==="practice"&&o.rhythm&&Number.isFinite(s.targetTime)){const delta=s.targetTime-s.elapsed;prompt+=" · "+(delta>80?"in "+(delta/1000).toFixed(1)+"s":"now");}
   if(s.error)prompt=s.error;
   trainingPrompt.textContent=prompt;
@@ -1974,6 +1979,20 @@ if(window.KeyMemoryPhrase){
   phraseEngine=window.KeyMemoryPhrase.create({viewProjection:true,onChange:refreshPhraseUI,onSound:soundPhrase,onBeat:soundPhraseBeat,onControl:soundPhraseControl,onSilence:silencePhrase,onMetronomeSilence:silencePhraseMetronome,onWrong:(note,message)=>{flashWrongKey(note);selected.clear();resetMidiAudio();incorrect(message);}});
   refreshPhraseUI(phraseEngine.snapshot());
 }
+if(window.KeyMemoryAudioImport){
+  phraseImporter=window.KeyMemoryAudioImport.create({isOpen:()=>currentDialog?.id==="phraseImportOverlay"&&activeMode==="phrase",onClose:closePracticeDialog,onCommit:payload=>{
+    if(currentDialog?.id!=="phraseImportOverlay"||activeMode!=="phrase")return false;
+    if(phraseSnapshot?.notes.length&&!window.confirm("Replace your saved phrase with these reviewed audio notes?"))return false;
+    phraseViewExample=false;phraseViewModel=null;phraseViewSignature="";phraseInspectTime=0;phraseInspectSelected=false;selected.clear();resetMidiAudio();
+    if(!phraseEngine.importPhrase(payload))throw Error(phraseEngine.snapshot().error||"The phrase could not be imported.");
+    return true;
+  }});
+  refreshPhraseUI();
+}
+document.getElementById("phraseImport").addEventListener("click",()=>{
+  if(!phraseImporter||activeMode!=="phrase"||phraseTransportPending||["recording","record-countin"].includes(phraseSnapshot?.state))return;
+  openPracticeDialog("phraseImportOverlay","phraseImport");phraseImporter.open();
+});
 function phraseAction(action){if(!phraseEngine)return;phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
 document.getElementById("phraseRecord").addEventListener("click",()=>{
   if(!midiController?.isConnected()){trainingPrompt.textContent="Connect a MIDI keyboard in Settings before recording.";return;}
@@ -2103,6 +2122,9 @@ function renderPhraseViewContent(){
   const s=phraseSnapshot,view=window.KeyMemoryPhraseView,recording=s.state==="recording",playing=s.state==="playing";
   const exampleAllowed=["idle","complete"].includes(s.state)&&!phraseTransportPending;
   if(!exampleAllowed)phraseViewExample=false;
+  const imported=s.origin==="audio"&&!recording&&!phraseViewExample;
+  document.getElementById("phraseTimingScope").textContent=imported?"Detected pitches · estimated timing":"Pitch reading · exact timing";
+  document.getElementById("phraseDurationLegend").textContent=imported?"Solid = estimated note duration; no pedal data":"Solid = key held · dashed tail = pedal sustain";
   const exampleButton=document.getElementById("phraseViewExample");exampleButton.disabled=!exampleAllowed;exampleButton.textContent=phraseViewExample?"Back to my phrase":"Show example";
   const source=phraseViewExample?{duration:3000,notes:[48,60,64,67].map(note=>({note,channel:0,velocity:90,start:0,duration:600})).concat([{note:72,channel:0,velocity:90,start:2000,duration:500}]),controllers:[{controller:64,value:127,channel:0,time:200},{controller:64,value:0,channel:0,time:1500}],initialControllers:[]}:{notes:recording?(s.viewNotes||[]):s.notes,controllers:recording?(s.viewControllers||[]):s.controllers,initialControllers:recording?(s.viewInitialControllers||[]):s.initialControllers,duration:recording?s.viewDuration:s.duration};
   const signature=[phraseViewExample,s.state,source.notes.length,source.controllers?.length,source.duration,s.options.transpose,source.notes[0]?.note,source.notes.at(-1)?.note].join(":");
@@ -2119,13 +2141,13 @@ function renderPhraseViewContent(){
   const highlighted=new Set(playing?held.map(n=>n.midi):showingLive?live:[]);
   const inspecting=canInspectPhrase()&&phraseInspectSelected&&!showingLive;
   const inspectHeld=new Set(inspecting?held.map(n=>n.midi):[]),inspectTails=new Set(inspecting?model.notes.filter(n=>n.start<=time&&n.keyEnd<=time&&n.soundEnd>time).map(n=>n.midi):[]);
-  for(const key of piano.querySelectorAll(".key")){const midi=Number(key.dataset.midi),on=highlighted.has(midi),heldAtPoint=inspectHeld.has(midi),pedalAtPoint=!heldAtPoint&&inspectTails.has(midi);key.classList.toggle("phrasePlaying",on);key.classList.toggle("phraseInspectKey",heldAtPoint);key.classList.toggle("phraseInspectTail",pedalAtPoint);if(key.title)key.setAttribute("aria-label",key.title+(on?(playing?" · playing, key held":" · live key held"):heldAtPoint?" · inspected time, key held":pedalAtPoint?" · inspected time, pedal sustain only":""));}
+  for(const key of piano.querySelectorAll(".key")){const midi=Number(key.dataset.midi),on=highlighted.has(midi),heldAtPoint=inspectHeld.has(midi),pedalAtPoint=!heldAtPoint&&inspectTails.has(midi);key.classList.toggle("phrasePlaying",on);key.classList.toggle("phraseInspectKey",heldAtPoint);key.classList.toggle("phraseInspectTail",pedalAtPoint);if(key.title)key.setAttribute("aria-label",key.title+(on?(playing?(imported?" · playing estimated note":" · playing, key held"):" · live key held"):heldAtPoint?(imported?" · inspected estimated note":" · inspected time, key held"):pedalAtPoint?" · inspected time, pedal sustain only":""));}
   if(show){
     const width=Math.max(320,panel.clientWidth||800),start=Math.max(0,time-phraseViewWindow/4),end=Math.min(Math.max(source.duration,phraseViewWindow),start+phraseViewWindow);
     document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames,inspecting}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
     const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
     document.getElementById("phrasePitchText").setAttribute("aria-live",inspecting?"polite":"off");
-    document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":inspecting?"Selected time, keys held: ":"At cursor: ")+(names.join(" · ")||"No keys held")+([...inspectTails].some(n=>!inspectHeld.has(n))?". Pedal only: "+[...inspectTails].filter(n=>!inspectHeld.has(n)).map(n=>view.pitch(n,phraseViewSpelling).name).join(" · "):"")+". C4 = middle C.";
+    document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":inspecting?(imported?"Selected time, estimated notes: ":"Selected time, keys held: "):"At cursor: ")+(names.join(" · ")||(imported?"No estimated notes active":"No keys held"))+([...inspectTails].some(n=>!inspectHeld.has(n))?". Pedal only: "+[...inspectTails].filter(n=>!inspectHeld.has(n)).map(n=>view.pitch(n,phraseViewSpelling).name).join(" · "):"")+". C4 = middle C.";
     document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,names:phraseViewNames,spelling:phraseViewSpelling});
     const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=!canInspectPhrase()||!source.notes.length;
     document.getElementById("phraseViewTimeLabel").textContent=(time/1000).toFixed(2)+" s";
@@ -2133,7 +2155,7 @@ function renderPhraseViewContent(){
     for(const c of source.controllers||[])if(c.time<=time)cc.set(c.channel+":"+c.controller,c.value);
     const channels=[...new Set(model.notes.filter(n=>n.start<=time&&n.soundEnd>time).map(n=>n.channel))];
     const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; loop ends at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
-    document.getElementById("phraseControllerText").textContent=sectionContext+(channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
+    document.getElementById("phraseControllerText").textContent=sectionContext+(imported?"Estimated note durations from audio. No pedal data; neutral playback velocity. Tempo is not detected.":channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
   }
   refreshPhraseTiming();refreshTransposeShortcuts();
   if((playing||recording||(s.state==="practice"&&s.options.rhythm))&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);

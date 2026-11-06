@@ -69,3 +69,17 @@ The new browser suite targets desktop, touch portrait and landscape layout, real
 The shared wrong-key suite checks all graded modes, including both Scale Builder piano stages and Phrase practice, through screen clicks and simulated raw MIDI. It verifies the same 950 ms feedback lifetime, rerender continuity, repeated mistakes, immediate cleanup, ignored ungraded input and off-screen MIDI safety. Scale Builder's correct answer, progress and Continue gate persist after the wrong key fades. The Chromium suite checks the computed red color and hold/fade/clear animation opacity through mouse, native Enter, synthetic MIDI and mobile touch. Physical MIDI latency and audio require separate device validation.
 
 The same November 6 cloud Chromium launch restriction described above prevented execution of `wrong-key-browser.cjs`; its browser matrix is authored but not verified in that environment. The deterministic shared-feedback test passed, and the pre-existing `phrase-keyboard.cjs` geometry failure was reproduced again on unchanged c15e315.
+
+## Audio import
+
+Use `npm ci` for the pinned runtime and jsdom dependencies. `npm run build:audio` regenerates self-hosted assets; ordinary static serving does not need this build.
+
+- `node tests/audio-import-utils.cjs`: pure clip/source limits, stereo downmix, resampling API contract, fractional note mapping and invalid proposals. OfflineAudioContext is mocked.
+- `node tests/audio-import-ui.cjs`: actual app DOM integration with mocked decode/inference/audio. Review edits, add/remove/restore/pagination, atomic acceptance/confirmation, errors, file-picker blur, cancellations and stale async completions.
+- `node tests/audio-import-preview-audio.cjs`: actual import UI with an automation evaluator; original/note preview cancellation preserves gain during attack/sustain/release, reaches zero before natural source endings and handles native-hold/fallback paths. No listening claim.
+- `node tests/phrase-import-engine.cjs`: atomic import, strict limits, transport cleanup, controller/option resets, persisted provenance, old storage, fractional timing and saving failures.
+- `npm run test:audio-runtime`: real Basic Pitch on pinned WASM, synthetic melody/chords/sustain/silence, maximum clip, upstream output parity, SIMD/non-SIMD, memory cleanup, repeat/cancel/failure and generated worker bundle VM. Synthetic success is not an accuracy benchmark.
+- `node tests/audio-transcription-browser.cjs`: optional real Chromium worker, subdirectory hosting, same-origin GET-only loading, cancellation/retry, and no cross-origin isolation.
+- `node tests/audio-import-browser.cjs`: optional real Chromium file decoder→resampler→worker→review→saved phrase integration, desktop/mobile viewports, local-only requests, edit and cancel. Install Playwright separately if unavailable and set `CHROMIUM_PATH` when appropriate.
+
+Browser test sources are supplied, but a local Chromium launch failed with `socket() failed: Operation not permitted`, including a temporary-profile escalation attempt. No native-browser, actual-phone, physical-MIDI or listening pass is claimed for audio import. None of these tests publish or transmit user audio.
