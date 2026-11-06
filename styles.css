@@ -411,22 +411,17 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 
 /* Editable timing is separate from source-time zoom and silent note inspection. */
 #phrasePlay[aria-pressed="true"]{background:#a61f2b;color:#fff;border-color:#d76d77}
-.phraseStaff[role="button"]{cursor:crosshair;touch-action:pan-x pan-y}
+.phraseStaff[role="slider"]{cursor:crosshair;touch-action:pan-x pan-y;user-select:none}
 .phraseStaff:focus-visible{outline:3px solid #8ad8ff;outline-offset:3px}
 .phraseStaffHelp{grid-column:1/-1;font-size:11px;line-height:1.45;margin:5px 0;color:var(--muted)}
-.phraseTimingEditor{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #718e78;border-radius:8px;background:#24362b;min-width:0}
-.phraseTimingEditor[hidden]{display:none}
-.phraseTimingHeading{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.phraseTimingEditor p,.phraseTimingEditor small{font-size:12px;line-height:1.45;margin:0;text-align:center}
-.phraseDialRow{display:flex;justify-content:center;align-items:center;gap:20px;font-size:12px}
-.phraseTimingDial{position:relative;display:grid;place-items:center;width:104px;height:104px;flex:none;border:3px solid #7a9a85;border-radius:50%;background:radial-gradient(circle at 35% 30%,#456b52,#142e1d);color:#fff;box-shadow:0 4px 10px #0006;cursor:ns-resize;touch-action:none;user-select:none;font-weight:800;font-variant-numeric:tabular-nums}
-.phraseTimingDial:focus-visible{outline:3px solid #8ad8ff;outline-offset:4px}
+.phraseSpeedControl{display:inline-flex;align-items:center;gap:6px;flex:none;font-size:11px}
+.phraseTimingDial{position:relative;display:grid;place-items:center;width:48px;height:48px;flex:none;border:2px solid #7a9a85;border-radius:50%;background:radial-gradient(circle at 35% 30%,#456b52,#142e1d);color:#fff;box-shadow:0 2px 5px #0006;cursor:ns-resize;touch-action:none;user-select:none;font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
+.phraseTimingDial:focus-visible{outline:3px solid #8ad8ff;outline-offset:3px}
 .phraseTimingDial[aria-disabled="true"]{opacity:.45;cursor:default}
-.phraseDialMarker{position:absolute;inset:6px;transform:rotate(var(--dial-angle));pointer-events:none}
-.phraseDialMarker::before{content:"";display:block;width:4px;height:17px;border-radius:3px;background:#b9ffcf;margin:0 auto}
+.phraseDialMarker{position:absolute;inset:3px;transform:rotate(var(--dial-angle));pointer-events:none}
+.phraseDialMarker::before{content:"";display:block;width:2px;height:8px;border-radius:2px;background:#b9ffcf;margin:0 auto}
 .visuallyHidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 #phraseTimingError{color:#ffd8a6}
-.phraseScore.timingExpanded .phraseStaff{max-height:320px}
 .staffSelectedKey .staffNoteHead{fill:#146eaa!important;stroke:#146eaa!important;stroke-width:3}
 .staffSelectedTail .staffNoteHead{fill:none!important;stroke:#a66a00!important;stroke-width:3}
 .key.phraseInspectKey{outline:3px solid #146eaa;outline-offset:-3px;background:#b8e3ff!important}
@@ -488,3 +483,23 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 .audioImportPages{justify-content:space-between;font-size:13px}
 .phraseAudioOrigin{font-size:12px;color:#d4c69e;line-height:1.4;margin:2px 0 8px}
 @media(max-width:520px){.audioImportNote{grid-template-columns:1fr 1fr 1fr}.audioImportNote button{grid-column:1/-1;justify-self:end}.audioImportTrim{gap:8px}.audioImportPages{justify-content:center}.audioImportActions button{flex:1 1 auto}}
+
+/* Loop handles stay outside the staff slider's accessibility subtree. */
+.phraseScore{position:relative}
+.phraseLoopControls{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px}
+.phraseLoopControls label{display:flex;align-items:center;gap:4px}
+.phraseLoopControls input{width:78px;min-height:36px;padding:5px;border:1px solid #718e78;border-radius:5px;background:#18231c;color:#fff;font-variant-numeric:tabular-nums}
+.phraseLoopControls>button:not(.phraseLoopHandle){min-height:36px;padding:5px 8px;font-size:11px}
+#phraseLoopStatus{color:var(--muted);font-size:11px}
+.phraseLoopHandle{position:absolute;z-index:4;transform:translateX(-50%);width:48px;min-height:44px;padding:2px;font-size:10px;font-weight:800;border:0;background:transparent;color:#075537;touch-action:none;user-select:none;cursor:ew-resize;text-shadow:0 0 3px #fff,0 0 3px #fff}
+.phraseLoopHandle::after{content:"▼";display:block;font-size:16px;line-height:14px}
+.phraseLoopHandle.loopEnd{color:#843c09;display:flex;flex-direction:column-reverse;justify-content:flex-start}
+.phraseLoopHandle.loopEnd::after{content:"▲"}
+.phraseLoopHandle:focus-visible{outline:3px solid #8ad8ff;border-radius:5px;background:#fff9}
+.phraseLoopHandle[hidden]{display:none}
+.phraseLoopHandle:disabled{opacity:.5;cursor:default}
+
+.phraseForgivenessControls{display:inline-flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:11px}
+.phraseForgivenessControls label{display:inline-flex;align-items:center;gap:3px}
+#phraseForgiveness{width:100px;min-height:32px;accent-color:#8ad8ff}
+#phraseForgivenessValue{min-width:64px;font-variant-numeric:tabular-nums}

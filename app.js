@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.06.44";
+const APP_VERSION = "2026.11.06.45";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
@@ -17,7 +17,8 @@ const phraseRawHeld=new Set();
 const physicalMidiHeld=new Set();
 let phraseSeenLow=21,phraseSeenHigh=108;
 let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false,phrasePianoScroll=0;
-let phraseViewModel=null,phraseViewSignature="",phraseViewTick=null,phraseViewStamp=0,phraseTimingOpen=false,phraseInspectSelected=false;
+let phraseViewModel=null,phraseViewSignature="",phraseViewTick=null,phraseViewStamp=0,phraseInspectSelected=false,phraseInspectWindowStart=null;
+let phraseLoopDraft=null,phraseLoopDrag=null,phraseForgivenessPreview=null;
 try{const prefs=JSON.parse(localStorage.getItem("keymemory.phrase.view")||"{}");if(["auto","show","hide"].includes(prefs.visibility))phraseViewVisibility=prefs.visibility;if(prefs.spelling==="flat")phraseViewSpelling="flat";if(prefs.names===false)phraseViewNames=false;}catch{}
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
@@ -1262,6 +1263,7 @@ function answerKey(midi) {
 }
 
 function activateMode(mode) {
+  phraseLoopDrag=null;phraseLoopDraft=null;phraseForgivenessPreview=null;
   if(currentDialog?.id==="phraseImportOverlay")closePracticeDialog();
   resetMidiAudio();
   if(["scaleRunOverlay","scaleDegreeOverlay"].includes(currentDialog?.id))closePracticeDialog({cancelScaleRun:false});
@@ -1601,8 +1603,10 @@ function closePracticeDialog(options={}) {
   if(dialogReturnFocus?.isConnected) dialogReturnFocus.focus();
   dialogReturnFocus=null;
   resumeScaleAfterDialog();
+  if(activeMode==="phrase")renderPhraseView();
 }
 function openPracticeDialog(id,buttonId) {
+  cancelLoopDrag();
   stopBuilderAudio();resetMidiAudio();
   if(scaleUserPause)return;
   if(activeMode==="phrase")phraseEngine?.stop();
@@ -1882,7 +1886,12 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
     const key=event.channel+":"+event.note;
     if(event.kind==="off"){
       phraseRawHeld.delete(key);releasePhraseMonitor(event.note,event.channel);phraseEngine.input(event);
-      if(activeMode==="phrase"&&![...phraseRawHeld].some(k=>Number(k.split(":")[1])===event.note)){selected.delete(event.note);if(!currentDialog){if(activeMode==="phrase"){phraseSnapshot=phraseEngine.snapshot();phraseViewStamp=Date.now();}renderPiano();}}
+      if(activeMode==="phrase"&&![...phraseRawHeld].some(k=>Number(k.split(":")[1])===event.note)){
+        selected.delete(event.note);
+        // Releases still arrive while a sheet is open. Reconcile the hidden,
+        // inert piano too: dismissing a sheet does not otherwise repaint it.
+        phraseSnapshot=phraseEngine.snapshot();phraseViewStamp=Date.now();renderPiano();
+      }
       return activeMode==="phrase";
     }
     const duplicate=phraseRawHeld.has(key);
@@ -1961,9 +1970,10 @@ function soundPhraseBeat({beat,at}){
   }catch{}
 }
 async function startPhraseTransport(action,kind=""){
+  cancelLoopDrag();
   if(!phraseEngine||phraseTransportPending)return;
   phraseEngine.stop();dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();
-  const request=++phraseTransportRequest;phraseTransportPending=true;phraseTransportAction=kind;phraseInspectSelected=false;refreshPhraseUI();
+  const request=++phraseTransportRequest;phraseTransportPending=true;phraseTransportAction=kind;phraseInspectSelected=false;phraseInspectWindowStart=null;refreshPhraseUI();
   let wake=null;
   try{
     await Promise.race([unlockPhraseAudio(),new Promise(resolve=>{wake=resolve;phraseTransportWake=resolve;})]);
@@ -1993,14 +2003,15 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   playButton.textContent=playOn?"Stop loop":"Play phrase";playButton.setAttribute("aria-pressed",String(playOn));
   document.getElementById("phrasePractice").disabled=phraseTransportPending||!has||s.state==="recording"||s.state==="record-countin";
   document.getElementById("phraseStop").disabled=!active;
-  for(const id of ["phraseDown","phraseUp"])document.getElementById(id).disabled=phraseTransportPending||s.state==="recording"||s.state==="record-countin";
+  document.getElementById("phraseDelete").disabled=!s.notes.length||phraseTransportPending||["recording","record-countin"].includes(s.state);
+  for(const id of ["phraseDown","phraseUp"])document.getElementById(id).disabled=!has||phraseTransportPending||s.state==="recording"||s.state==="record-countin";
   document.getElementById("phraseTransposeValue").textContent=o.transpose?((o.transpose>0?"+":"")+o.transpose+" st"):"Original";
   document.getElementById("phraseClock").textContent=s.state==="recording"?"REC "+phraseTime(s.elapsed)+" / 2:00":has?phraseTime(s.duration)+" · "+s.notes.length+" notes":"Up to 2:00";
   const values={phraseSourceBpm:o.sourceBpm,phrasePlayBpm:o.playBpm,phraseRhythm:o.rhythm?"rhythm":"notes",phraseTolerance:o.tolerance,phraseSectionStart:o.sectionStart/1000,phraseSectionEnd:o.sectionEnd/1000};
   for(const [id,value]of Object.entries(values))document.getElementById(id).value=String(value);
   document.getElementById("phraseSaved").textContent=(s.error?s.error+" ":"")+(has?(s.saved?"Saved locally on this device":"Kept for this session only")+" · "+s.notes.length+" notes":"No saved phrase");
   if(activeMode!=="phrase")return;
-  refreshPhraseTiming();
+  refreshPhraseTiming();refreshPhraseForgiveness();
   const names=(s.target||[]).map(m=>phraseDisplayName(m));
   let prompt=phraseTransportPending?"Preparing audio…":s.state==="record-countin"?"Record count-in: "+s.countIn+" · start after 3":s.state==="play-countin"?"Playback count-in: "+s.countIn+" · starts after 3":s.state==="recording"?"Recording MIDI — play your phrase. Stop when finished.":s.state==="playing"?"Loop "+s.loop+" · note group "+(s.progress+1)+" / "+s.total+" · press Stop loop to finish":
     s.state==="countin"?"Count in: "+s.countIn+" · release the keys":s.state==="wait-release"?"Release all keys — restarting from the beginning":
@@ -2021,7 +2032,7 @@ if(window.KeyMemoryAudioImport){
   phraseImporter=window.KeyMemoryAudioImport.create({isOpen:()=>currentDialog?.id==="phraseImportOverlay"&&activeMode==="phrase",onClose:closePracticeDialog,onCommit:payload=>{
     if(currentDialog?.id!=="phraseImportOverlay"||activeMode!=="phrase")return false;
     if(phraseSnapshot?.notes.length&&!window.confirm("Replace your saved phrase with these reviewed audio notes?"))return false;
-    phraseViewExample=false;phraseViewModel=null;phraseViewSignature="";phraseInspectTime=0;phraseInspectSelected=false;selected.clear();resetMidiAudio();
+    phraseLoopDraft=null;phraseLoopDrag=null;phraseViewExample=false;phraseViewModel=null;phraseViewSignature="";phraseInspectTime=0;phraseInspectSelected=false;phraseInspectWindowStart=null;selected.clear();resetMidiAudio();
     if(!phraseEngine.importPhrase(payload))throw Error(phraseEngine.snapshot().error||"The phrase could not be imported.");
     return true;
   }});
@@ -2031,7 +2042,7 @@ document.getElementById("phraseImport").addEventListener("click",()=>{
   if(!phraseImporter||activeMode!=="phrase"||phraseTransportPending||["recording","record-countin"].includes(phraseSnapshot?.state))return;
   openPracticeDialog("phraseImportOverlay","phraseImport");phraseImporter.open();
 });
-function phraseAction(action){if(!phraseEngine)return;phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
+function phraseAction(action){if(!phraseEngine)return;cancelLoopDrag();phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
 document.getElementById("phraseRecord").addEventListener("click",()=>{
   if(!midiController?.isConnected()){trainingPrompt.textContent="Connect a MIDI keyboard in Settings before recording.";return;}
   if(phraseSnapshot?.notes.length&&!window.confirm("Replace the saved phrase with a new recording? An empty recording keeps the previous phrase."))return;
@@ -2049,20 +2060,42 @@ const phraseFields={phraseSourceBpm:["sourceBpm",1],phrasePlayBpm:["playBpm",1],
 for(const [id,[key,multiplier]]of Object.entries(phraseFields))document.getElementById(id).addEventListener("change",event=>phraseEngine?.setOptions({[key]:Number(event.target.value)*multiplier}));
 document.getElementById("phraseRhythm").addEventListener("change",event=>phraseEngine?.setOptions({rhythm:event.target.value==="rhythm"}));
 document.getElementById("phraseFull").addEventListener("click",()=>phraseEngine?.setOptions({sectionStart:0,sectionEnd:phraseSnapshot?.duration||120000}));
-document.getElementById("phraseClear").addEventListener("click",()=>{if(window.confirm("Delete the saved phrase from this browser?")){selected.clear();phraseSeenLow=21;phraseSeenHigh=108;phraseViewExample=false;phraseEngine?.clear();}});
+function deleteSavedPhrase(){
+  if(!window.confirm("Delete the saved phrase from this browser?"))return;
+  phraseLoopDraft=null;phraseLoopDrag=null;phraseStaffDrag=null;phraseInspectTime=0;phraseInspectSelected=false;phraseInspectWindowStart=null;phraseViewModel=null;phraseViewSignature="";
+  selected.clear();phraseSeenLow=21;phraseSeenHigh=108;phraseViewExample=false;phraseEngine?.clear();
+}
+for(const id of ["phraseClear","phraseDelete"])document.getElementById(id).addEventListener("click",deleteSavedPhrase);
 let phraseTaps=[];
 document.getElementById("phraseTap").addEventListener("click",()=>{const now=Date.now();if(phraseTaps.length&&now-phraseTaps.at(-1)>2000)phraseTaps=[];phraseTaps.push(now);phraseTaps=phraseTaps.slice(-5);if(phraseTaps.length<2)return;const bpm=Math.round(60000*(phraseTaps.length-1)/(phraseTaps.at(-1)-phraseTaps[0]));if(bpm>=30&&bpm<=300)phraseEngine?.setOptions({sourceBpm:bpm,playBpm:bpm});});
 
-// Timing is non-destructive: only the playback/practice tempo changes.
-function setPhraseTimingOpen(open){
-  phraseTimingOpen=open;if(!open){phraseDialDrag=null;phraseDialLastTap=null;}refreshPhraseTiming();
+function refreshPhraseForgiveness(preview=false){
+  const s=phraseSnapshot;if(!s)return;const o=s.options,range=document.getElementById("phraseForgiveness"),toggle=document.getElementById("phraseRhythmToggle");
+  const disabled=!s.notes.length||phraseTransportPending||phraseViewExample||["recording","record-countin"].includes(s.state);
+  if(disabled)phraseForgivenessPreview=null;
+  else if(preview)phraseForgivenessPreview=Math.max(80,Math.min(1000,Math.round(Number(range.value))));
+  if(phraseForgivenessPreview===null)range.value=String(o.tolerance);
+  const value=phraseForgivenessPreview??o.tolerance;
+  const chord=Math.max(180,value,80*o.sourceBpm/o.playBpm),text=o.rhythm?"±"+Number(value.toFixed(1))+" ms":"Chords "+Number(chord.toFixed(1))+" ms";
+  document.getElementById("phraseForgivenessValue").textContent=text;range.setAttribute("aria-valuetext",o.rhythm?value+" milliseconds early or late after count-in":chord+" milliseconds to complete a chord; single notes have no onset deadline");
+  toggle.checked=o.rhythm;range.disabled=toggle.disabled=disabled;
 }
+const phraseForgiveness=document.getElementById("phraseForgiveness");
+phraseForgiveness.addEventListener("input",()=>refreshPhraseForgiveness(true));
+phraseForgiveness.addEventListener("change",()=>{
+  if(phraseForgiveness.disabled||activeMode!=="phrase"||currentDialog||document.hidden)return;
+  const value=Math.max(80,Math.min(1000,Math.round(Number(phraseForgiveness.value))));phraseForgivenessPreview=null;cancelLoopDrag();
+  if(Number.isFinite(value)&&value!==phraseSnapshot.options.tolerance)phraseEngine.setOptions({tolerance:value});
+  phraseForgiveness.value=String(phraseSnapshot.options.tolerance);refreshPhraseForgiveness();
+});
+phraseForgiveness.addEventListener("blur",()=>{phraseForgivenessPreview=null;phraseForgiveness.value=String(phraseSnapshot.options.tolerance);refreshPhraseForgiveness();});
+for(const name of ["pointercancel","keydown"])phraseForgiveness.addEventListener(name,event=>{if(name==="keydown"&&event.key!=="Escape")return;phraseForgivenessPreview=null;phraseForgiveness.value=String(phraseSnapshot.options.tolerance);refreshPhraseForgiveness();});
+document.getElementById("phraseRhythmToggle").addEventListener("change",event=>{if(!event.target.disabled){cancelLoopDrag();if(event.target.checked!==phraseSnapshot.options.rhythm)phraseEngine.setOptions({rhythm:event.target.checked});}});
+
+// Timing is non-destructive: only the playback/practice tempo changes.
 function refreshPhraseTiming(){
   const s=phraseSnapshot;if(!s)return;const o=s.options,has=s.notes.length>0;
   const disabled=!has||Math.min(s.duration,o.sectionEnd)<=o.sectionStart||phraseTransportPending||["recording","record-countin"].includes(s.state)||phraseViewExample;
-  document.getElementById("phraseTimingEditor").hidden=!phraseTimingOpen;
-  document.getElementById("phraseScore").classList.toggle("timingExpanded",phraseTimingOpen);
-  for(const id of ["phraseTimingToggle","phraseStaff"])document.getElementById(id).setAttribute("aria-expanded",String(phraseTimingOpen));
   const dial=document.getElementById("phraseTimingDial"),speed=o.playBpm/o.sourceBpm*100,min=30/o.sourceBpm*100,max=300/o.sourceBpm*100,percent=Number(speed.toFixed(1));
   dial.setAttribute("aria-valuemin",String(min));dial.setAttribute("aria-valuemax",String(max));dial.setAttribute("aria-valuenow",String(speed));
   dial.setAttribute("aria-valuetext",speed===100?"Normal speed":percent+" percent speed, "+(speed<100?"slower":"faster"));dial.setAttribute("aria-disabled",String(disabled));dial.tabIndex=disabled?-1:0;
@@ -2072,15 +2105,12 @@ function refreshPhraseTiming(){
   document.getElementById("phraseTimingError").textContent=s.error||"";
 }
 function applyPhraseSpeed(percent){
-  const dial=document.getElementById("phraseTimingDial");if(activeMode!=="phrase"||currentDialog||document.hidden||!phraseTimingOpen||dial.getAttribute("aria-disabled")==="true"||!Number.isFinite(percent))return;
+  const dial=document.getElementById("phraseTimingDial");if(activeMode!=="phrase"||currentDialog||document.hidden||dial.getAttribute("aria-disabled")==="true"||!Number.isFinite(percent))return;
   const o=phraseSnapshot.options,min=30/o.sourceBpm*100,max=300/o.sourceBpm*100;
-  const speed=Math.max(min,Math.min(max,percent)),bpm=Math.max(30,Math.min(300,speed*o.sourceBpm/100));
+  cancelLoopDrag();const speed=Math.max(min,Math.min(max,percent)),bpm=Math.max(30,Math.min(300,speed*o.sourceBpm/100));
   if(Math.abs(bpm-o.playBpm)<1e-8)return;
   phraseEngine?.setOptions({playBpm:bpm});
 }
-document.getElementById("phraseTimingToggle").addEventListener("click",()=>setPhraseTimingOpen(!phraseTimingOpen));
-document.getElementById("phraseTimingClose").addEventListener("click",()=>{setPhraseTimingOpen(false);document.getElementById("phraseTimingToggle").focus();});
-document.getElementById("phraseTimingEditor").addEventListener("keydown",event=>{if(event.key==="Escape"){event.stopPropagation();setPhraseTimingOpen(false);document.getElementById("phraseTimingToggle").focus();}});
 const phraseTimingDial=document.getElementById("phraseTimingDial");let phraseDialDrag=null,phraseDialLastTap=null;
 phraseTimingDial.addEventListener("keydown",event=>{
   if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Home","End","Enter"].includes(event.key))return;
@@ -2104,29 +2134,131 @@ phraseTimingDial.addEventListener("pointerup",event=>{
   phraseDialDrag=null;
 });
 for(const name of ["pointercancel","lostpointercapture"])phraseTimingDial.addEventListener(name,event=>{if(phraseDialDrag?.id===event.pointerId){phraseDialDrag=null;phraseDialLastTap=null;}});
-function canInspectPhrase(){return phraseSnapshot&&["idle","complete"].includes(phraseSnapshot.state)&&!phraseTransportPending;}
-function inspectPhraseTime(time){
-  if(!canInspectPhrase())return;
-  phraseInspectTime=Math.max(0,Math.min(phraseViewModel?.duration||0,time));phraseInspectSelected=true;renderPhraseView();
+function canInspectPhrase(){return activeMode==="phrase"&&phraseSnapshot&&["idle","complete"].includes(phraseSnapshot.state)&&!phraseTransportPending;}
+function inspectPhraseTime(time,windowStart){
+  if(currentDialog||document.hidden||!canInspectPhrase()||!Number.isFinite(time))return;
+  const duration=phraseViewModel?.duration||0,next=Math.max(0,Math.min(duration,time)),limit=Math.max(0,duration-phraseViewWindow);
+  let start=Number.isFinite(windowStart)?windowStart:phraseInspectWindowStart;
+  if(!Number.isFinite(start)){const svg=document.querySelector("#phraseStaff .phraseTimelineStaffSVG");start=svg?Number(svg.dataset.timeStart):0;}
+  if(next<start||next>start+phraseViewWindow)start=next-phraseViewWindow/4;
+  phraseInspectWindowStart=Math.max(0,Math.min(limit,start));
+  phraseInspectTime=next;phraseInspectSelected=true;renderPhraseView();
 }
-const phraseStaff=document.getElementById("phraseStaff");
-phraseStaff.addEventListener("click",event=>{
-  setPhraseTimingOpen(true);if(!canInspectPhrase())return;
-  const note=event.target.closest?.(".staffTimelineNote");
-  if(note){inspectPhraseTime(Number(note.dataset.start));return;}
-  const svg=phraseStaff.querySelector(".phraseTimelineStaffSVG");if(!svg)return;
-  const bounds=svg.getBoundingClientRect(),box=svg.getAttribute("viewBox").split(" ").map(Number);
-  if(bounds.width<=0)return;
-  // SVG geometry carries the exact source window, even when dense chords expand its viewBox.
-  const x=box[0]+(event.clientX-bounds.left)/bounds.width*box[2];
+const phraseStaff=document.getElementById("phraseStaff");let phraseStaffDrag=null,phraseStaffSuppressClick=false;
+// Capture coordinates before rendering; noteheads, labels and empty space all use the same timeline.
+function staffPointMapper(){
+  const svg=phraseStaff.querySelector(".phraseTimelineStaffSVG");if(!svg)return null;
   const start=Number(svg.dataset.timeStart),end=Number(svg.dataset.timeEnd),left=Number(svg.dataset.timeLeft),right=Number(svg.dataset.timeRight);
-  inspectPhraseTime(start+(x-left)/(right-left)*(end-start));
+  if(![start,end,left,right].every(Number.isFinite)||end<=start||right<=left)return null;
+  let toX;const matrix=svg.getScreenCTM?.();
+  if(matrix){
+    const {a,b,c,d,e,f}=matrix,det=a*d-b*c;
+    if(![a,b,c,d,e,f,det].every(Number.isFinite)||Math.abs(det)<1e-12)return null;
+    toX=(x,y)=>(d*(x-e)-c*(y-f))/det;
+  }else{
+    // Fallback for SVG implementations without getScreenCTM, including DOM-only tests.
+    const bounds=svg.getBoundingClientRect(),box=svg.getAttribute("viewBox").trim().split(/[ ,]+/).map(Number);
+    if(box.length!==4||!box.every(Number.isFinite)||box[2]<=0||box[3]<=0||bounds.width<=0)return null;
+    let sx=bounds.width/box[2],sy=bounds.height>0?bounds.height/box[3]:sx,ox=0;
+    const aspect=svg.getAttribute("preserveAspectRatio")||"xMidYMid meet";
+    if(!aspect.includes("none")){const scale=aspect.includes("slice")?Math.max(sx,sy):Math.min(sx,sy);ox=(bounds.width-box[2]*scale)*(aspect.includes("xMin")?0:aspect.includes("xMax")?1:.5);sx=scale;}
+    toX=x=>box[0]+(x-bounds.left-ox)/sx;
+  }
+  return {start,time:(x,y)=>start+(toX(x,y)-left)/(right-left)*(end-start)};
+}
+function inspectStaffPoint(event,mapper=staffPointMapper()){
+  if(mapper&&Number.isFinite(event.clientX)&&Number.isFinite(event.clientY))inspectPhraseTime(mapper.time(event.clientX,event.clientY),mapper.start);
+}
+function loopBounds(){
+  const s=phraseSnapshot||{},o=s.options||{},duration=s.duration||0,gap=Math.ceil(50*(o.playBpm||120)/(o.sourceBpm||120));
+  return {start:Math.max(0,Math.min(duration,phraseLoopDraft?.start??o.sectionStart??0)),end:Math.max(0,Math.min(duration,phraseLoopDraft?.end??o.sectionEnd??duration)),duration,gap};
+}
+function canEditLoop(){return activeMode==="phrase"&&!currentDialog&&!document.hidden&&phraseSnapshot?.notes.length&&!phraseViewExample&&!phraseTransportPending&&!["recording","record-countin"].includes(phraseSnapshot.state);}
+function clampLoopPoint(bound,time,range=loopBounds()){
+  if(!Number.isFinite(time)||range.duration<range.gap)return null;
+  return bound==="start"?Math.max(0,Math.min(range.end-range.gap,time)):Math.min(range.duration,Math.max(range.start+range.gap,time));
+}
+function refreshPhraseLoop(){
+  const r=loopBounds(),enabled=!!canEditLoop()&&r.duration>=r.gap;
+  for(const bound of ["start","end"]){
+    const cap=bound==="start"?"Start":"End",field=document.getElementById("phraseLoop"+cap),handle=document.getElementById("phraseLoop"+cap+"Handle"),min=bound==="start"?0:r.start+r.gap,max=bound==="start"?Math.max(0,r.end-r.gap):r.duration;
+    if(document.activeElement!==field)field.value=String(Number((r[bound]/1000).toFixed(6)));
+    field.min=String(min/1000);field.max=String(max/1000);field.disabled=!enabled;handle.disabled=!enabled;
+    handle.setAttribute("aria-valuemin",String(min/1000));handle.setAttribute("aria-valuemax",String(max/1000));handle.setAttribute("aria-valuenow",String(r[bound]/1000));handle.setAttribute("aria-valuetext",(r[bound]/1000).toFixed(3)+" seconds");
+  }
+  document.getElementById("phraseLoopReset").disabled=!canEditLoop();
+  document.getElementById("phraseLoopStatus").textContent=phraseViewExample?"Example only":!phraseSnapshot?.notes.length?"":r.end-r.start<r.gap?"Too short at this speed. Slow down or expand the loop.":"";
+  positionLoopHandles();
+}
+function positionLoopHandles(){
+  const svg=phraseStaff.querySelector(".phraseTimelineStaffSVG"),r=loopBounds(),panel=document.getElementById("phraseScore"),bounds=phraseStaff.getBoundingClientRect(),parent=panel.getBoundingClientRect();
+  for(const bound of ["start","end"]){
+    const handle=document.getElementById("phraseLoop"+(bound==="start"?"Start":"End")+"Handle");
+    if(!svg||panel.hidden||!canEditLoop()||bounds.width<=0||r.duration<r.gap){handle.hidden=true;continue;}
+    const begin=Number(svg.dataset.timeStart),end=Number(svg.dataset.timeEnd);if(r[bound]<begin||r[bound]>end){handle.hidden=true;continue;}
+    const x=Number(svg.dataset.timeLeft)+(r[bound]-begin)/(end-begin)*(Number(svg.dataset.timeRight)-Number(svg.dataset.timeLeft)),m=svg.getScreenCTM?.(),vb=svg.getAttribute("viewBox").split(/[ ,]+/).map(Number),box=svg.getBoundingClientRect();
+    const scale=Math.min(box.width/vb[2],box.height>0?box.height/vb[3]:box.width/vb[2]),px=m?m.a*x+m.c*vb[1]+m.e:box.left+(box.width-vb[2]*scale)/2+(x-vb[0])*scale;
+    if(!Number.isFinite(px)||px<bounds.left||px>bounds.right){handle.hidden=true;continue;}
+    handle.style.left=(px-parent.left)+"px";handle.style.top=((bound==="start"?bounds.top+2:bounds.bottom-46)-parent.top)+"px";handle.hidden=false;
+  }
+}
+function commitLoopPoint(bound,time,reveal=false){
+  if(!canEditLoop())return;const r=loopBounds(),value=clampLoopPoint(bound,time,r);if(value===null){refreshPhraseLoop();return;}
+  if(Math.abs(value-r[bound])<1e-8){refreshPhraseLoop();return;}
+  if(reveal){const begin=Number(phraseStaff.querySelector(".phraseTimelineStaffSVG")?.dataset.timeStart)||0;if(value<begin||value>begin+phraseViewWindow)phraseInspectWindowStart=Math.max(0,Math.min(Math.max(0,r.duration-phraseViewWindow),value-phraseViewWindow/2));}
+  phraseEngine.setOptions({sectionStart:bound==="start"?value:r.start,sectionEnd:bound==="end"?value:r.end});
+}
+function cancelLoopDrag(){if(!phraseLoopDrag&&!phraseLoopDraft)return;phraseLoopDrag=null;phraseLoopDraft=null;renderPhraseView();}
+for(const bound of ["start","end"]){
+  const cap=bound==="start"?"Start":"End",field=document.getElementById("phraseLoop"+cap),handle=document.getElementById("phraseLoop"+cap+"Handle");
+  field.addEventListener("change",()=>{const value=field.value.trim()===""?NaN:Number(field.value)*1000;commitLoopPoint(bound,value);field.value=String(Number((loopBounds()[bound]/1000).toFixed(6)));});
+  handle.addEventListener("keydown",event=>{
+    if(event.key==="Escape"){event.preventDefault();cancelLoopDrag();return;}
+    if(!["ArrowLeft","ArrowDown","ArrowRight","ArrowUp","PageUp","PageDown","Home","End"].includes(event.key))return;
+    event.preventDefault();const r=loopBounds(),step=event.key.startsWith("Page")?100:event.shiftKey?1:10;
+    commitLoopPoint(bound,event.key==="Home"?0:event.key==="End"?r.duration:r[bound]+(["ArrowLeft","ArrowDown","PageDown"].includes(event.key)?-step:step),true);
+  });
+  handle.addEventListener("pointerdown",event=>{
+    if(event.button!==0||event.isPrimary===false||phraseLoopDrag||!canEditLoop())return;
+    const mapper=staffPointMapper(),r=loopBounds();if(!mapper||r.duration<r.gap)return;
+    event.preventDefault();handle.focus({preventScroll:true});phraseLoopDrag={id:event.pointerId,bound,mapper,initialX:event.clientX,initialTime:r[bound]};handle.setPointerCapture?.(event.pointerId);
+  });
+  const updateDrag=event=>{
+    if(phraseLoopDrag?.id!==event.pointerId||phraseLoopDrag.bound!==bound)return;
+    const drag=phraseLoopDrag,r=loopBounds(),time=drag.initialTime+drag.mapper.time(event.clientX,event.clientY)-drag.mapper.time(drag.initialX,event.clientY),value=clampLoopPoint(bound,time,r);
+    if(value===null||Math.abs(value-r[bound])<1e-8)return;
+    phraseLoopDraft={start:r.start,end:r.end,[bound]:value};phraseInspectWindowStart=drag.mapper.start;
+    if(!["idle","complete"].includes(phraseSnapshot.state)){phraseInspectTime=Number(document.getElementById("phraseViewTime").value)*1000;phraseInspectSelected=true;phraseEngine.stop();}
+    renderPhraseView();
+  };
+  handle.addEventListener("pointermove",updateDrag);
+  handle.addEventListener("pointerup",event=>{
+    if(phraseLoopDrag?.id!==event.pointerId||phraseLoopDrag.bound!==bound)return;
+    updateDrag(event);const draft=phraseLoopDraft;phraseLoopDrag=null;phraseLoopDraft=null;
+    if(draft&&(Math.abs(draft.start-phraseSnapshot.options.sectionStart)>1e-8||Math.abs(draft.end-Math.min(phraseSnapshot.duration,phraseSnapshot.options.sectionEnd))>1e-8))phraseEngine.setOptions({sectionStart:draft.start,sectionEnd:draft.end});else renderPhraseView();
+  });
+  for(const name of ["pointercancel","lostpointercapture"])handle.addEventListener(name,event=>{if(phraseLoopDrag?.id===event.pointerId)cancelLoopDrag();});
+}
+document.getElementById("phraseLoopReset").addEventListener("click",()=>{if(canEditLoop()){const r=loopBounds();phraseLoopDraft=null;phraseLoopDrag=null;if(r.start!==0||r.end!==r.duration)phraseEngine.setOptions({sectionStart:0,sectionEnd:phraseSnapshot.duration});else refreshPhraseLoop();}});
+phraseStaff.addEventListener("pointerdown",event=>{
+  phraseStaffSuppressClick=false;
+  // Touch keeps native scrolling; its completed tap is handled by click.
+  if(event.pointerType==="touch"||event.button!==0||event.isPrimary===false||phraseStaffDrag||currentDialog||document.hidden||!canInspectPhrase())return;
+  const mapper=staffPointMapper();if(!mapper)return;
+  event.preventDefault();phraseStaff.focus({preventScroll:true});phraseStaffDrag={id:event.pointerId,mapper};phraseStaff.setPointerCapture?.(event.pointerId);inspectStaffPoint(event,mapper);
+});
+phraseStaff.addEventListener("pointermove",event=>{if(phraseStaffDrag?.id===event.pointerId)inspectStaffPoint(event,phraseStaffDrag.mapper);});
+phraseStaff.addEventListener("pointerup",event=>{if(phraseStaffDrag?.id!==event.pointerId)return;inspectStaffPoint(event,phraseStaffDrag.mapper);phraseStaffDrag=null;phraseStaffSuppressClick=true;});
+for(const name of ["pointercancel","lostpointercapture","scroll"])phraseStaff.addEventListener(name,()=>{phraseStaffDrag=null;if(name==="scroll"){cancelLoopDrag();positionLoopHandles();}});
+phraseStaff.addEventListener("click",event=>{
+  if(phraseStaffSuppressClick){phraseStaffSuppressClick=false;return;}
+  if(event.detail===0){inspectPhraseTime(phraseInspectTime);return;}
+  inspectStaffPoint(event);
 });
 phraseStaff.addEventListener("keydown",event=>{
-  if(["Enter"," ","ArrowLeft","ArrowRight","Home","End"].includes(event.key)){
-    event.preventDefault();setPhraseTimingOpen(true);if(!canInspectPhrase())return;
-    const step=event.shiftKey?1000:100;
-    inspectPhraseTime(event.key==="Home"?0:event.key==="End"?phraseViewModel?.duration||0:phraseInspectTime+(event.key==="ArrowLeft"?-step:event.key==="ArrowRight"?step:0));
+  if(["Enter"," ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(event.key)){
+    event.preventDefault();const step=event.altKey?1:event.shiftKey?1000:100;
+    inspectPhraseTime(event.key==="Home"?0:event.key==="End"?phraseViewModel?.duration||0:phraseInspectTime+(["ArrowLeft","ArrowDown"].includes(event.key)?-step:["ArrowRight","ArrowUp"].includes(event.key)?step:0));
   }
 });
 // Display/inspection never change raw notes, transport, grading or audio.
@@ -2181,12 +2313,15 @@ function renderPhraseViewContent(){
   const inspectHeld=new Set(inspecting?held.map(n=>n.midi):[]),inspectTails=new Set(inspecting?model.notes.filter(n=>n.start<=time&&n.keyEnd<=time&&n.soundEnd>time).map(n=>n.midi):[]);
   for(const key of piano.querySelectorAll(".key")){const midi=Number(key.dataset.midi),on=highlighted.has(midi),heldAtPoint=inspectHeld.has(midi),pedalAtPoint=!heldAtPoint&&inspectTails.has(midi);key.classList.toggle("phrasePlaying",on);key.classList.toggle("phraseInspectKey",heldAtPoint);key.classList.toggle("phraseInspectTail",pedalAtPoint);if(key.title)key.setAttribute("aria-label",key.title+(on?(playing?(imported?" · playing estimated note":" · playing, key held"):" · live key held"):heldAtPoint?(imported?" · inspected estimated note":" · inspected time, key held"):pedalAtPoint?" · inspected time, pedal sustain only":""));}
   if(show){
-    const width=Math.max(320,panel.clientWidth||800),start=Math.max(0,time-phraseViewWindow/4),end=Math.min(Math.max(source.duration,phraseViewWindow),start+phraseViewWindow);
-    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames,inspecting}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
+    const width=Math.max(320,panel.clientWidth||800),inspectable=canInspectPhrase(),limit=Math.max(0,source.duration-phraseViewWindow);
+    const start=Math.max(0,Math.min(limit,inspectable&&Number.isFinite(phraseInspectWindowStart)?phraseInspectWindowStart:time-phraseViewWindow/4)),end=start+phraseViewWindow;
+    if(inspectable)phraseInspectWindowStart=start;
+    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames,inspecting,includeContinuations:inspectable,loopStart:phraseViewExample?undefined:loopBounds().start,loopEnd:phraseViewExample?undefined:loopBounds().end}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
     const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
     document.getElementById("phrasePitchText").setAttribute("aria-live",inspecting?"polite":"off");
     document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":inspecting?(imported?"Selected time, estimated notes: ":"Selected time, keys held: "):"At cursor: ")+(names.join(" · ")||(imported?"No estimated notes active":"No keys held"))+([...inspectTails].some(n=>!inspectHeld.has(n))?". Pedal only: "+[...inspectTails].filter(n=>!inspectHeld.has(n)).map(n=>view.pitch(n,phraseViewSpelling).name).join(" · "):"")+". C4 = middle C.";
     document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,names:phraseViewNames,spelling:phraseViewSpelling});
+    phraseStaff.setAttribute("aria-valuemax",String(source.duration/1000));phraseStaff.setAttribute("aria-valuenow",String(time/1000));phraseStaff.setAttribute("aria-valuetext",(time/1000).toFixed(3)+" seconds");phraseStaff.setAttribute("aria-disabled",String(!inspectable||!source.notes.length));phraseStaff.tabIndex=inspectable&&source.notes.length?0:-1;
     const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=!canInspectPhrase()||!source.notes.length;
     document.getElementById("phraseViewTimeLabel").textContent=(time/1000).toFixed(2)+" s";
     const cc=new Map((source.initialControllers||[]).map(c=>[c.channel+":"+c.controller,c.value]));
@@ -2195,7 +2330,7 @@ function renderPhraseViewContent(){
     const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; loop ends at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
     document.getElementById("phraseControllerText").textContent=sectionContext+(imported?"Estimated note durations from audio. No pedal data; neutral playback velocity. Tempo is not detected.":channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
   }
-  refreshPhraseTiming();refreshTransportShortcuts();
+  refreshPhraseTiming();refreshPhraseForgiveness();refreshPhraseLoop();refreshTransportShortcuts();
   if((playing||recording||(s.state==="practice"&&s.options.rhythm))&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
 }
 for(const [id,apply]of[
@@ -2207,9 +2342,9 @@ document.getElementById("phraseViewSwitch").addEventListener("click",()=>{const 
 document.getElementById("phraseViewTime").addEventListener("input",event=>{inspectPhraseTime(Number(event.target.value)*1000);});
 
 function phraseDisplayName(midi,withOctave=true){const name=window.KeyMemoryPhraseView?window.KeyMemoryPhraseView.pitch(midi,phraseViewSpelling).name.replace("#","♯").replace(/([A-G])b/,"$1♭"):noteName(midi)+(Math.floor(midi/12)-1);return withOctave?name:name.replace(/-?\d+$/,"");}
-document.getElementById("phraseViewWindow").addEventListener("change",event=>{phraseViewWindow=Number(event.target.value);renderPhraseView();});
+document.getElementById("phraseViewWindow").addEventListener("change",event=>{cancelLoopDrag();phraseViewWindow=Number(event.target.value);phraseInspectWindowStart=null;phraseStaffDrag=null;renderPhraseView();});
 
-document.getElementById("phraseViewExample").addEventListener("click",()=>{phraseViewExample=!phraseViewExample;phraseInspectTime=0;phraseViewVisibility="show";phraseSmallScore=true;renderPhraseView();});
+document.getElementById("phraseViewExample").addEventListener("click",()=>{phraseLoopDraft=null;phraseLoopDrag=null;phraseViewExample=!phraseViewExample;phraseInspectTime=0;phraseInspectSelected=false;phraseInspectWindowStart=null;phraseStaffDrag=null;phraseViewVisibility="show";phraseSmallScore=true;renderPhraseView();});
 
 // Backgrounding cancels voices and pending live requests without changing mute preference.
 window.addEventListener("blur",()=>{stopBuilderAudio();resetMidiAudio();silencePhrase(false);});
@@ -2218,4 +2353,7 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden){stopBuilde
 for(const id of ["closeSettings","openModes"]){document.getElementById(id)?.addEventListener("click",()=>midiTransport?.cancelLearn());}
 
 // Hidden piano containers do not resize-observe while Score is visible.
-window.addEventListener("resize",()=>{if(activeMode==="phrase")renderPhraseView();});
+window.addEventListener("resize",()=>{cancelLoopDrag();phraseStaffDrag=null;phraseDialDrag=null;if(activeMode==="phrase")renderPhraseView();});
+window.addEventListener("blur",()=>{cancelLoopDrag();phraseStaffDrag=null;phraseStaffSuppressClick=false;phraseDialDrag=null;phraseDialLastTap=null;});
+
+document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelLoopDrag();phraseStaffDrag=null;phraseDialDrag=null;}});

@@ -70,7 +70,7 @@ window.KeyMemoryPhrase={create(config={}){
     const keys=new Set();for(const c of data.initialControllers){if(!validControl(c)||keys.has(c.channel+':'+c.controller))throw Error();keys.add(c.channel+':'+c.controller);loadedBaseline[ccIndex(c.channel,c.controller)]={controller:c.controller,value:c.value,channel:c.channel};}
     for(const c of data.controllers){if(!validControl(c)||!finite(c.time)||c.time<0||c.time>data.duration)throw Error();loadedControls.push({controller:c.controller,value:c.value,channel:c.channel,time:c.time});}loadedControls.sort((a,b)=>a.time-b.time);
    }
-   halt();controllers=loadedControls;initialControllers=loadedBaseline;notes=data.notes.map(n=>({note:n.note,velocity:n.velocity,channel:n.channel,start:n.start,duration:n.duration})).sort((a,b)=>a.start-b.start);duration=data.duration;origin=data.origin??'midi';options.sourceBpm=data.sourceBpm;options.playBpm=data.sourceBpm;options.sectionEnd=duration||MAX;if(data.options){const o=data.options;if(validOptions(o)&&!notes.some(n=>n.note+o.transpose<0||n.note+o.transpose>127))options={...options,...o};}saved=true;state='idle';error='';emit();return true;
+   halt();controllers=loadedControls;initialControllers=loadedBaseline;notes=data.notes.map(n=>({note:n.note,velocity:n.velocity,channel:n.channel,start:n.start,duration:n.duration})).sort((a,b)=>a.start-b.start);duration=data.duration;origin=data.origin??'midi';options.sourceBpm=data.sourceBpm;options.playBpm=data.sourceBpm;options.sectionEnd=duration||MAX;if(data.options){const o=data.options;if(validOptions(o)&&!notes.some(n=>n.note+o.transpose<0||n.note+o.transpose>127))options={...options,...o};}if(!notes.length)options={...options,transpose:0,sectionStart:0,sectionEnd:duration||MAX};saved=true;state='idle';error='';if(!notes.length)persist();emit();return true;
   }catch{error='Saved phrase could not be read. You can record a new phrase.';emit();return false;}
  }
  function finishRecording(){
@@ -138,6 +138,7 @@ window.KeyMemoryPhrase={create(config={}){
   if(Object.keys(patch).length===1&&Object.hasOwn(patch,'metronome'))return setMetronome(patch.metronome);
   const next={...options,...patch};
   if(!validOptions(next)){error='Use BPM 30–300, transpose ±48, tolerance 80–1000 ms, and a valid section.';emit();return false;}
+  if(!notes.length)next.transpose=0;
   if(notes.some(n=>n.note+next.transpose<0||n.note+next.transpose>127)){error='That transposition exceeds the MIDI keyboard range.';emit();return false;}
   if(state==='recording'||state==='record-countin'){error='Stop recording before changing phrase settings.';emit();return false;}
   halt();state='idle';options=next;error='';if(notes.length)persist();emit();return true;
@@ -224,6 +225,6 @@ window.KeyMemoryPhrase={create(config={}){
   if(progress>=groups.length){halt();state='complete';error='';emit();return true;}
   emit();lateGuard();return true;
  }
- function clear(){stop();notes=[];controllers=[];initialControllers=baseline();duration=0;origin='midi';groups=[];progress=0;error='';saved=false;try{storage?.removeItem(KEY);}catch{error='Could not remove the saved phrase from this browser.';}emit();return true;}
+ function clear(){stop();options={...options,transpose:0,sectionStart:0,sectionEnd:MAX};notes=[];controllers=[];initialControllers=baseline();duration=0;origin='midi';groups=[];progress=0;error='';saved=false;try{storage?.removeItem(KEY);}catch{error='Could not remove the saved phrase from this browser.';}emit();return true;}
  const api={record,stop,input,play,practice,setOptions,setMetronome,importPhrase,clear,snapshot,load};load();return api;
 }};

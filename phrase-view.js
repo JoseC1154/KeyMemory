@@ -122,7 +122,7 @@
   pitch(60,spelling);
   // Original onsets stay exact. Inspection includes left-edge continuation marks
   // for earlier sounding notes; pedal tails never become pressed keys.
-  const candidates=timeline.notes.filter(n=>(n.start>=start&&n.start<end)||(options.inspecting&&n.start<start&&n.start<=cursor&&n.soundEnd>cursor)),visible=candidates.slice(0,maxNotes).map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
+  const candidates=timeline.notes.filter(n=>(n.start>=start&&n.start<end)||((options.inspecting||options.includeContinuations)&&n.start<start&&n.soundEnd>start)),visible=candidates.slice(0,maxNotes).map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
   const left=80,right=64,plotW=width-left-right,x=t=>left+(t-start)/(end-start)*plotW;
   // Merge true unisons only: distinct channels/releases remain in the accessible title.
   const merged=new Map();
@@ -132,16 +132,22 @@
   let minX=0,maxX=width;
   for(const chord of chords.values()){
    const columns=[],onsetX=x(Math.max(start,chord[0].start)),direction=width-onsetX-64>=onsetX-28?1:-1;
-   const step=names||chord.some(n=>n.voices.length>1)?80:30;
    for(const n of [...chord].sort((a,b)=>a.y-b.y||a.midi-b.midi)){
-    let column=0;while(columns[column]?.some(y=>Math.abs(y-n.y)<20))column++;
-    (columns[column]||=[]).push(n.y);n.onsetX=onsetX;n.headX=onsetX+direction*column*step;
-    minX=Math.min(minX,n.headX-(n.start<start?40:28));maxX=Math.max(maxX,n.headX+(names?72:32));
+    let column=0;while(columns[column]?.some(y=>Math.abs(y-n.y)<10))column++;
+    (columns[column]||=[]).push(n.y);n.onsetX=onsetX;n.headX=onsetX;n.labelX=onsetX+direction*(11+column*72);n.labelAnchor=direction>0?'start':'end';n.accidentalX=onsetX-17-column*13;
+    minX=Math.min(minX,n.headX-(n.start<start?40:28),n.accidentalX-8);maxX=Math.max(maxX,n.headX+28);
+    if(names||n.voices.length>1){minX=Math.min(minX,n.labelX-(direction<0?64:0));maxX=Math.max(maxX,n.labelX+(direction>0?64:0));}
    }
   }
   const minY=Math.min(30,...visible.map(n=>n.y-22)),maxY=Math.max(205,...visible.map(n=>n.y+18)),height=maxY-minY+26;
-  const label=`Pitch timeline, not rhythmic notation. Exact onset times, ${(start/1000).toFixed(2)} to ${(end/1000).toFixed(2)} seconds. Offset heads connect to their exact onset markers. Unisons are grouped with voice counts. ${visible.length} notes shown${omitted?', '+omitted+' omitted in this dense window':''}.`;
+  const label=`Pitch timeline, not rhythmic notation. Exact onset times, ${(start/1000).toFixed(2)} to ${(end/1000).toFixed(2)} seconds. Noteheads mark exact onset times; labels may be offset for readability. Unisons are grouped with voice counts. ${visible.length} notes shown${omitted?', '+omitted+' omitted in this dense window':''}.`;
   let body=staffFrameSVG(width);
+  if(finite(options.loopStart)&&finite(options.loopEnd)&&options.loopEnd>options.loopStart){
+   const a=Math.max(left,Math.min(width-right,x(options.loopStart))),b=Math.max(left,Math.min(width-right,x(options.loopEnd)));
+   body+=`<g class="staffLoopRegion" aria-hidden="true"><rect x="${left}" y="${minY}" width="${Math.max(0,a-left)}" height="${height}" fill="#17251b" opacity=".08"/><rect x="${b}" y="${minY}" width="${Math.max(0,width-right-b)}" height="${height}" fill="#17251b" opacity=".08"/>`;
+   for(const [bound,time,color]of[['start',options.loopStart,'#087449'],['end',options.loopEnd,'#9b4b16']])if(time>=start&&time<=end)body+=`<line class="staffLoopBoundary" data-bound="${bound}" x1="${x(time)}" x2="${x(time)}" y1="${minY+12}" y2="${maxY+10}" stroke="${color}" stroke-width="2" stroke-dasharray="4 3"/>`;
+   body+='</g>';
+  }
   for(let i=0;i<=4;i++){
    const at=start+(end-start)*i/4,xx=x(at);
    body+=`<line class="staffTimeGuide" x1="${xx}" x2="${xx}" y1="${minY+15}" y2="${maxY}" stroke="currentColor" opacity=".1"/><text x="${xx}" y="${maxY+18}" text-anchor="${i===0?'start':i===4?'end':'middle'}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${(at/1000).toFixed(2)}s</text>`;
@@ -150,12 +156,12 @@
    const xx=n.headX,active=finite(cursor)&&n.voices.some(v=>cursor>=v.start&&cursor<v.keyEnd),tail=options.inspecting&&!active&&finite(cursor)&&n.voices.some(v=>cursor>=v.keyEnd&&cursor<v.soundEnd);
    const voiceLabel=n.voices.map(v=>`channel ${v.channel+1}, key release ${v.keyEnd}ms`).join('; ');
    body+=`<g class="staffTimelineNote${active?' keyActive':''}${options.inspecting&&active?' staffSelectedKey':tail?' staffSelectedTail':''}" data-note-id="${esc(n.id)}" data-note-ids="${esc(n.voices.map(v=>v.id).join(','))}" data-voice-count="${n.voices.length}" data-onset-x="${n.onsetX}" data-midi="${n.midi}" data-channel="${esc(n.channel)}" data-clef="${n.clef}" data-diatonic="${n.diatonic}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(n.name)}, ${n.clef} staff; onset ${n.start}ms; ${n.voices.length} voice${n.voices.length===1?'':'s'}: ${esc(voiceLabel)}</title>`;
-   if(xx!==n.onsetX)body+=`<line class="staffOnsetConnector" x1="${n.onsetX}" x2="${xx}" y1="${n.y}" y2="${n.y}" stroke="currentColor" stroke-dasharray="2 2" opacity=".45"/>`;
+   if((names||n.voices.length>1)&&Math.abs(n.labelX-xx)>12)body+=`<line class="staffLabelConnector" x1="${xx}" x2="${n.labelX}" y1="${n.y}" y2="${n.y}" stroke="currentColor" stroke-dasharray="2 2" opacity=".3"/>`;
    if(n.start<start)body+=`<text class="staffContinuation" x="${xx-34}" y="${n.y+3}" font-size="12" fill="currentColor"><title>Note began before this window at ${n.start}ms</title>←</text>`;
    body+=`<circle class="staffOnsetMarker" cx="${n.onsetX}" cy="${n.y}" r="1.8" fill="currentColor"/>`;
    for(const yy of n.ledger)body+=`<line class="ledger" x1="${xx-10}" x2="${xx+10}" y1="${yy}" y2="${yy}" stroke="currentColor"/>`;
-   body+=accidentalSVG(n.accidental,xx-17,n.y)+`<ellipse class="staffNoteHead" cx="${xx}" cy="${n.y}" rx="6" ry="4" transform="rotate(-15 ${xx} ${n.y})" fill="${active?'#8e2525':'currentColor'}"${active?' stroke="#8e2525" stroke-width="1.5"':''}/>`;
-   if(names||n.voices.length>1)body+=`<text x="${xx+11}" y="${n.y+3}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${names?esc(n.name):''}${n.voices.length>1?' ×'+n.voices.length:''}</text>`;
+   body+=accidentalSVG(n.accidental,n.accidentalX,n.y)+`<ellipse class="staffNoteHead" cx="${xx}" cy="${n.y}" rx="6" ry="4" transform="rotate(-15 ${xx} ${n.y})" fill="${active?'#8e2525':'currentColor'}"${active?' stroke="#8e2525" stroke-width="1.5"':''}/>`;
+   if(names||n.voices.length>1)body+=`<text class="staffNoteLabel" x="${n.labelX}" y="${n.y+3}" text-anchor="${n.labelAnchor}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">${names?esc(n.name):''}${n.voices.length>1?' ×'+n.voices.length:''}</text>`;
    body+='</g>';
   }
   if(finite(cursor)&&cursor>=start&&cursor<=end)body+=`<line class="staffTimelineCursor" x1="${x(cursor)}" x2="${x(cursor)}" y1="${minY+15}" y2="${maxY}" stroke="#8e2525" stroke-width="2"/>`;

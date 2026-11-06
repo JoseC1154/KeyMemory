@@ -47,7 +47,7 @@ for(const options of [{start:0,end:0},{start:NaN},{end:Infinity},{width:NaN},{ma
 assert.doesNotThrow(()=>svg(view.timelineStaffSVG(view.prepareTimeline({duration:0,notes:[]}))));
 console.log('PASS: timeline staff all128 sharp/flat pitches, literal clef/ledger anchors, exact fractional onsets/chord alignment/transposition, physical-key activity only, half-open windows/cursor, full-range bounds/accessibility, 10k source/400 rendered cap.');
 
-// Chromatic clusters retain true onset coordinates while displacing colliding glyphs.
+// Chromatic clusters retain true onset coordinates without displacing noteheads.
 const cluster=view.prepareTimeline({duration:1000,notes:[60,61,62,63,64,65,66,67,68,69,70,71].map(note=>({note,start:100.125,duration:100})).concat([{note:60,channel:1,start:100.125,duration:300}])});
 for(const spelling of ['sharp','flat'])for(const width of [240,800])for(const names of [true,false]){
  const d=svg(view.timelineStaffSVG(cluster,{width,spelling,names,cursor:250})),marks=[...d.querySelectorAll('.staffTimelineNote')],box=d.documentElement.getAttribute('viewBox').split(' ').map(Number);
@@ -56,16 +56,16 @@ for(const spelling of ['sharp','flat'])for(const width of [240,800])for(const na
  for(let i=0;i<marks.length;i++){
   const g=marks[i],head=g.querySelector('ellipse'),xx=+head.getAttribute('cx'),yy=+head.getAttribute('cy'),anchor=+g.getAttribute('data-onset-x');
   assert.equal(+g.querySelector('.staffOnsetMarker').getAttribute('cx'),anchor);assert(xx-24>=box[0]&&xx+24<=box[0]+box[2]);
-  if(xx!==anchor){assert(g.querySelector('.staffOnsetConnector'));assert.equal(+g.querySelector('.staffOnsetConnector').getAttribute('x1'),anchor);}
-  for(const other of marks.slice(i+1)){const oh=other.querySelector('ellipse');assert(Math.abs(xx- +oh.getAttribute('cx'))>=30||Math.abs(yy- +oh.getAttribute('cy'))>=20,'no simultaneous glyph collision');}
+  assert.equal(xx,anchor,'every notehead marks its exact onset; only labels may move');
+  const label=g.querySelector('.staffNoteLabel');if(label)for(const other of marks.slice(i+1)){const next=other.querySelector('.staffNoteLabel');if(next)assert(Math.abs(+label.getAttribute('x')- +next.getAttribute('x'))>=71.99999||Math.abs(+label.getAttribute('y')- +next.getAttribute('y'))>=10,'simultaneous labels remain legible');}
  }
 }
-console.log('PASS: sharp/flat chromatic clusters, exact onset markers/connectors, grouped channel unisons with counts/releases and narrow-view horizontal bounds.');
+console.log('PASS: sharp/flat chromatic clusters, exact noteheads and onset markers; offset labels, grouped channel unisons with counts/releases and narrow-view horizontal bounds.');
 // Silent inspection distinguishes held/pedal notes and retains earlier sounding notes.
 const long=view.prepareTimeline({duration:12000,notes:[{note:60,start:0,duration:11000},{note:64,start:300,duration:200},{note:64,start:1000,duration:1000}],controllers:[{channel:0,controller:64,value:127,time:400},{channel:0,controller:64,value:0,time:11000}]});
 doc=svg(view.timelineStaffSVG(long,{start:8500,end:12000,cursor:10000,inspecting:true,width:400}));
 assert.equal(doc.querySelectorAll('.staffSelectedKey').length,1);assert.equal(doc.querySelectorAll('.staffSelectedTail').length,2);assert.equal(doc.querySelectorAll('.staffContinuation').length,3);
 assert.deepEqual([...doc.querySelectorAll('.staffTimelineNote')].map(g=>Number(g.dataset.start)),[0,300,1000]);
-assert.equal(new Set([...doc.querySelectorAll('[data-midi="64"] .staffNoteHead')].map(x=>x.getAttribute('cx'))).size,2,'earlier same-pitch notes remain distinguishable at left edge');
+assert.equal(new Set([...doc.querySelectorAll('[data-midi="64"] .staffNoteHead')].map(x=>x.getAttribute('cx'))).size,1,'earlier same-pitch notes retain the exact continuation boundary');assert.equal(new Set([...doc.querySelectorAll('[data-midi="64"] .staffNoteLabel')].map(x=>x.getAttribute('x'))).size,2,'continuation labels distinguish earlier same-pitch notes');
 assert.equal(doc.documentElement.dataset.timeStart,'8500');assert.equal(doc.documentElement.dataset.timeRight,'336');
 console.log('PASS: inspection includes earlier held and pedal-only notes with separate continuation marks and unmodified source timestamps.');
