@@ -19,7 +19,7 @@ function advance(ms){const end=now+ms;for(;;){const pending=[...timers].filter((
 win.eval(fs.readFileSync(path.join(root,'app.js'),'utf8')+'\nwindow.activateMode=activateMode; window.renderPiano=renderPiano; window.testState = () => ({targetMidi,chordAnswer,activeMode,builderStep,builderTargets:[...builderTargets],builderNotes:[...builderNotes],semitoneAnswer,deadline,countdown,builderPhase,dictionaryVoicing:[...dictionaryVoicing],dictionaryTimedOut,selected:[...selected]});');
 const level=win.document.getElementById('builderLevel');level.value='sevenths';
 const state=()=>win.testState();
-const key=m=>win.document.querySelector(`[data-midi="${m}"]`);
+const key=m=>win.document.querySelector(`.key[data-midi="${m}"]`);
 const press=m=>key(m).click();
 const next=win.document.getElementById('nextChallenge');
 const timer=win.document.getElementById('timerEnabled');

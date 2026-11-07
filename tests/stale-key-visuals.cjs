@@ -22,7 +22,7 @@ function setup(saved,prefs){
  async function connect(){click('connectMidi');await flush();}
  return{w,d,el,click,change,send,off,advance,connect,port,access,sounds,controls,oscillators,cc:(controller,value,channel=0)=>send(controller,value,channel,0xb0),mode:m=>w.phraseTest.mode(m),get:()=>w.phraseTest.get(),snapshot:()=>engine.snapshot(),transportTimers:()=>[...timers].filter(([,v])=>v.fn.name!=='renderPhraseView').map(([id,v])=>({id,time:v.time,repeat:v.repeat})),now:()=>now,close:()=>w.close()};
 }
-const key=(h,n)=>h.d.querySelector(`[data-midi="${n}"]`);
+const key=(h,n)=>h.d.querySelector(`.key[data-midi="${n}"]`);
 const transient=(h,n)=>['midiKeyDown','phrasePlaying','phraseLive','selected'].filter(c=>key(h,n)?.classList.contains(c));
 (async()=>{
  for(const recording of [false,true])for(const [open,close]of [['openSettings','closeSettings'],['openHint','closeHint'],['openModes','closeModes']]){

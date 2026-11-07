@@ -1,0 +1,41 @@
+// Deterministic loop scheduler tests. No physical MIDI or audible-audio claims.
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const code=fs.readFileSync(path.join(__dirname,'..','phrase.js'),'utf8');
+const plain=x=>JSON.parse(JSON.stringify(x));
+function setup({duration=400,notes=[{note:60,velocity:90,channel:0,start:75,duration:100}],controllers=[],initialControllers,options={}}={}){
+ let time=0,id=0,silences=0;const timers=new Map(),sounds=[],controls=[],beats=[],changes=[];
+ const baseline=initialControllers||Array.from({length:16},(_,channel)=>[7,11,64].map(controller=>({channel,controller,value:controller===7?100:controller===11?127:0}))).flat();
+ const payload={version:2,duration,notes,controllers,initialControllers:baseline,sourceBpm:120,options:{metronome:true,sourceBpm:120,playBpm:120,transpose:0,rhythm:false,tolerance:200,sectionStart:0,sectionEnd:duration,...options}};
+ const storage={value:JSON.stringify(payload),getItem(){return this.value;},setItem(k,v){this.value=v;},removeItem(){this.value=null;}};
+ const context={window:{},Date,console};vm.createContext(context);vm.runInContext(code,context);
+ const engine=context.window.KeyMemoryPhrase.create({storage,now:()=>time,setTimer:(fn,delay)=>{timers.set(++id,{fn,at:time+delay});return id;},clearTimer:i=>timers.delete(i),onSound:(note,velocity,duration,at,meta)=>sounds.push({note,velocity,duration,at,meta:plain(meta),calledAt:time}),onControl:c=>controls.push({...c,calledAt:time}),onBeat:b=>beats.push({...b,calledAt:time}),onChange:s=>changes.push(s),onSilence:()=>silences++});
+ function advance(ms){const end=time+ms;for(let count=0;;count++){assert(count<100000,'bounded timer execution');const entry=[...timers].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!entry)break;const [i,t]=entry;time=Math.max(time,t.at);timers.delete(i);t.fn();}time=end;}
+ return{engine,s:()=>engine.snapshot(),advance,jump:ms=>{time+=ms;},sounds,controls,beats,changes,timers,storage,get time(){return time;},get silences(){return silences;}};
+}
+const raw=h=>JSON.stringify([h.s().notes,h.s().controllers,h.s().initialControllers,h.s().duration]);
+
+const fixture={duration:2000,notes:[{note:60,velocity:90,channel:0,start:100,duration:300},{note:64,velocity:80,channel:0,start:700.5,duration:300},{note:67,velocity:70,channel:1,start:1700,duration:100}],controllers:[{controller:64,value:127,channel:0,time:200},{controller:7,value:70,channel:0,time:800},{controller:11,value:50,channel:0,time:900},{controller:64,value:0,channel:0,time:1500}]};
+const near=(a,b)=>assert(Math.abs(a-b)<1e-7,`${a} != ${b}`);
+for(const bpm of [60,120,240]){
+ const h=setup({...fixture,options:{playBpm:bpm,sectionStart:200.25,sectionEnd:1900.75}}),source=raw(h),stored=h.storage.value,scale=120/bpm,loopLength=1700.5*scale,sourceAt=950.375,offset=(sourceAt-200.25)*scale;
+ assert(h.engine.play({loop:true}));h.advance(240000/bpm+3*loopLength+offset);assert.equal(h.s().loop,4);const cancelled=[...h.timers.values()].map(t=>t.fn);const beforeCounts=[h.sounds.length,h.controls.length,h.beats.length];assert(h.engine.pause());assert.equal(h.s().state,'idle');near(h.s().pausedAt,sourceAt);assert(h.s().pausedLoop);assert.equal(h.timers.size,0);assert.equal(h.s().elapsed,0);assert.equal(h.engine.pause(),false);
+ for(const f of cancelled)f();h.advance(10000);assert.deepEqual([h.sounds.length,h.controls.length,h.beats.length],beforeCounts);near(h.s().pausedAt,sourceAt);assert.equal(raw(h),source);assert.equal(h.storage.value,stored);
+ const origin=h.time,beatCount=h.beats.filter(b=>b.countIn).length,soundIndex=h.sounds.length,controlIndex=h.controls.length;
+ assert(h.engine.play());assert.equal(h.s().state,'playing','resume is immediate, without count-in');near(h.s().elapsed,offset);assert.equal(h.s().loop,4);assert.equal(h.s().pausedAt,null);assert.equal(h.beats.filter(b=>b.countIn).length,beatCount);
+ const continued=h.sounds.slice(soundIndex);assert.deepEqual(continued.map(n=>n.note),[60,64]);for(const n of continued){const end=n.note===60?1500:1500;near(n.at+n.duration-origin,(end-sourceAt)*scale);}const restored=h.controls.slice(controlIndex).filter(c=>c.at<=origin);assert.equal(restored.find(c=>c.channel===0&&c.controller===7).value,70);assert.equal(restored.find(c=>c.channel===0&&c.controller===11).value,50);assert.equal(restored.find(c=>c.channel===0&&c.controller===64).value,127);
+ h.advance((1900.75-sourceAt)*scale+10);assert.equal(h.s().loop,5);near(h.s().elapsed,10);const nextCycle=origin+(1900.75-sourceAt)*scale;assert(h.sounds.slice(soundIndex).some(n=>n.note===60&&Math.abs(n.at-nextCycle)<1e-7),'next loop restores the complete selected section');h.engine.pause();const position=h.s().pausedAt;h.engine.stop({preservePaused:true});near(h.s().pausedAt,position);assert(h.engine.seekPaused(500.125));near(h.s().pausedAt,500.125);h.engine.seekPaused(-1);near(h.s().pausedAt,200.25);h.engine.seekPaused(99999);near(h.s().pausedAt,1900.75);assert.equal(h.engine.seekPaused(NaN),false);
+ h.engine.stop();assert.equal(h.s().pausedAt,null);assert(h.engine.play({loop:true}));assert.equal(h.s().state,'play-countin','explicit reset keeps the usual count-in');h.engine.stop();assert.equal(raw(h),source);assert.equal(h.storage.value,stored);
+}
+// Pause, resume and restart do not repurpose Record/Practice or their Stop semantics.
+for(const action of ['record','practice','transpose','delete','clear','load','import','restart']){
+ const h=setup(fixture);h.engine.setOptions({countInBars:0});h.engine.play({loop:true});h.advance(950);h.engine.pause();assert.notEqual(h.s().pausedAt,null);
+ if(action==='record')h.engine.record();else if(action==='practice')h.engine.practice();else if(action==='transpose')h.engine.setOptions({transpose:1});else if(action==='delete')h.engine.deleteNote(0,h.s().noteRevision);else if(action==='clear')h.engine.clear();else if(action==='load')h.engine.load();else if(action==='import')h.engine.importPhrase({notes:fixture.notes,duration:fixture.duration,sourceBpm:120});else h.engine.play({loop:true,resume:false});assert.equal(h.s().pausedAt,null,action);if(action==='restart')near(h.s().elapsed,0);h.engine.stop();assert.equal(h.s().state,'idle');assert.equal(h.s().pausedAt,null);
+}
+let h=setup(fixture);h.engine.play({loop:true});assert.equal(h.engine.pause(),false);assert.equal(h.s().state,'play-countin');h.engine.stop();assert.equal(h.s().pausedAt,null);
+h=setup({...fixture,options:{countInBars:0}});h.engine.play();h.advance(900);h.engine.pause();h.advance(5000);const resume=h.time;h.engine.play();assert.equal(h.s().looping,false);h.advance(1099);assert.equal(h.s().state,'playing');h.advance(101);assert.equal(h.s().state,'idle');assert.equal(h.s().pausedAt,null);assert.equal(h.timers.size,0);
+console.log('PASS pause engine: exact fractional source cursor, half/normal/double tempo, loop count/full repeated section, pedal/CC restoration, remaining sound durations, immediate resume without count-in, stale callback cancellation, seek, one-shot end and explicit reset/record/practice/edit semantics.');
+
+// Trailing padded rests and the minimum loop length retain their exact phase.
+h=setup({duration:2100,notes:[{note:60,velocity:90,channel:0,start:100,duration:100}],options:{countInBars:0,loopPadEnd:true,sectionEnd:4000}});h.engine.play({loop:true});h.advance(3500);h.engine.pause();near(h.s().pausedAt,3500);h.advance(8000);const paddingResume=h.time,notesBefore=h.sounds.length;h.engine.play();assert.equal(h.sounds.length,notesBefore);h.advance(500);assert.equal(h.s().loop,2);near(h.s().elapsed,0);h.advance(100);assert(h.sounds.slice(notesBefore).some(n=>n.at===paddingResume+600));h.engine.stop();
+h=setup({duration:50,notes:[{note:60,velocity:90,channel:0,start:0,duration:50}],options:{countInBars:0}});h.engine.play({loop:true});h.advance(125);h.engine.pause();near(h.s().pausedAt,25);h.advance(1000);const shortResume=h.time,shortCount=h.sounds.length;h.engine.play();assert.equal(h.s().loop,3);near(h.s().elapsed,25);assert(h.sounds.slice(shortCount).every(n=>n.at+n.duration>shortResume));h.advance(25);assert.equal(h.s().loop,4);near(h.s().elapsed,0);h.engine.stop();
+console.log('PASS: padded-rest resume and 50ms minimum-loop boundary phase.');

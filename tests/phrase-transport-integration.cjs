@@ -41,6 +41,8 @@ const stored=h=>h.w.localStorage.getItem('keymemory.phrase.v1');
  assert(h.el('phraseStaff').querySelector('.staffTimelineCursor'),'recording staff has timeline cursor');assert(+h.el('phraseViewTime').value>=1.2,'recording cursor advances');
  h.cc(22,63);assert.equal(h.snapshot().state,'recording');h.cc(22,64);assert.equal(h.snapshot().state,'idle');h.cc(22,127);h.cc(22,0);
  assert(h.el('phraseRecordIndicator').hidden);assert.deepEqual(Array.from(h.snapshot().notes,n=>n.note),[60,64]);assert(!h.snapshot().controllers.some(c=>c.controller===22));
+ // Mapped Play and Stop use the same pause/resume/reset flow as screen controls.
+ tap(h,38);await flush();h.advance(2450);tap(h,38);assert.equal(h.snapshot().pausedAt,450);assert.equal(+h.el('phraseViewTime').value,.45);assert.equal(h.el('phrasePlay').textContent,'Resume phrase');tap(h,38);await flush();assert.equal(h.snapshot().state,'playing');assert.equal(h.snapshot().elapsed,450);h.advance(125);stop(h);assert.equal(h.snapshot().pausedAt,575);stop(h);assert.equal(h.snapshot().pausedAt,null);assert.equal(+h.el('phraseViewTime').value,0);
  const saved=stored(h);let confirmations=0;h.w.confirm=()=>{confirmations++;return false;};
  tap(h,36);await flush();assert.equal(confirmations,1,'MIDI replacement uses existing confirmation');assert.equal(h.snapshot().state,'idle');assert.equal(stored(h),saved);
  // Reserved note commands do not enter musical grading in any non-phrase mode.

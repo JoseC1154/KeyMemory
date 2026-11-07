@@ -52,7 +52,7 @@ function setup() {
       builderNotes:[...builderNotes], builderStep, dictionaryVoicing:[...dictionaryVoicing],
       scalePhase, scaleLives, scaleRuns, scaleStreak, scaleCorrection, feedback:[...wrongKeyFeedback.keys()] })
   };`);
-  const api = w.feedbackTest, el = id => d.getElementById(id), key = note => d.querySelector(`[data-midi="${note}"]`);
+  const api = w.feedbackTest, el = id => d.getElementById(id), key = note => d.querySelector(`.key[data-midi="${note}"]`);
   const send = (note, velocity = 100) => port.onmidimessage?.({ data: new Uint8Array([0x90, note, velocity]), timeStamp: now });
   function begin(mode) {
     api.mode(mode.startsWith('scale') ? 'scale' : mode);

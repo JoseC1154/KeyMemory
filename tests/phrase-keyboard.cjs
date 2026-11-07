@@ -22,7 +22,7 @@ const near=(a,b,message)=>assert(Math.abs(a-b)<1e-7,message||`${a} != ${b}`);
 function verifyRange(h,low=21,high=108){const keys=h.keys();assert.deepEqual(keys,Array.from({length:high-low+1},(_,i)=>low+i));assert.equal(new Set(keys).size,keys.length);assert(keys.every(m=>m>=0&&m<=127));}
 (async()=>{
  const metrics=[];
- for(const [viewport,width,height,scroll]of[[1180,1156,900,false],[1280,1256,900,false],[1440,1416,900,false],[400,388,844,true],[843,827,390,true]]){
+ for(const [viewport,width,height,scroll]of[[1180,1156,900,false],[1280,1256,900,false],[1440,1416,900,false],[400,388,844,true],[843,827,390,true],[568,556,320,true]]){
   const h=setup({viewport,width,height});h.mode('phrase');verifyRange(h);assert.equal(h.piano.querySelectorAll('.key.white').length,52);assert.equal(h.piano.querySelectorAll('.key.black').length,36);assert(h.d.querySelector('.shell').classList.contains('phraseWorkspace'));
   const style=h.d.documentElement.style,white=parseFloat(style.getPropertyValue('--white-w')),black=parseFloat(style.getPropertyValue('--black-w')),pianoWidth=parseFloat(h.piano.style.width);
   if(scroll){assert(white>=26);assert(pianoWidth>width);}else assert(pianoWidth<=width+1e-7,'88 keys fit available desktop width');

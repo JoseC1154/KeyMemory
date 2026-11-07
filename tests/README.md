@@ -161,3 +161,33 @@ Native browser execution was attempted for the transcription and import suites, 
 - `npm run test:note-edit-browser` supplies native Chromium desktop, 390/320-pixel portrait and short-landscape rendering, keyboard, touch tap, overlap choice, Delete/Undo, focus, control-size/overflow and screenshot checks. It is unexecuted because the Chromium launch restriction was established by the import browser attempts; no native/mobile pass is claimed.
 
 Existing cursor, loop, staff/timeline, playback-sync, MIDI, audio, import and layout suites remain applicable. No candidate code is published by these tests.
+
+## Falling piano duration bars (Build 2026.11.07.51 candidate)
+
+- `npm run test:falling-notes` checks exact fractional vertical lengths, downward source-time motion, strike-line onsets, shared piano/black-key geometry, same-pitch channel lanes, zero-duration events, pedal-only tails, loop-section clipping, upcoming repetitions, bar/beat distinction, transpose, dense-window cap/priority, unchanged source data, anchored count-ins at half/normal/double speed, repeated loops, and mobile score/piano/scroll behavior using pure SVG and simulated app DOM/audio.
+- `npm run test:falling-browser` supplies native desktop/portrait/landscape checks for key-center alignment and strike-line adjacency before/after scrolling, page overflow, playback motion, accessible mobile Window controls, and staff Delete/Undo. It requires Playwright and Chromium. The local browser launch remains blocked before assertions by `socket() failed: Operation not permitted`; native rendering, actual phone/Safari, physical MIDI and audible-device verification are not claimed.
+
+No candidate source is uploaded, pushed or deployed by these tests.
+
+## Manual scrubbing and edit-note audition
+
+- `npm run test:audition` checks the dedicated preview synth and its actual-app integration. Native/fallback audio envelopes preserve attack/hold/release continuity on cancellation; async resumes cannot revive superseded previews; voices and summed gain are bounded; durations/offsets end within 600 ms. App tests cover forward/reverse traversal, exact chords, held-note gesture start, Sound off, transpose, edit/Delete/Undo, immutable source/options, main playback exclusion, and sheet/mode/mute/blur/transport cancellation.
+- Existing pointer/keyboard staff inspection remains silent. Only manual Inspect-slider movement and explicit editor selection request audition. Fixtures use simulated audio contexts; these passes do not establish audible output, native mobile gestures or device latency.
+
+
+## Phrase pause and resume
+
+- `node tests/phrase-pause-engine.cjs` checks exact source-time pause at fractional positions across 0.5×/1×/2× tempo, current loop number, immediate resume without count-in, remaining physical/pedal sound, CC7/11/64 state, full subsequent loop boundaries, stale canceled callbacks, paused seek, explicit reset, one-shot completion, padded rests, minimum 50ms loops and Record/Practice/import/edit reset semantics.
+- `node tests/phrase-pause-ui.cjs` checks both controls, staff/falling/key cursor agreement, Resume/Pause/Reset wording, paused inspection, Settings/mode return, example isolation, saved-data preservation and interrupted asynchronous audio startup. `phrase-transport-integration.cjs` additionally checks assigned MIDI Play/Stop pause/resume/reset.
+
+These are deterministic clock/DOM/audio tests. Native Chromium, physical MIDI latency and audible output remain unverified in this environment.
+
+## Optional tempo suggestions
+
+- `npm run test:tempo` runs the pure onset estimator, import-review integration and recorded-phrase UI suites.
+- `tests/tempo-estimate.cjs` covers regular/expressive timings, chords and layers, subdivisions/rests, half/double interpretation, short and irregular/drifting abstention, invalid input, dense bounded work and source immutability. It is synthetic correctness coverage, not an accuracy benchmark.
+- `tests/tempo-import-ui.cjs` covers explicit suggestion acceptance, manual/tapped correction, invalid BPM, unchanged source times and normal-speed playback, no inferred meter, canceled replacement, edited/reset/new/closed draft lifecycle and short/irregular fallback. Decode/model/audio are mocked.
+- `tests/tempo-phrase-ui.cjs` records synthetic MIDI and checks suggestion acceptance, exact note/controller preservation, speed ratio, compound pulse display/manual/tap correction, bounds rejection, meter/origin/grid state, saved reload, empty recordings, edit/undo invalidation and active/pending transport safety. Its combined runtime case also checks paused audible scrubbing, example isolation and clearing pause when accepting a tempo suggestion.
+- `npm run test:tempo-browser` supplies optional native desktop/mobile geometry, input/focus and repeated/canceled review checks using a generated local WAV and deterministic transcription output. It does not publish or upload media.
+
+Native Chromium launch was attempted with the default and an escalated temporary profile for this candidate; both failed before assertions with `socket() failed: Operation not permitted`. No native-rendering, actual-device, physical-MIDI, listening or arbitrary-music accuracy pass is claimed.

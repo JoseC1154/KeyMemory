@@ -15,6 +15,7 @@ window.KeyMemoryPhrase={timing:phraseTiming,create(config={}){
  const KEY='keymemory.phrase.v1',MAX=120000,LIMIT=10000,CONTROL_LIMIT=20000,GROUP=80;
  let storage;try{storage=config.storage===undefined?window.localStorage:config.storage;}catch{}
  let notes=[],duration=0,origin='midi',state='idle',error='',saved=false,start=0,countIn=0,countInBar=0,progress=0,groups=[],answered=new Set(),generation=0,recorded=[],chordTimer=null,plannedStart=0,looping=false;
+ let pausedAt=null,pausedPass=1,pausedLoop=false;
  let noteRevision=0;const deletedNotes=[];
  const CC_DEFAULTS={64:0,7:100,11:127};
  const baseline=()=>Array.from({length:16},(_,channel)=>Object.entries(CC_DEFAULTS).map(([controller,value])=>({controller:Number(controller),value,channel}))).flat();
@@ -28,11 +29,11 @@ window.KeyMemoryPhrase={timing:phraseTiming,create(config={}){
  const playbackElapsed=()=>{const elapsed=Math.max(0,now()-start),length=playbackDuration();return looping&&length>0?elapsed%length:elapsed;};
  function snapshot(){const viewDuration=state==='recording'?Math.min(MAX,Math.max(0,now()-start)):duration;
  const live=config.viewProjection===true&&state==='recording';const activeNotes=live?new Set(recordHeld.values()):null;
- return{noteRevision,undoDeleteCount:deletedNotes.length,viewNotes:live?recorded.map(n=>({...n,duration:activeNotes.has(n)?Math.max(0,viewDuration-n.start):n.duration})):null,viewControllers:live?recordedControllers.map(c=>({...c})):null,viewInitialControllers:live?recordBaseline.map(c=>({...c})):null,viewDuration,state,error,saved,origin,notes:notes.map(n=>({...n})),controllers:controllers.map(c=>({...c})),initialControllers:initialControllers.map(c=>({...c})),recordedControllerCount:state==='recording'?recordedControllers.length:controllers.length,duration,playbackDuration:playbackDuration(),looping,loop:state==='playing'&&looping?Math.floor(Math.max(0,now()-start)/playbackDuration())+1:0,elapsed:state==='recording'?Math.min(MAX,Math.max(0,now()-start)):state==='playing'?playbackElapsed():state==='practice'?Math.max(0,now()-start):0,countIn,countInBar,countInMode:state==='record-countin'?'record':state==='play-countin'?'play':state==='countin'?'practice':null,targetTime:state==='practice'?groups[progress]?.start??null:null,target:state==='practice'||state==='countin'?(groups[progress]?.notes||[]).filter(n=>!answered.has(n)):[],progress,total:groups.length,options:{...options,...(['recording','record-countin'].includes(state)?{gridOriginMs:0,gridConfirmed:true,loopPadEnd:false}:{})},recordedCount:state==='recording'?recorded.length:notes.length};}
+ return{pausedAt,pausedLoop:pausedAt!==null&&pausedLoop,countInRemaining:['play-countin','record-countin','countin'].includes(state)?Math.max(0,plannedStart-now()):0,noteRevision,undoDeleteCount:deletedNotes.length,viewNotes:live?recorded.map(n=>({...n,duration:activeNotes.has(n)?Math.max(0,viewDuration-n.start):n.duration})):null,viewControllers:live?recordedControllers.map(c=>({...c})):null,viewInitialControllers:live?recordBaseline.map(c=>({...c})):null,viewDuration,state,error,saved,origin,notes:notes.map(n=>({...n})),controllers:controllers.map(c=>({...c})),initialControllers:initialControllers.map(c=>({...c})),recordedControllerCount:state==='recording'?recordedControllers.length:controllers.length,duration,playbackDuration:playbackDuration(),looping,loop:state==='playing'&&looping?Math.floor(Math.max(0,now()-start)/playbackDuration())+1:0,elapsed:state==='recording'?Math.min(MAX,Math.max(0,now()-start)):state==='playing'?playbackElapsed():state==='practice'?Math.max(0,now()-start):0,countIn,countInBar,countInMode:state==='record-countin'?'record':state==='play-countin'?'play':state==='countin'?'practice':null,targetTime:state==='practice'?groups[progress]?.start??null:null,target:state==='practice'||state==='countin'?(groups[progress]?.notes||[]).filter(n=>!answered.has(n)):[],progress,total:groups.length,options:{...options,...(['recording','record-countin'].includes(state)?{gridOriginMs:0,gridConfirmed:true,loopPadEnd:false}:{})},recordedCount:state==='recording'?recorded.length:notes.length};}
  const emit=()=>onChange(snapshot());
  function schedule(fn,delay){const token=generation;let id;id=later(()=>{timers.delete(id);if(token===generation)fn();},Math.max(0,delay));timers.add(id);return id;}
  function unschedule(id){if(id!==null){cancel(id);timers.delete(id);}}
- function halt(){generation++;looping=false;for(const id of timers)cancel(id);timers.clear();chordTimer=null;countIn=0;countInBar=0;onSilence();}
+ function halt(){generation++;looping=false;pausedAt=null;pausedPass=1;pausedLoop=false;for(const id of timers)cancel(id);timers.clear();chordTimer=null;countIn=0;countInBar=0;onSilence();}
  function persist(){saved=false;try{if(!storage)throw Error();storage.setItem(KEY,JSON.stringify({version:3,origin,notes,controllers,initialControllers,duration,sourceBpm:options.sourceBpm,options}));saved=true;}catch{error='Phrase kept for this session; local saving is unavailable.';}}
  // Staff note IDs are raw snapshot array indices, guarded by a content revision.
  // Keep undo entries small and exact: no timing normalization or phrase replacement.
@@ -112,7 +113,23 @@ window.KeyMemoryPhrase={timing:phraseTiming,create(config={}){
   else error='No notes recorded. Your previous phrase was kept.';
   recorded=[];recordedControllers=[];emit();return notes.length>0;
  }
- function stop({releaseHeld=false}={}){if(state==='recording'){finishRecording();}else{halt();state='idle';emit();}if(releaseHeld){held.clear();observedControllers=baseline();}return true;}
+ function stop({releaseHeld=false,preservePaused=false}={}){
+  const position=preservePaused&&state==='idle'?pausedAt:null,pass=pausedPass,repeat=pausedLoop;
+  if(state==='recording'){finishRecording();}else{halt();state='idle';if(position!==null){pausedAt=position;pausedPass=pass;pausedLoop=repeat;}emit();}
+  if(releaseHeld){held.clear();observedControllers=baseline();}return true;
+ }
+ // Pause samples the exact source clock before cancelling queued notes and clicks.
+ // It is session state only: no phrase data or local-storage values are changed.
+ function pause(){
+  if(state!=='playing')return false;
+  const length=playbackDuration(),position=options.sectionStart+Math.min(length,playbackElapsed())*options.playBpm/options.sourceBpm;
+  const pass=looping&&length>0?Math.floor(Math.max(0,now()-start)/length)+1:1,repeat=looping;
+  halt();state='idle';pausedAt=position;pausedPass=pass;pausedLoop=repeat;emit();return true;
+ }
+ function seekPaused(position){
+  if(state!=='idle'||pausedAt===null||!finite(position))return false;
+  pausedAt=Math.max(options.sectionStart,Math.min(Math.min(phraseTiming.maxLoopEnd(duration,options),options.sectionEnd),position));emit();return true;
+ }
  // A short lookahead hands absolute times to Web Audio instead of timing audio by JS dispatch.
  function audioPump(mode,origin,beatMs,trackStart,trackLength,list=[],controls=[],countBeats=0,repeat=false){
   let countIndex=0,noteIndex=0,controlIndex=0,cycle=0,clickIndex=0;
@@ -209,14 +226,25 @@ window.KeyMemoryPhrase={timing:phraseTiming,create(config={}){
   groups=[];for(const n of list){let g=groups.at(-1);if(!g||n.start-g.start>GROUP*options.sourceBpm/options.playBpm){g={start:n.start,end:n.start,notes:[]};groups.push(g);}g.end=Math.max(g.end,n.start);if(!g.notes.includes(n.note))g.notes.push(n.note);}return list;
  }
  function runningTick(){if(state!=='playing'&&state!=='practice')return;if(state==='playing'){const index=groups.findIndex(g=>g.start>playbackElapsed());progress=index<0?groups.length-1:Math.max(0,index-1);}emit();schedule(runningTick,100);}
- function play({loop=false}={}){const list=prepare(true);if(!list)return false;
-  const length=playbackDuration();
+ function play({loop,resume=true}={}){
+  const position=resume?pausedAt:null,pass=pausedPass,repeat=loop??(position!==null&&pausedLoop);
+  const list=prepare(true);if(!list)return false;
+  const length=playbackDuration(),end=Math.min(phraseTiming.maxLoopEnd(duration,options),options.sectionEnd);
   // Sub-50ms loops can flood the audio graph. Keep one-shot tiny taps supported.
-  if(loop&&length<50){state='idle';error='Choose a section at least 0.05 seconds long at this tempo to loop.';emit();return false;}
-  looping=loop;
-  countBefore('play',options.playBpm,at=>{state='playing';countIn=0;countInBar=0;start=at;emit();schedule(runningTick,100);
-   if(!loop)schedule(()=>{halt();state='idle';progress=0;emit();},Math.max(0,start+length+100-now()));
-  },length,list,sectionControls(),loop);return true;
+  if(repeat&&length<50){state='idle';error='Choose a section at least 0.05 seconds long at this tempo to loop.';emit();return false;}
+  looping=repeat;
+  const begin=at=>{state='playing';countIn=0;countInBar=0;start=at;const index=groups.findIndex(g=>g.start>playbackElapsed());progress=index<0?groups.length-1:Math.max(0,index-1);emit();schedule(runningTick,100);
+   if(!repeat)schedule(()=>{halt();state='idle';progress=0;emit();},Math.max(0,start+length+100-now()));
+  };
+  if(position!==null&&position>=options.sectionStart&&position<end){
+   // Reconstruct the same absolute pass clock. The existing pump discards expired
+   // notes, restores CC state, and retriggers only still-sounding note remainders.
+   // Later passes keep the full original loop, never just the resumed remainder.
+   const offset=(position-options.sectionStart)*options.sourceBpm/options.playBpm,origin=now();
+   begin(origin-offset-(repeat?Math.max(0,pass-1)*length:0));
+   audioPump('play',origin,phraseTiming.metrics(options,options.playBpm).beatMs,start,length,list,sectionControls(),0,repeat);
+  }else countBefore('play',options.playBpm,begin,length,list,sectionControls(),repeat);
+  return true;
  }
  function lateGuard(){if(!options.rhythm)return;const group=groups[progress];if(!group)return;schedule(()=>{if(state==='practice'&&groups[progress]===group)fail(null,'Timing missed — restart from the beginning.');},start+group.end+options.tolerance-now()+1);}
  function beginPractice(at){state='practice';error='';start=at;progress=0;answered.clear();countIn=0;countInBar=0;emit();schedule(runningTick,100);lateGuard();}
@@ -266,6 +294,6 @@ window.KeyMemoryPhrase={timing:phraseTiming,create(config={}){
   emit();lateGuard();return true;
  }
  function clear(){stop();resetNoteHistory();options={...options,transpose:0,sectionStart:0,sectionEnd:MAX,gridOriginMs:0,gridConfirmed:false,loopPadEnd:false,loopSnap:'free'};notes=[];controllers=[];initialControllers=baseline();duration=0;origin='midi';groups=[];progress=0;error='';saved=false;try{storage?.removeItem(KEY);}catch{error='Could not remove the saved phrase from this browser.';}emit();return true;}
- function setSourceTempo(qBpm){const playBpm=qBpm*options.playBpm/options.sourceBpm;if(!finite(qBpm)||qBpm<30||qBpm>300||playBpm<30||playBpm>300){error='That source tempo would put playback outside BPM 30–300.';emit();return false;}return setOptions({sourceBpm:qBpm,playBpm,gridConfirmed:true});}
- const api={record,stop,input,play,practice,setSourceTempo,setOptions,setMetronome,importPhrase,deleteNote,undoDelete,clear,snapshot,load};load();return api;
+ function setSourceTempo(qBpm,{confirmGrid=true}={}){const playBpm=qBpm*options.playBpm/options.sourceBpm;if(!finite(qBpm)||qBpm<30||qBpm>300||playBpm<30||playBpm>300){error='That source tempo would put playback outside BPM 30–300.';emit();return false;}return setOptions({sourceBpm:qBpm,playBpm,gridConfirmed:confirmGrid?true:options.gridConfirmed});}
+ const api={record,stop,pause,seekPaused,input,play,practice,setSourceTempo,setOptions,setMetronome,importPhrase,deleteNote,undoDelete,clear,snapshot,load};load();return api;
 }};

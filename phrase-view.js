@@ -127,6 +127,56 @@
   if(omitted)body+=`<text x="${left}" y="12" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">Dense window: ${omitted} more notes; zoom in.</text>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseRollSVG" viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title>${body}</svg>`;
  }
+ // Vertical duration bars use the piano's own key geometry, not evenly spaced MIDI rows.
+ // Later source time is higher: advancing the cursor moves each bar down to its key.
+ function fallingSVG(timeline,options={}){
+  const cursor=options.cursor??0,span=options.window??6000,width=options.width??800,height=options.height??110,maxNotes=Math.max(1,Math.min(400,Math.floor(options.maxNotes??400)));
+  const sectionStart=options.sectionStart??0,sectionEnd=options.sectionEnd??timeline.duration,spelling=options.spelling||'sharp',keys=options.keys||[];
+  if(![cursor,span,width,height,sectionStart,sectionEnd,maxNotes].every(finite)||span<=0||width<=0||height<=0||sectionEnd<sectionStart)throw new RangeError('Choose valid falling-note dimensions and source times.');
+  const byMidi=new Map();for(const key of keys){pitch(key.midi,spelling);if(!finite(key.x)||!finite(key.width)||key.width<=0)throw new RangeError('Invalid piano key geometry.');byMidi.set(key.midi,key);}
+  const until=cursor+span,y=t=>height-(t-cursor)/span*height;
+  const base=timeline.notes.filter(n=>byMidi.has(n.midi)&&n.start<sectionEnd&&(n.soundEnd>sectionStart||(n.start===n.keyEnd&&n.start>=sectionStart)))
+   .map(n=>({...n,originalStart:n.start,originalKeyEnd:n.keyEnd,originalSoundEnd:n.soundEnd,cycle:0,start:Math.max(sectionStart,n.start),keyEnd:Math.max(sectionStart,Math.min(sectionEnd,n.keyEnd)),soundEnd:Math.min(sectionEnd,n.soundEnd)}));
+  const candidates=base.filter(n=>n.start<until&&(n.soundEnd>cursor||(n.start===n.keyEnd&&n.start>=cursor)));
+  // Prioritize current holds and the selected edit before the nearest future notes.
+  candidates.sort((a,b)=>(b.id===options.selectedNoteId)-(a.id===options.selectedNoteId)||(b.start<=cursor&&b.soundEnd>cursor)-(a.start<=cursor&&a.soundEnd>cursor)||a.start-b.start||a.id-b.id);
+  const visible=candidates.slice(0,maxNotes),length=sectionEnd-sectionStart;let total=candidates.length;
+  // Preview upcoming repetitions across the loop boundary. Binary search counts
+  // dense future cycles without allocating or walking millions of note copies.
+  if(options.loop&&length>0&&base.length){
+   for(let cycle=1;cycle<=10000&&sectionStart+cycle*length<until;cycle++){
+    const offset=cycle*length,limit=until-offset;let lo=0,hi=base.length;
+    while(lo<hi){const mid=(lo+hi)>>1;if(base[mid].start<limit)lo=mid+1;else hi=mid;}
+    total+=lo;const count=Math.min(lo,maxNotes-visible.length);
+    for(let i=0;i<count;i++){const n=base[i];visible.push({...n,cycle,start:n.start+offset,keyEnd:n.keyEnd+offset,soundEnd:n.soundEnd+offset});}
+   }
+  }
+  visible.sort((a,b)=>a.start-b.start||a.id-b.id);const omitted=total-visible.length,laneEnds=new Map();
+  for(const n of visible){const ends=laneEnds.get(n.midi)||[];let lane=ends.findIndex(end=>end<=n.start);if(lane<0)lane=ends.length;ends[lane]=n.soundEnd;n.lane=lane;laneEnds.set(n.midi,ends);}
+  const label=`Falling notes toward matching piano keys. Longer bars mean longer ${options.recording?'recorded notes':'holds'}. Solid blue is key duration; dashed amber is pedal only. ${visible.length} notes shown${omitted?', '+omitted+' omitted; shorten Window to inspect':''}.`;
+  let body='';for(const key of keys){const x=key.x+key.width/2;body+=`<line class="fallingKeyGuide" data-midi="${key.midi}" x1="${x}" x2="${x}" y1="0" y2="${height}" stroke="currentColor" opacity="${key.midi%12===0?.16:.055}"/>`;}
+  let moving='',tickCount=0;const cycles=options.loop&&length>0?Math.min(10001,Math.max(1,Math.ceil((until-sectionStart)/length))):1;
+  for(let cycle=0;cycle<cycles&&tickCount<240;cycle++)for(const tick of options.grid||[]){
+   if(tickCount>=240)break;
+   if(!finite(tick.time)||tick.time<sectionStart||tick.time>sectionEnd||(options.loop&&tick.time===sectionEnd))continue;
+   const at=tick.time+cycle*length;if(at<cursor||at>until)continue;tickCount++;
+   moving+=`<line class="musicalGridTick" data-time="${at}" x1="0" x2="${width}" y1="${y(at)}" y2="${y(at)}" stroke="currentColor" opacity="${tick.kind==='bar'?.22:.09}"/>`;
+  }
+  for(const n of visible){
+   const key=byMidi.get(n.midi),lanes=laneEnds.get(n.midi).length,whole=Math.min(key.width*.8,options.barWidth??key.width*.5),w=Math.max(.1,whole/lanes),x=key.x+key.width/2-whole/2+n.lane*w;
+   const active=cursor>=n.start&&cursor<n.keyEnd,tail=cursor>=n.keyEnd&&cursor<n.soundEnd,zero=n.originalKeyEnd===n.originalStart;
+   moving+=`<g class="fallingNote${active?' keyActive':tail?' tailActive':''}${n.id===options.selectedNoteId?' noteEditSelected':''}" data-note-id="${n.id}" data-cycle="${n.cycle}" data-midi="${n.midi}" data-channel="${n.channel}" data-lane="${n.lane}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(pitch(n.midi,spelling).name)}, channel ${n.channel+1}; onset ${n.originalStart}ms, key release ${n.originalKeyEnd}ms, sound end ${n.originalSoundEnd}ms${n.cycle?"; upcoming loop "+(n.cycle+1):""}</title>`;
+   if(n.keyEnd>n.start&&n.keyEnd>cursor||zero&&n.start>=cursor)moving+=`<rect class="keyDuration" x="${x}" y="${y(n.keyEnd)-(zero?1:0)}" width="${w}" height="${zero?1:(n.keyEnd-n.start)/span*height}" rx="${Math.min(2,w/3)}"/>`;
+   if(n.soundEnd>n.keyEnd)moving+=`<line class="pedalTail" x1="${x+w/2}" x2="${x+w/2}" y1="${y(n.keyEnd)}" y2="${y(n.soundEnd)}"/>`;
+   moving+='</g>';
+  }
+  body+=`<g class="fallingMotion">${moving}</g><line class="fallingStrike" x1="0" x2="${width}" y1="${height-1}" y2="${height-1}"/>`;
+  for(const n of visible)if(n.start<=cursor&&n.keyEnd>cursor){const key=byMidi.get(n.midi);body+=`<rect class="fallingGlow" data-midi="${n.midi}" x="${key.x+key.width*.15}" y="${height-3}" width="${key.width*.7}" height="3" rx="1.5"/>`;}
+  if(omitted)body+=`<text x="12" y="12" font-size="10" fill="currentColor">${omitted} more notes · shorten Window</text>`;
+  if(options.recording)body+=`<text x="12" y="16" font-size="11" fill="currentColor">Recording · play back to see falling notes</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseFallingSVG" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${esc(label)}" data-cursor="${cursor}" data-window="${span}"><title>${esc(label)}</title>${body}</svg>`;
+ }
+
  function timelineStaffSVG(timeline,options={}){
   const start=options.start??0,end=options.end??Math.max(1000,timeline.duration),cursor=options.cursor??start;
   const width=Math.max(240,Math.min(2000,options.width??800)),maxNotes=Math.max(1,Math.min(400,Math.floor(options.maxNotes??400))),spelling=options.spelling||'sharp',names=options.names!==false;
@@ -186,5 +236,5 @@
   if(omitted)body+=`<text x="${left}" y="${minY+10}" font-size="10" font-family="system-ui,sans-serif" fill="currentColor">Dense window: ${omitted} more notes; zoom in.</text>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" class="phraseTimelineStaffSVG" data-time-start="${start}" data-time-end="${end}" data-time-left="${left}" data-time-right="${width-right}" style="min-height:${height}px;min-width:${maxX-minX}px" viewBox="${minX} ${minY} ${maxX-minX} ${height}" width="100%" role="img" aria-label="${esc(label)}" preserveAspectRatio="xMidYMid meet"><title>${esc(label)}</title>${body}</svg>`;
  }
- return{pitch,staffPosition,staffSVG,prepareTimeline,controllerAt,rollSVG,timelineStaffSVG};
+ return{pitch,staffPosition,staffSVG,prepareTimeline,controllerAt,rollSVG,fallingSVG,timelineStaffSVG};
 });

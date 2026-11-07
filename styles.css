@@ -285,7 +285,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
  .scoreOptions{gap:6px;font-size:11px}.scoreOptions select{padding:3px;min-height:27px}.scoreCaveat{font-size:10px;margin:3px 0}
  .phrasePitchText,.phraseControllerText{font-size:10px}.rollHeading{font-size:10px;gap:4px}
 }
-/* A single score column keeps the exact-time roll directly under the staff. */
+/* Keep the staff and its edit controls in one compact column. */
 .phraseScore{display:flex;flex-direction:column;gap:4px}
 .phraseScore[hidden]{display:none}
 .phraseStaff,.phraseRoll{flex:none}
@@ -558,3 +558,25 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 .phraseStaff.isNoteEditing .staffTimelineNote:hover .staffNoteHead{stroke:#8b35a5;stroke-width:3}
 .rollNote.noteEditSelected rect{stroke:#9d48bd;stroke-width:3}
 @media(max-width:520px){.phraseNoteEditActions label{flex-basis:100%;order:-1}.phraseNoteEditActions button{flex:1 1 44%}}
+
+/* The duration view shares the piano's exact width, origin and horizontal scroll. */
+.phraseFallingHeader{flex-wrap:wrap;justify-content:flex-start;gap:6px 12px;margin:4px 0}
+.phraseFallingHeader[hidden],.phraseFallingNotes[hidden]{display:none}
+.phraseFallingHeader span{color:var(--muted)}
+.phraseFallingNotes{position:relative;overflow:hidden;background:linear-gradient(#101b25,#172d3e);border-radius:8px 8px 0 0;touch-action:pan-x;pointer-events:none}
+.phraseFallingNotes svg{display:block;max-width:none;color:#b7d4e4;overflow:hidden}
+.pianoContainer:has(.phraseFallingNotes:not([hidden])) .piano{padding-top:0;height:calc(var(--white-h) + 12px);border-radius:0 0 12px 12px}
+.pianoContainer:has(.phraseFallingNotes:not([hidden])) .key.black{top:0}
+.fallingNote .keyDuration{fill:#61bdf3;stroke:#b6e3ff;stroke-width:.7}
+.fallingNote.keyActive .keyDuration{fill:#a4e1ff;stroke:#e0f6ff}
+.fallingNote.noteEditSelected .keyDuration{fill:#cf92e1;stroke:#f1ccff;stroke-width:2}
+.fallingNote .pedalTail{stroke:#e2ae51;stroke-width:2;stroke-dasharray:4 3}
+.fallingStrike{stroke:#8edcff;stroke-width:2}
+.fallingGlow{fill:#91dcff;opacity:.8}
+/* Optional local tempo suggestions never hide the manual timing controls. */
+.phraseTempoReview{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex-basis:100%;font-size:.86rem;}
+.phraseTempoReview[hidden]{display:none;}
+.phraseTempoReview span{flex:1 1 260px;min-width:0;}
+.audioImportTempo{padding:10px 0;border-top:1px solid #55775f;}
+.audioImportTempo label{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.audioImportPanel .audioImportTempo input{width:88px;}

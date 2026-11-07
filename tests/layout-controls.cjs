@@ -13,7 +13,7 @@ const el=id=>d.getElementById(id),s=()=>w.snapshot(),shell=d.querySelector('.she
 const change=(id,value)=>{el(id).value=value;el(id).dispatchEvent(new w.Event('change',{bubbles:true}));};
 const keyboard=(key,shiftKey=false)=>d.dispatchEvent(new w.KeyboardEvent('keydown',{key,shiftKey,bubbles:true,cancelable:true}));
 const open=(id)=>{el(id).focus();el(id).click();};
-const press=m=>d.querySelector(`[data-midi="${m}"]`).click();
+const press=m=>d.querySelector(`.key[data-midi="${m}"]`).click();
 const ids=[...d.querySelectorAll('[id]')].map(e=>e.id);assert.equal(new Set(ids).size,ids.length,'unique IDs');
 assert.equal(d.querySelectorAll('.startMode').length,9);assert(!el('dictionaryExpand'));
 for(const id of ['modeOverlay','settingsOverlay','hintOverlay']){assert(!shell.contains(el(id)));assert.equal(el(id).getAttribute('role'),'dialog');assert.equal(el(id).getAttribute('aria-modal'),'true');assert(el(id).hidden);}
@@ -41,14 +41,14 @@ for(const mode of ['free','find','remember','semitones','degrees','builder','dic
 }
 // Open/Done/Escape/backdrop are not lesson-reset operations and do not pause clocks.
 w.activateMode('builder');el('timerEnabled').checked=true;el('timerEnabled').dispatchEvent(new w.Event('change',{bubbles:true}));
-let before=s();press(48);assert(d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));
+let before=s();press(48);assert(d.querySelector('.key[data-midi="48"]').classList.contains('wrongAnswer'));
 for(const exit of ['done','escape','backdrop']){
  open('openSettings');assert.equal(d.activeElement,el('closeSettings'));assert.equal(shell.inert,true);assert.equal(el('openSettings').getAttribute('aria-expanded'),'true');
  advance(100);assert.equal(s().deadline,before.deadline);assert.equal(s().countdown,before.countdown);assert.equal(s().targetMidi,before.targetMidi);assert.equal(s().prompt,before.prompt);
  if(exit==='done')el('closeSettings').click();else if(exit==='escape')keyboard('Escape');else el('settingsOverlay').click();
  assert(el('settingsOverlay').hidden);assert.equal(shell.inert,false);assert.equal(d.activeElement,el('openSettings'));assert.equal(el('openSettings').getAttribute('aria-expanded'),'false');
 }
-assert(d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));advance(650);assert(!d.querySelector('[data-midi="48"]').classList.contains('wrongAnswer'));assert.equal(s().targetMidi,before.targetMidi);
+assert(d.querySelector('.key[data-midi="48"]').classList.contains('wrongAnswer'));advance(650);assert(!d.querySelector('.key[data-midi="48"]').classList.contains('wrongAnswer'));assert.equal(s().targetMidi,before.targetMidi);
 // Dialog interiors never count as backdrop clicks. Focus trap wraps visible controls.
 open('openSettings');el('settingsOverlay').querySelector('.modalPanel').click();assert(!el('settingsOverlay').hidden);
 el('closeSettings').focus();keyboard('Tab',true);assert.equal(d.activeElement,el('midiRemove-transposeUp'));keyboard('Tab');assert.equal(d.activeElement,el('closeSettings'));
@@ -85,14 +85,14 @@ for(const width of [280,333,400,600,843,900])for(const orientation of [false,tru
   const keys=[...piano.querySelectorAll('.key')],base=48+root,low=base-(blackPC.has((base-2)%12)?3:2),high=base+12+(blackPC.has((base+14)%12)?3:2);
   assert([2,3].includes(base-low));assert([2,3].includes(high-base-12));assert(!blackPC.has(low%12));assert(!blackPC.has(high%12));
   assert(keys.length>=17&&keys.length<=19);assert.deepEqual(keys.map(k=>+k.dataset.midi).sort((a,b)=>a-b),Array.from({length:high-low+1},(_,i)=>low+i));
-  assert(piano.querySelector('[data-midi="'+low+'"]').classList.contains('white'));assert(piano.querySelector('[data-midi="'+high+'"]').classList.contains('white'));
+  assert(piano.querySelector('.key[data-midi="'+low+'"]').classList.contains('white'));assert(piano.querySelector('.key[data-midi="'+high+'"]').classList.contains('white'));
   assert(piano.classList.contains('compactScalePiano'));
   assert(Math.abs(parseFloat(piano.style.width)-width)<.01,'compact octave fits available width');
   const ww=parseFloat(d.documentElement.style.getPropertyValue('--white-w')),bw=parseFloat(d.documentElement.style.getPropertyValue('--black-w')),pad=parseFloat(piano.style.paddingLeft);
   assert(ww>=20,'white targets retain usable width in narrow geometry');
   let whites=0;
   for(let n=low;n<=high;n++){
-   const key=piano.querySelector('[data-midi="'+n+'"]');assert(key.querySelector('.noteLabel').textContent.includes(String(Math.floor(n/12)-1)));
+   const key=piano.querySelector('.key[data-midi="'+n+'"]');assert(key.querySelector('.noteLabel').textContent.includes(String(Math.floor(n/12)-1)));
    if(blackPC.has(n%12)){
     const left=parseFloat(key.style.left),expected=pad+(whites-1)*(ww+2)+ww-bw/2;
     assert(Math.abs(left-expected)<.01);assert(left>=0&&left+bw<=width,'full black endpoint stays inside piano');

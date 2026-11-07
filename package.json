@@ -11,7 +11,13 @@
     "test:video": "node tests/video-import-ui.cjs",
     "test:video-browser": "node tests/video-import-browser.cjs",
     "test:note-edit": "node tests/phrase-note-edit-engine.cjs && node tests/phrase-note-edit-ui.cjs",
-    "test:note-edit-browser": "node tests/phrase-note-edit-browser.cjs"
+    "test:note-edit-browser": "node tests/phrase-note-edit-browser.cjs",
+    "test:falling-notes": "node tests/phrase-falling-notes.cjs && node tests/phrase-falling-integration.cjs",
+    "test:falling-browser": "node tests/phrase-falling-browser.cjs",
+    "test:audition": "node tests/phrase-audition.cjs && node tests/phrase-audition-ui.cjs",
+    "test:pause": "node tests/phrase-pause-engine.cjs && node tests/phrase-pause-ui.cjs",
+    "test:tempo": "node tests/tempo-estimate.cjs && node tests/tempo-import-ui.cjs && node tests/tempo-phrase-ui.cjs",
+    "test:tempo-browser": "node tests/tempo-browser.cjs"
   },
   "devDependencies": {
     "@spotify/basic-pitch": "1.0.1",
