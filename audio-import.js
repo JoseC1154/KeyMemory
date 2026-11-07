@@ -1,15 +1,17 @@
-// Local audio import and a disposable review draft. No audio uploads or storage.
+// Local audio/video import and a disposable review draft. No media uploads or storage.
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.KeyMemoryAudioImport=api;})(typeof window==='undefined'?null:window,function(){
  'use strict';
  const MAX_FILE_BYTES=20*1024*1024,MAX_SOURCE_SECONDS=120,MAX_CLIP_SECONDS=30,MAX_NOTES=10000;
  const finite=n=>typeof n==='number'&&Number.isFinite(n);
  const abortError=()=>Object.assign(new Error('Canceled.'),{name:'AbortError'});
+ function isVideoFile(file){return /^video\//i.test(file?.type||'')||/\.(mp4|m4v|mov|webm|ogv|avi|mkv)$/i.test(file?.name||'');}
+ function decodeMessage(file){return isVideoFile(file)?'This video has no audio track this browser can decode. Try an MP4 with AAC audio, a WebM with Opus audio, or export its audio as WAV or MP3.':'This browser cannot decode the audio in that file. Try WAV or MP3.';}
  function bounds(start,end,duration){
   if(![start,end,duration].every(finite)||start<0||end>duration+.000001||end-start<.05||end-start>MAX_CLIP_SECONDS+.000001)throw Error('Choose a section from 0.05 to 30 seconds within the audio.');
   return{start,end,duration:Math.min(MAX_CLIP_SECONDS,end-start)};
  }
  function validateSource(buffer){
-  if(!buffer||!finite(buffer.duration)||buffer.duration<=0||buffer.duration>MAX_SOURCE_SECONDS||!finite(buffer.sampleRate)||buffer.sampleRate<8000||buffer.sampleRate>192000||!Number.isInteger(buffer.numberOfChannels)||buffer.numberOfChannels<1||buffer.numberOfChannels>2||!Number.isInteger(buffer.length)||buffer.length>25000000/buffer.numberOfChannels)throw Error('Use a mono or stereo audio file up to 2 minutes long.');
+  if(!buffer||!finite(buffer.duration)||buffer.duration<=0||buffer.duration>MAX_SOURCE_SECONDS||!finite(buffer.sampleRate)||buffer.sampleRate<8000||buffer.sampleRate>192000||!Number.isInteger(buffer.numberOfChannels)||buffer.numberOfChannels<1||buffer.numberOfChannels>2||!Number.isInteger(buffer.length)||buffer.length>25000000/buffer.numberOfChannels)throw Error('Use a file with a mono or stereo audio track up to 2 minutes long.');
  }
  function monoSlice(buffer,start,end){
   validateSource(buffer);bounds(start,end,buffer.duration);
@@ -84,26 +86,30 @@
   function abortWork(){generation++;controller?.abort();controller=null;}
   function resetDraft(){notes=[];detected=[];page=0;nextId=0;renderNotes();}
   function close(){abortWork();stopPreview();buffer=null;resetDraft();phase='empty';el('audioImportFile').value='';el('audioImportFilename').textContent='';el('audioImportStart').value='0';el('audioImportEnd').value='0';const old=context;context=null;if(old)w.setTimeout(()=>{try{Promise.resolve(old.close()).catch(()=>{});}catch{}},45);sync();}
-  function begin(){close();status('Choose a file. Audio stays on this device; only accepted notes are saved.');sync();}
+  function begin(){close();status('Choose an audio or video file. Files stay on this device; only accepted notes are saved.');sync();}
   function metadata(file,signal){return new Promise((resolve,reject)=>{
-   const media=d.createElement('audio'),url=w.URL.createObjectURL(file);let timer;
-   const done=(error,value)=>{w.clearTimeout(timer);signal.removeEventListener('abort',cancel);media.onloadedmetadata=media.onerror=null;media.removeAttribute('src');try{media.load();}catch{}w.URL.revokeObjectURL(url);error?reject(error):resolve(value);};
+   if(signal.aborted){reject(abortError());return;}
+   const media=d.createElement(isVideoFile(file)?'video':'audio'),url=w.URL.createObjectURL(file);let timer,settled=false;
+   const done=(error,value)=>{if(settled)return;settled=true;w.clearTimeout(timer);signal.removeEventListener('abort',cancel);media.onloadedmetadata=media.onerror=null;media.removeAttribute('src');try{media.load();}catch{}w.URL.revokeObjectURL(url);error?reject(error):resolve(value);};
    const cancel=()=>done(abortError());signal.addEventListener('abort',cancel,{once:true});
-   media.preload='metadata';media.onloadedmetadata=()=>{const duration=media.duration;if(!finite(duration)||duration<=0||duration>MAX_SOURCE_SECONDS)done(Error('Use an audio file up to 2 minutes long, then select up to 30 seconds.'));else done(null,duration);};
-   media.onerror=()=>done(Error('This browser cannot read that audio format. Try WAV or MP3.'));
-   timer=w.setTimeout(()=>done(Error('Audio details could not be read. Try a short WAV or MP3 file.')),15000);media.src=url;
+   media.preload='metadata';media.muted=true;media.playsInline=true;
+   media.onloadedmetadata=()=>{const duration=media.duration;if(!finite(duration)||duration<=0||duration>MAX_SOURCE_SECONDS)done(Error('Use an audio or video file up to 2 minutes long, then select up to 30 seconds.'));else done(null,duration);};
+   media.onerror=()=>done(Error(decodeMessage(file)));
+   timer=w.setTimeout(()=>done(Error('File details could not be read. Try a shorter file or export its audio as WAV or MP3.')),15000);media.src=url;
   });}
   async function chooseFile(){
    const file=el('audioImportFile').files?.[0];if(!file)return;el('audioImportFile').value='';
-   abortWork();stopPreview();buffer=null;resetDraft();const request=generation;controller=new w.AbortController();phase='loading';el('audioImportProgress').removeAttribute('value');el('audioImportFilename').textContent=file.name;status('Reading audio on this device…');sync();
+   abortWork();stopPreview();buffer=null;resetDraft();const request=generation;controller=new w.AbortController();phase='loading';el('audioImportProgress').removeAttribute('value');el('audioImportFilename').textContent=file.name;status(isVideoFile(file)?'Reading video audio on this device…':'Reading audio on this device…');sync();
    try{
-    if(!finite(file.size)||file.size<=0||file.size>MAX_FILE_BYTES)throw Error('Choose an audio file smaller than 20 MB.');
+    if(!finite(file.size)||file.size<=0||file.size>MAX_FILE_BYTES)throw Error('Choose an audio or video file up to 20 MB.');
     await metadata(file,controller.signal);if(request!==generation||!open())return;
     const bytes=await file.arrayBuffer();if(request!==generation||!open())return;
-    const decoded=await audioContext().decodeAudioData(bytes);if(request!==generation||!open())return;
+    const audio=audioContext();let decoded;
+    try{decoded=await audio.decodeAudioData(bytes);}catch{throw Error(decodeMessage(file));}
+    if(request!==generation||!open())return;
     validateSource(decoded);buffer=decoded;phase='ready';controller=null;el('audioImportStart').value='0';el('audioImportEnd').value=String(Math.min(MAX_CLIP_SECONDS,decoded.duration));
-    status('Select up to 30 seconds, then Analyze. Clean solo piano works best.');
-   }catch(error){if(request!==generation||!open())return;phase='empty';controller=null;status(error.name==='AbortError'?'Canceled. Your saved phrase is unchanged.':error.message||'Audio could not be read. Try WAV or MP3.');}
+    status((isVideoFile(file)?'Video audio is ready. ':'')+'Select up to 30 seconds, then Analyze. Clean solo piano works best.');
+   }catch(error){if(request!==generation||!open())return;phase='empty';controller=null;status(error.name==='AbortError'?'Canceled. Your saved phrase is unchanged.':error.message||decodeMessage(file));}
    finally{if(request===generation&&open())sync();}
   }
   async function analyze(){
@@ -178,5 +184,5 @@
   w.addEventListener('blur',stopPreview);d.addEventListener('visibilitychange',()=>{if(d.hidden)stopPreview();});w.addEventListener('pagehide',close);
   sync();return{open:begin,close,stopPreview};
  }
- return{MAX_FILE_BYTES,MAX_SOURCE_SECONDS,MAX_CLIP_SECONDS,bounds,validateSource,monoSlice,prepareClip,normalizeNotes,validNotes,noteName,envelopeValue,fadePreview,create};
+ return{MAX_FILE_BYTES,MAX_SOURCE_SECONDS,MAX_CLIP_SECONDS,isVideoFile,decodeMessage,bounds,validateSource,monoSlice,prepareClip,normalizeNotes,validNotes,noteName,envelopeValue,fadePreview,create};
 });

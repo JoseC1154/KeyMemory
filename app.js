@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.06.46";
+const APP_VERSION = "2026.11.07.48";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
@@ -1492,6 +1492,10 @@ function renderPiano() {
     label.className = "noteLabel";
     label.textContent = activeMode==="phrase"?phraseDisplayName(midi,midi%12===0||midi===21):activeMode==="scale"?scaleNoteName(midi):NAMES[midi % 12];
     button.append(label);
+    if(phrase){
+      const marker=document.createElement("span");marker.className="phraseLiveMarker";marker.setAttribute("aria-hidden","true");button.append(marker);
+      button.setAttribute("aria-describedby","phraseKeyLegend");
+    }
     decorateTransportKey(button,midi);
     button.classList.toggle("midiKeyDown",isPhysicalMidiDown(midi));
     if(!existing)button.addEventListener("click",event=>{
@@ -2309,6 +2313,7 @@ function renderPhraseViewContent(){
   piano.parentElement.hidden=hidePiano;
   if(!hidePiano&&wasPianoHidden){renderPiano();piano.parentElement.scrollLeft=activeMode==="phrase"?phrasePianoScroll:0;}
   document.querySelector(".pianoHint").hidden=hidePiano;
+  document.getElementById("phraseKeyLegend").hidden=!enabled||hidePiano;
   document.querySelector(".info").hidden=hidePiano;
   const toggle=document.getElementById("phraseViewSwitch");toggle.hidden=!small;toggle.textContent=show?"Show piano":"Show score";toggle.setAttribute("aria-expanded",String(show));
   document.getElementById("phraseViewVisibility").value=phraseViewVisibility;
@@ -2333,19 +2338,32 @@ function renderPhraseViewContent(){
   const showingLive=!phraseViewExample&&(recording||!source.notes.length||(!playing&&live.length>0));
   const practicing=s.state==="practice"||s.state==="countin";
   const pitches=showingLive?live:practicing?s.target:held.map(n=>n.midi);
-  // Same physical pitches on staff, roll and keyboard; pedal tails are deliberately not held keys.
-  const highlighted=new Set(playing?held.map(n=>n.midi):showingLive?live:[]);
-  const inspecting=canInspectPhrase()&&phraseInspectSelected&&!showingLive;
+  // Live musical input is independent of reference/playback, even on the same
+  // pitch. Reserved shortcuts never enter phraseRawHeld; pedal tails are not
+  // physically held keys. Keep deliberate inspection visible while playing.
+  const playbackHeld=new Set(playing?held.map(n=>n.midi):[]),liveHeld=new Set(live);
+  const inspecting=canInspectPhrase()&&phraseInspectSelected;
   const inspectHeld=new Set(inspecting?held.map(n=>n.midi):[]),inspectTails=new Set(inspecting?model.notes.filter(n=>n.start<=time&&n.keyEnd<=time&&n.soundEnd>time).map(n=>n.midi):[]);
-  for(const key of piano.querySelectorAll(".key")){const midi=Number(key.dataset.midi),on=highlighted.has(midi),heldAtPoint=inspectHeld.has(midi),pedalAtPoint=!heldAtPoint&&inspectTails.has(midi);key.classList.toggle("phrasePlaying",on);key.classList.toggle("phraseInspectKey",heldAtPoint);key.classList.toggle("phraseInspectTail",pedalAtPoint);if(key.title)key.setAttribute("aria-label",key.title+(on?(playing?(imported?" · playing estimated note":" · playing, key held"):" · live key held"):heldAtPoint?(imported?" · inspected estimated note":" · inspected time, key held"):pedalAtPoint?" · inspected time, pedal sustain only":""));}
+  for(const key of piano.querySelectorAll(".key")){
+    const midi=Number(key.dataset.midi),on=playbackHeld.has(midi),liveOn=liveHeld.has(midi),heldAtPoint=inspectHeld.has(midi),pedalAtPoint=!heldAtPoint&&inspectTails.has(midi);
+    key.classList.toggle("phrasePlaying",on);key.classList.toggle("phraseLive",liveOn);
+    key.classList.toggle("phraseInspectKey",heldAtPoint);key.classList.toggle("phraseInspectTail",pedalAtPoint);
+    const cues=[];
+    if(key.classList.contains("chordTone"))cues.push("practice target");
+    if(on)cues.push(imported?"playing estimated note":"playing, key held");
+    if(heldAtPoint)cues.push(imported?"inspected estimated note":"inspected time, key held");
+    if(pedalAtPoint)cues.push("inspected time, pedal sustain only");
+    if(liveOn)cues.push("your MIDI key held");
+    if(key.title)key.setAttribute("aria-label",key.title+(cues.length?" · "+cues.join(" · "):""));
+  }
   if(show){
     const width=Math.max(320,panel.clientWidth||800),inspectable=canInspectPhrase(),limit=Math.max(0,source.duration-phraseViewWindow);
     const start=Math.max(0,Math.min(limit,inspectable&&Number.isFinite(phraseInspectWindowStart)?phraseInspectWindowStart:time-phraseViewWindow/4)),end=start+phraseViewWindow;
     if(inspectable)phraseInspectWindowStart=start;
     document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames,inspecting,includeContinuations:inspectable,loopStart:phraseViewExample?undefined:loopBounds().start,loopEnd:phraseViewExample?undefined:loopBounds().end,grid:phraseViewExample?undefined:window.KeyMemoryPhrase.timing.grid(s.options,start,end,120),gridConfirmed:s.options.gridConfirmed}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
     const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
-    document.getElementById("phrasePitchText").setAttribute("aria-live",inspecting?"polite":"off");
-    document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":inspecting?(imported?"Selected time, estimated notes: ":"Selected time, keys held: "):"At cursor: ")+(names.join(" · ")||(imported?"No estimated notes active":"No keys held"))+([...inspectTails].some(n=>!inspectHeld.has(n))?". Pedal only: "+[...inspectTails].filter(n=>!inspectHeld.has(n)).map(n=>view.pitch(n,phraseViewSpelling).name).join(" · "):"")+". C4 = middle C.";
+    document.getElementById("phrasePitchText").setAttribute("aria-live",inspecting&&!showingLive?"polite":"off");
+    document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":inspecting?(imported?"Selected time, estimated notes: ":"Selected time, keys held: "):"At cursor: ")+(names.join(" · ")||(imported?"No estimated notes active":"No keys held"))+([...inspectTails].some(n=>!inspectHeld.has(n))?". At inspected time, pedal only: "+[...inspectTails].filter(n=>!inspectHeld.has(n)).map(n=>view.pitch(n,phraseViewSpelling).name).join(" · "):"")+". C4 = middle C.";
     document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,grid:phraseViewExample?undefined:window.KeyMemoryPhrase.timing.grid(s.options,start,end,120),gridConfirmed:s.options.gridConfirmed,names:phraseViewNames,spelling:phraseViewSpelling});
     phraseStaff.setAttribute("aria-valuemax",String(source.duration/1000));phraseStaff.setAttribute("aria-valuenow",String(time/1000));phraseStaff.setAttribute("aria-valuetext",phrasePositionText(time));phraseStaff.setAttribute("aria-disabled",String(!inspectable||!source.notes.length));phraseStaff.tabIndex=inspectable&&source.notes.length?0:-1;
     const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=!canInspectPhrase()||!source.notes.length;

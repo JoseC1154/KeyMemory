@@ -66,7 +66,10 @@ const server = http.createServer((req, res) => {
           assert(fading > 0 && fading < held.opacity, `${mode}/${input}: same fading overlay after rerender (${fading})`);
           await page.waitForTimeout(450);
           assert(!await key.evaluate(k => k.classList.contains('wrongAnswer')), `${mode}/${input}: feedback clears`);
-          assert.equal(await key.evaluate(k => getComputedStyle(k).backgroundImage), base, `${mode}/${input}: no permanent red base`);
+          if (mode === 'phrase' && input === 'midi') {
+            assert(await key.evaluate(k => k.classList.contains('phraseLive')), 'a held MIDI note remains identifiable after red fades');
+            assert.equal(await key.evaluate(k => getComputedStyle(k).backgroundColor), 'rgb(240, 140, 224)');
+          } else assert.equal(await key.evaluate(k => getComputedStyle(k).backgroundImage), base, `${mode}/${input}: no permanent red base`);
           if (mode.startsWith('scale')) {
             assert.equal(await page.evaluate(() => scalePhase), 'correction');
             assert.equal(await page.locator('.key.correctionTarget').count(), 1);

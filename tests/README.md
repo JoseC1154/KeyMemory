@@ -118,3 +118,20 @@ Existing phrase regressions use the new one-bar default rather than the former t
 These checks use simulated clocks, MIDI, DOM and audio. Local Chromium was attempted for the existing browser suites but blocked before assertions by `socket() failed: Operation not permitted`. No rendered-layout, native pointer/keyboard, audible seamlessness, physical MIDI or Safari/mobile-device pass is claimed for this candidate. No candidate source was uploaded or published for testing.
 
 `node tests/phrase-meter-browser.cjs` adds native checks for pulse-unit editing, controls with the score hidden, snapped keyboard/numeric boundaries, padded inspection, count-in-off transport and narrow-screen control bounds at 1280×900, 390×844, 320×740 and 844×390. It was also attempted and blocked at Chromium launch before any assertions.
+
+## Local video import
+
+- `npm run test:video` checks actual app integration using simulated video metadata/decode: MP4/MOV/WebM, MIME/extension fallback, no autoplay or media persistence, unchanged size/duration/clip limits, review and accept, unsupported/no-audio errors, Blob URL cleanup, cancel/close and late decoder results.
+- `npm run test:video-browser` requires Playwright, Chromium and FFmpeg (AAC, H.264, Opus and VP9 encoders). It generates deterministic tones with a solid-color picture using `tests/video-fixtures.cjs`, then tests real MP4/AAC, MOV/AAC and WebM/Opus decoding, real WebM→resample→worker→review→accept, missing audio/corrupt containers, cancellation, same-origin GET-only requests and 1280/390/320-pixel layout. `VIDEO_FIXTURE_DIR` may point to an existing generated set; `FFMPEG_PATH` and `CHROMIUM_PATH` override executables. No user recordings or downloaded videos are used.
+
+Native Chromium remains blocked here by `socket() failed: Operation not permitted`, so browser codec and rendered-layout checks are authored but not passed in this environment. Simulated tests cannot establish codec support; MOV and other formats depend on each browser. Physical-device, listening and transcription-accuracy validation remain separate.
+
+
+## Distinct live MIDI keys (Build 2026.11.07.48)
+
+- `node tests/phrase-live-midi.cjs`: black/white/extreme pitches; musical versus reserved channels; layered/duplicate/velocity-zero input; pedal release; target/playback/live/inspection and example states; red lifetime; stable nodes; accessible labels, marker, legend and contrast; score visibility; blur/hidden/disconnect/mapping/mode cleanup; unchanged saved notes.
+- `node tests/phrase-live-midi-browser.cjs`: computed live fills and text; diamond bounds; two-color reference overlap; full-key red overlay; channel-specific shortcut overlap; reduced motion and legend at desktop, portrait and landscape widths.
+
+`stale-key-visuals.cjs` checks the separate live state behind Settings/Hint/Modes. `wrong-key-browser.cjs` expects held Phrase MIDI notes to remain pink after red fades. `phrase-timing-controls.cjs` verifies explicit inspected-time pedal wording.
+
+The native MIDI browser suite was attempted locally but Chromium failed before assertions with `socket() failed: Operation not permitted`. Local deterministic success is not a native-browser or physical-MIDI pass.

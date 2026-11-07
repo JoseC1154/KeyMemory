@@ -23,12 +23,12 @@ function setup(saved,prefs){
  return{w,d,el,click,change,send,off,advance,connect,port,access,sounds,controls,oscillators,cc:(controller,value,channel=0)=>send(controller,value,channel,0xb0),mode:m=>w.phraseTest.mode(m),get:()=>w.phraseTest.get(),snapshot:()=>engine.snapshot(),transportTimers:()=>[...timers].filter(([,v])=>v.fn.name!=='renderPhraseView').map(([id,v])=>({id,time:v.time,repeat:v.repeat})),now:()=>now,close:()=>w.close()};
 }
 const key=(h,n)=>h.d.querySelector(`[data-midi="${n}"]`);
-const transient=(h,n)=>['midiKeyDown','phrasePlaying','selected'].filter(c=>key(h,n)?.classList.contains(c));
+const transient=(h,n)=>['midiKeyDown','phrasePlaying','phraseLive','selected'].filter(c=>key(h,n)?.classList.contains(c));
 (async()=>{
  for(const recording of [false,true])for(const [open,close]of [['openSettings','closeSettings'],['openHint','closeHint'],['openModes','closeModes']]){
   const h=setup();await h.connect();h.mode('phrase');
   if(recording){h.click('phraseRecord');await flush();h.advance(2000);assert.equal(h.snapshot().state,'recording');}
-  h.send(60);assert(key(h,60).classList.contains('phrasePlaying'));assert(key(h,60).classList.contains('midiKeyDown'));
+  h.send(60);assert(key(h,60).classList.contains('phraseLive'));assert(key(h,60).classList.contains('midiKeyDown'));
   h.click(open);h.off(60);assert.deepEqual(Array.from(h.get().selected),[],'logical selection is already released');assert.deepEqual(transient(h,60),[],'release repaints immediately behind the open sheet');
   h.click(close);assert.deepEqual(transient(h,60),[],`${recording?'recorded':'idle'} note released behind ${open} must not remain painted`);
   h.advance(10000);assert.deepEqual(transient(h,60),[],'no late repaint resurrects the released key');h.close();
@@ -40,7 +40,7 @@ const transient=(h,n)=>['midiKeyDown','phrasePlaying','selected'].filter(c=>key(
  let h=setup(saved);await h.connect();h.mode('phrase');h.click('phrasePractice');await flush();h.advance(2000);h.send(60);assert(key(h,60).classList.contains('selected'));h.click('openSettings');h.send(60,0);h.click('closeSettings');assert.deepEqual(transient(h,60),[],'velocity-zero releases interrupted practice selection');h.close();
  // Pedal state does not make a released physical key appear pressed, and one
  // channel's release must not hide the same pitch still held on another channel.
- h=setup();await h.connect();h.mode('phrase');h.click('phraseRecord');await flush();h.advance(2000);h.cc(64,127);h.send(60);h.send(60,90,1);h.send(64);h.click('openHint');h.off(60);assert(key(h,60).classList.contains('midiKeyDown'));assert(key(h,60).classList.contains('phrasePlaying'));h.off(60,1);assert.deepEqual(transient(h,60),[]);assert(key(h,64).classList.contains('phrasePlaying'),'different held note survives reconciliation');h.off(64);h.click('closeHint');assert.deepEqual(transient(h,64),[]);h.close();
+ h=setup();await h.connect();h.mode('phrase');h.click('phraseRecord');await flush();h.advance(2000);h.cc(64,127);h.send(60);h.send(60,90,1);h.send(64);h.click('openHint');h.off(60);assert(key(h,60).classList.contains('midiKeyDown'));assert(key(h,60).classList.contains('phraseLive'));h.off(60,1);assert.deepEqual(transient(h,60),[]);assert(key(h,64).classList.contains('phraseLive'),'different held note survives reconciliation');h.off(64);h.click('closeHint');assert.deepEqual(transient(h,64),[]);h.close();
  // Explicit time inspection remains intentional after a live note releases.
  h=setup(saved);await h.connect();h.mode('phrase');h.el('phraseViewTime').value='.2';h.el('phraseViewTime').dispatchEvent(new h.w.Event('input'));assert(key(h,60).classList.contains('phraseInspectKey'));h.send(67);h.click('openSettings');h.off(67);h.click('closeSettings');assert.deepEqual(transient(h,67),[]);assert(key(h,60).classList.contains('phraseInspectKey'),'keep deliberate score inspection');h.close();
  for(const mode of ['free','find','remember','semitones','degrees','builder','dictionary']){
