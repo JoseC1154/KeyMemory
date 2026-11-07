@@ -7,14 +7,14 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="#121212" name="theme-color"/>
 <title>KeyMemory — Piano</title>
-<link href="./styles.css?v=20261107-49" rel="stylesheet"/>
-<script defer="" src="./midi-transport.js?v=20261107-49"></script>
-<script defer="" src="./midi.js?v=20261107-49"></script>
-<script defer="" src="./phrase.js?v=20261107-49"></script>
-<script defer="" src="./phrase-view.js?v=20261107-49"></script>
-<script defer="" src="./audio-transcription.js?v=20261107-49"></script>
-<script defer="" src="./audio-import.js?v=20261107-49"></script>
-<script defer="" src="./app.js?v=20261107-49"></script>
+<link href="./styles.css?v=20261107-50" rel="stylesheet"/>
+<script defer="" src="./midi-transport.js?v=20261107-50"></script>
+<script defer="" src="./midi.js?v=20261107-50"></script>
+<script defer="" src="./phrase.js?v=20261107-50"></script>
+<script defer="" src="./phrase-view.js?v=20261107-50"></script>
+<script defer="" src="./audio-transcription.js?v=20261107-50"></script>
+<script defer="" src="./audio-import.js?v=20261107-50"></script>
+<script defer="" src="./app.js?v=20261107-50"></script>
 </head>
 <body>
 <main class="shell">
@@ -70,8 +70,13 @@
 <span id="phraseGridHint" role="status">Set tempo and meter. The grid is a reference, not quantization.</span>
 </div>
 <section id="phraseScore" class="phraseScore" hidden aria-label="Live Score and exact performance timing">
-<div class="scoreOptions"><strong>Live Score</strong><div class="phraseSpeedControl"><span>Speed</span><div id="phraseTimingDial" class="phraseTimingDial" role="slider" tabindex="0" aria-label="Phrase speed" aria-valuemin="25" aria-valuemax="250" aria-valuenow="100" aria-valuetext="Normal speed" aria-describedby="phraseDialHelp phraseTimingSummary" title="Drag up for faster, down for slower. Double-click or double-tap to reset."><span class="phraseDialMarker" aria-hidden="true"></span><span id="phraseTimingValue" aria-hidden="true">100%</span></div><span id="phraseTimingSummary" class="visuallyHidden"></span><span id="phraseTimingError" class="visuallyHidden" role="status"></span><span id="phraseDialHelp" class="visuallyHidden">Arrow keys change speed; Shift makes larger changes. Home is slowest, End is fastest, and Enter resets normal speed. Changing speed stops playback. Your recording stays unchanged.</span></div><label>Spelling <select id="phraseSpelling"><option value="sharp">Sharps ♯</option><option value="flat">Flats ♭</option></select></label><label><input type="checkbox" id="phraseNoteNames" checked/> Note names</label></div>
+<div class="scoreOptions"><strong>Live Score</strong><button id="phraseEditNotes" type="button" aria-pressed="false" aria-controls="phraseNoteEditor">Edit notes</button><div class="phraseSpeedControl"><span>Speed</span><div id="phraseTimingDial" class="phraseTimingDial" role="slider" tabindex="0" aria-label="Phrase speed" aria-valuemin="25" aria-valuemax="250" aria-valuenow="100" aria-valuetext="Normal speed" aria-describedby="phraseDialHelp phraseTimingSummary" title="Drag up for faster, down for slower. Double-click or double-tap to reset."><span class="phraseDialMarker" aria-hidden="true"></span><span id="phraseTimingValue" aria-hidden="true">100%</span></div><span id="phraseTimingSummary" class="visuallyHidden"></span><span id="phraseTimingError" class="visuallyHidden" role="status"></span><span id="phraseDialHelp" class="visuallyHidden">Arrow keys change speed; Shift makes larger changes. Home is slowest, End is fastest, and Enter resets normal speed. Changing speed stops playback. Your recording stays unchanged.</span></div><label>Spelling <select id="phraseSpelling"><option value="sharp">Sharps ♯</option><option value="flat">Flats ♭</option></select></label><label><input type="checkbox" id="phraseNoteNames" checked/> Note names</label></div>
 <p class="scoreCaveat">Continuous pitch timeline, not rhythmic sheet music. Horizontal spacing is exact time, not guessed note values. Notes-only practice follows your progress; rhythm practice follows the clock. Staff split is not a hand assignment; spelling is your preference, not a guessed key.</p>
+<section id="phraseNoteEditor" class="phraseNoteEditor" hidden aria-label="Edit individual phrase notes" aria-describedby="phraseNoteEditHelp">
+<p id="phraseNoteEditHelp">Tap a note on the staff, or choose one below, then Delete. Purple marks your selection. Edits save on this device; Undo keeps the last 100 deletions until you reload or replace the phrase.</p>
+<div class="phraseNoteEditActions"><button id="phraseNotePrevious" type="button" aria-label="Select previous note">Previous note</button><label>Selected note <select id="phraseNoteChoice" aria-label="Note to delete"></select></label><button id="phraseNoteNext" type="button" aria-label="Select next note">Next note</button><button id="phraseNoteDelete" type="button" disabled>Delete note</button><button id="phraseNoteUndo" type="button" disabled>Undo delete</button></div>
+<p id="phraseNoteEditStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+</section>
 <div id="phraseStaff" class="phraseStaff" role="slider" tabindex="0" aria-label="Inspect staff time" aria-orientation="horizontal" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="0 seconds" aria-describedby="phraseStaffHelp phraseStaffKeys phrasePitchText"></div>
 <div id="phraseRoll" class="phraseRoll"></div>
 <div class="phraseMeterControls" aria-label="Loop grid">
@@ -109,20 +114,29 @@
 <section id="phraseImportOverlay" class="modalOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="audioImportTitle" aria-describedby="audioImportPrivacy">
 <div class="modalPanel audioImportPanel">
 <div class="modalTop"><h2 id="audioImportTitle">Import audio / video</h2><button id="audioImportClose" type="button">Close</button></div>
-<p id="audioImportPrivacy">Files stay on this device. Choose a video up to 100 MB or an audio file up to 20 MB, each up to 2 minutes long, then analyze up to 30 seconds of its audio. Clean solo piano or a single instrument works best; full song mixes can include wrong or missing notes.</p>
-<label class="audioImportFile">Audio or video file <input id="audioImportFile" type="file" accept="audio/*,video/*,.wav,.mp3,.m4a,.flac,.ogg,.mp4,.m4v,.mov,.webm" aria-describedby="audioImportFormats"/></label><p id="audioImportFilename" class="audioImportFilename"></p>
+<p id="audioImportPrivacy">Turn your recording into notes for Phrase Trainer. Files stay on this device.</p>
+<label class="audioImportFile">Audio or video file <input id="audioImportFile" type="file" accept="audio/*,video/*,.wav,.mp3,.m4a,.flac,.ogg,.mp4,.m4v,.mov,.webm" aria-describedby="audioImportLimits"/></label><p id="audioImportFilename" class="audioImportFilename"></p>
+<p id="audioImportLimits">Video up to 100 MB · Audio up to 20 MB · Files up to 2 minutes</p>
 <div class="audioImportFeedback"><p id="audioImportStatus" role="status" aria-live="polite" aria-atomic="true"></p><progress id="audioImportProgress" max="1" hidden aria-label="Audio analysis progress"></progress></div>
-<p id="audioImportFormats">WAV, MP3, or video with a browser-supported audio track, such as MP4/AAC or WebM/Opus. MOV and other formats vary by browser. Video images are not analyzed. URL and YouTube imports are not supported.</p>
-<p id="audioImportTrimHint">Start and End unlock after the audio loads. Until then, check the file status above. The default section is the first 30 seconds or the full clip if shorter.</p>
+<p id="audioImportSection">Analyze up to 30 seconds at a time. Clear piano recordings work best.</p>
+<div class="audioImportActions"><button id="audioImportAnalyze" type="button" disabled>Analyze</button><button id="audioImportOriginal" type="button" disabled>Hear original section</button><button id="audioImportCancel" type="button" hidden>Cancel</button><button id="audioImportStopPreview" type="button" hidden>Stop preview</button></div>
+<details id="audioImportOptions" class="audioImportDetails"><summary>Section &amp; file options</summary>
+<p id="audioImportTrimHint">Start and End unlock after the audio loads. The default is the first 30 seconds, or the full clip if shorter.</p>
 <div class="audioImportTrim"><label>Start (seconds) <input id="audioImportStart" aria-describedby="audioImportTrimHint" type="number" min="0" max="120" step="any" value="0" disabled/></label><label>End (seconds) <input id="audioImportEnd" aria-describedby="audioImportTrimHint" type="number" min="0" max="120" step="any" value="0" disabled/></label></div>
-<div class="audioImportActions"><button id="audioImportOriginal" type="button" disabled>Hear original section</button><button id="audioImportAnalyze" type="button" disabled>Analyze</button><button id="audioImportCancel" type="button" hidden>Cancel</button><button id="audioImportStopPreview" type="button" hidden>Stop preview</button></div>
-
+<p id="audioImportFormats">WAV, MP3, or video with a browser-supported audio track, such as MP4/AAC or WebM/Opus. MOV and other formats vary by browser. Only the audio is analyzed. URL and YouTube imports are not supported.</p>
+</details>
 <section id="audioImportReview" hidden aria-labelledby="audioImportReviewTitle">
-<h3 id="audioImportReviewTitle">Review and correct</h3><p>Listen and check the notes before practicing. Change a pitch, start or length; remove extra notes or add missing ones. Timing is preserved, not quantized. Tempo, pedal, hands and original key-release timing are not detected. Playback uses neutral velocity.</p>
-<div class="audioImportActions"><button id="audioImportNotesPreview" type="button" disabled>Hear detected notes</button><button id="audioImportAdd" type="button">Add note</button><button id="audioImportReset" type="button" disabled>Restore detected notes</button></div>
-<strong id="audioImportCount"></strong><p id="audioImportValidation" role="status"></p><div id="audioImportNoteList" class="audioImportNoteList"></div>
+<h3 id="audioImportReviewTitle">Your notes</h3><strong id="audioImportCount"></strong>
+<p>Listen if you like, then import to play and practice. Detected notes are estimates and may need corrections.</p>
+<p id="audioImportValidation" role="status"></p>
+<div class="audioImportActions"><button id="audioImportUse" type="button" disabled>Import notes</button><button id="audioImportNotesPreview" type="button" disabled>Hear detected notes</button></div>
+<p id="audioImportSaveHint">Nothing is saved until you import. Closing discards this draft and its audio.</p>
+<details id="audioImportEditor" class="audioImportDetails"><summary>Edit notes (optional)</summary>
+<p>Correct a pitch, start or length, or add and remove notes. Original timing is preserved. Tempo, pedal, hands and key-release timing are not detected; playback uses neutral velocity.</p>
+<div class="audioImportActions"><button id="audioImportAdd" type="button">Add note</button><button id="audioImportReset" type="button" disabled>Restore detected notes</button></div>
+<div id="audioImportNoteList" class="audioImportNoteList"></div>
 <div class="audioImportPages"><button id="audioImportPrevious" type="button" disabled>Previous notes</button><span id="audioImportPage">Page 1 of 1</span><button id="audioImportNext" type="button" disabled>Next notes</button></div>
-<p>Your saved phrase stays unchanged until you choose Use this phrase. Closing discards this draft and its audio.</p><button id="audioImportUse" type="button" disabled>Use this phrase</button>
+</details>
 </section></div></section>
 
 <section id="scalePauseOverlay" class="modalOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="scalePauseTitle" aria-describedby="scalePauseDescription"><div class="modalPanel scalePausePanel"><h2 id="scalePauseTitle">Scale paused</h2><p id="scalePauseDescription">Your time and progress are saved. Release any held keys, then resume when ready.</p><button id="resumeScale" type="button">Resume</button></div></section>

@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.07.49";
+const APP_VERSION = "2026.11.07.50";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
@@ -19,6 +19,7 @@ let phraseSeenLow=21,phraseSeenHigh=108;
 let phraseViewVisibility="auto",phraseViewSpelling="sharp",phraseViewNames=true,phraseSmallScore=false,phraseInspectTime=0,phraseViewWindow=6000,phraseViewExample=false,phrasePianoScroll=0;
 let phraseViewModel=null,phraseViewSignature="",phraseViewTick=null,phraseViewStamp=0,phraseInspectSelected=false,phraseInspectWindowStart=null;
 let phraseLoopDraft=null,phraseLoopDrag=null,phraseForgivenessPreview=null;
+let phraseNoteEdit=false,phraseNoteSelected=null,phraseNoteCandidates=[],phraseNoteRevision=-1,phraseNoteMessage="",phraseNoteGesture=null,phraseNoteBlockClick=false;
 try{const prefs=JSON.parse(localStorage.getItem("keymemory.phrase.view")||"{}");if(["auto","show","hide"].includes(prefs.visibility))phraseViewVisibility=prefs.visibility;if(prefs.spelling==="flat")phraseViewSpelling="flat";if(prefs.names===false)phraseViewNames=false;}catch{}
 const wrongKeyFeedback = new Map();
 const WRONG_KEY_DURATION = 950;
@@ -2033,9 +2034,9 @@ if(window.KeyMemoryPhrase){
   refreshPhraseUI(phraseEngine.snapshot());
 }
 if(window.KeyMemoryAudioImport){
-  phraseImporter=window.KeyMemoryAudioImport.create({isOpen:()=>currentDialog?.id==="phraseImportOverlay"&&activeMode==="phrase",onClose:closePracticeDialog,onCommit:payload=>{
+  phraseImporter=window.KeyMemoryAudioImport.create({isOpen:()=>currentDialog?.id==="phraseImportOverlay"&&activeMode==="phrase",onClose:closePracticeDialog,hasSavedPhrase:()=>!!phraseSnapshot?.notes.length,onCommit:payload=>{
     if(currentDialog?.id!=="phraseImportOverlay"||activeMode!=="phrase")return false;
-    if(phraseSnapshot?.notes.length&&!window.confirm("Replace your saved phrase with these reviewed audio notes?"))return false;
+    if(phraseSnapshot?.notes.length&&!window.confirm("Replace your saved phrase with these imported notes?"))return false;
     phraseLoopDraft=null;phraseLoopDrag=null;phraseViewExample=false;phraseViewModel=null;phraseViewSignature="";phraseInspectTime=0;phraseInspectSelected=false;phraseInspectWindowStart=null;selected.clear();resetMidiAudio();
     if(!phraseEngine.importPhrase(payload))throw Error(phraseEngine.snapshot().error||"The phrase could not be imported.");
     return true;
@@ -2269,28 +2270,111 @@ for(const bound of ["start","end"]){
   for(const name of ["pointercancel","lostpointercapture"])handle.addEventListener(name,event=>{if(phraseLoopDrag?.id===event.pointerId)cancelLoopDrag();});
 }
 document.getElementById("phraseLoopReset").addEventListener("click",()=>{if(canEditLoop()){const r=loopBounds();phraseLoopDraft=null;phraseLoopDrag=null;if(r.start!==0||r.end!==r.duration)phraseEngine.setOptions({sectionStart:0,sectionEnd:r.duration});else refreshPhraseLoop();}});
+// Note editing is explicit; the ordinary staff remains an exact-time inspector.
+function canEditPhraseNotes(){return activeMode==="phrase"&&!currentDialog&&!document.hidden&&!phraseViewExample&&!phraseTransportPending&&phraseSnapshot&&["idle","complete"].includes(phraseSnapshot.state);}
+function clearPhraseNoteSelection(){phraseNoteSelected=null;phraseNoteCandidates=[];phraseNoteMessage="";phraseNoteGesture=null;}
+function phraseNoteLabel(index){
+  const n=phraseSnapshot?.notes[index];if(!n)return "";
+  return phraseDisplayName(n.note+phraseSnapshot.options.transpose)+" · note "+(index+1)+" · channel "+(n.channel+1)+" · at "+Number((n.start/1000).toFixed(6))+" s · "+Number((n.duration/1000).toFixed(6))+" s long";
+}
+function refreshPhraseNoteEditor(){
+  const s=phraseSnapshot,allowed=!!canEditPhraseNotes(),button=document.getElementById("phraseEditNotes"),panel=document.getElementById("phraseNoteEditor"),staff=document.getElementById("phraseStaff");
+  if(!allowed){phraseNoteEdit=false;clearPhraseNoteSelection();}
+  if(phraseNoteRevision!==(s?.noteRevision??0)){clearPhraseNoteSelection();phraseNoteRevision=s?.noteRevision??0;}
+  button.disabled=!allowed||!(s?.notes.length||s?.undoDeleteCount);button.textContent=phraseNoteEdit?"Done editing":"Edit notes";button.setAttribute("aria-pressed",String(phraseNoteEdit));panel.hidden=!phraseNoteEdit;
+  staff.classList.toggle("isNoteEditing",phraseNoteEdit);
+  if(!phraseNoteEdit)return;
+  const ids=phraseNoteCandidates.length?phraseNoteCandidates:[...new Set([...staff.querySelectorAll(".staffTimelineNote")].flatMap(g=>g.dataset.noteIds.split(",").map(Number)))];
+  const choices=ids.filter(id=>s.notes[id]),select=document.getElementById("phraseNoteChoice"),signature=[phraseNoteRevision,s.options.transpose,phraseViewSpelling,choices.join(",")].join(":");
+  if(select.dataset.signature!==signature){select.replaceChildren();const placeholder=document.createElement("option");placeholder.value="";placeholder.textContent=phraseNoteCandidates.length>1?"Choose one of these overlapping notes":"Choose a note, or tap the staff";select.append(placeholder);for(const id of choices){const option=document.createElement("option");option.value=id;option.textContent=phraseNoteLabel(id);select.append(option);}select.dataset.signature=signature;}
+  if(phraseNoteSelected!==null&&!choices.includes(phraseNoteSelected)){phraseNoteSelected=null;phraseNoteMessage="";}
+  select.value=phraseNoteSelected===null?"":String(phraseNoteSelected);select.disabled=!choices.length;
+  document.getElementById("phraseNoteDelete").disabled=phraseNoteSelected===null||!s.notes[phraseNoteSelected];document.getElementById("phraseNoteUndo").disabled=!s.undoDeleteCount;
+  document.getElementById("phraseNotePrevious").disabled=!s.notes.length||phraseNoteSelected===0;document.getElementById("phraseNoteNext").disabled=!s.notes.length||phraseNoteSelected===s.notes.length-1;
+  document.getElementById("phraseNoteEditStatus").textContent=phraseNoteMessage||(phraseNoteSelected!==null?phraseNoteLabel(phraseNoteSelected)+" selected.":!s.notes.length?"No notes remain. Undo delete restores your last note.":phraseNoteCandidates.length>1?phraseNoteCandidates.length+" notes overlap here. Choose the individual note to delete.":"Select a note. No changes are made until you choose Delete note.");
+  staff.setAttribute("role","group");staff.setAttribute("aria-describedby","phraseNoteEditHelp phraseNoteEditStatus");staff.setAttribute("aria-label","Select a staff note to delete. Arrow keys select notes; Delete removes the selected note; Control or Command Z undoes deletion.");
+  for(const name of ["aria-valuemin","aria-valuemax","aria-valuenow","aria-valuetext","aria-orientation"])staff.removeAttribute(name);
+}
+function selectPhraseNote(index){
+  if(!phraseNoteEdit||!canEditPhraseNotes()||!Number.isInteger(index)||!phraseSnapshot.notes[index])return;
+  phraseNoteSelected=index;phraseNoteCandidates=[];phraseNoteRevision=phraseSnapshot.noteRevision;phraseNoteMessage="";
+  const time=phraseSnapshot.notes[index].start;
+  // Keep the selected note in view without moving notes or changing loop boundaries.
+  if(time<(phraseInspectWindowStart??0)||time>=(phraseInspectWindowStart??0)+phraseViewWindow)phraseInspectWindowStart=Math.max(0,Math.min(Math.max(0,phraseExtent()-phraseViewWindow),time-phraseViewWindow/4));
+  renderPhraseView();
+}
+function noteIdsAtStaffPoint(event){
+  const mark=event.target.closest?.(".staffTimelineNote"),ids=g=>g.dataset.noteIds.split(",").map(Number),marks=[...phraseStaff.querySelectorAll(".staffTimelineNote")];
+  // Offset labels identify their own mark. Noteheads can cover other pitches or continuations.
+  if(mark&&event.target.closest?.(".staffNoteLabel"))return ids(mark);
+  if(mark){
+    const target=mark.querySelector(".staffNoteHead").getBoundingClientRect();
+    if(target.width>0&&target.height>0)return [...new Set(marks.filter(g=>{const r=g.querySelector(".staffNoteHead").getBoundingClientRect();return r.width>0&&r.height>0&&r.left<target.right&&r.right>target.left&&r.top<target.bottom&&r.bottom>target.top;}).flatMap(ids))];
+    return ids(mark);
+  }
+  if(!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return [];
+  // Nearby taps have a 44-pixel target. Ambiguous hits require an explicit choice.
+  return [...new Set(marks.filter(g=>{const r=g.querySelector(".staffNoteHead").getBoundingClientRect();return r.width>0&&Math.hypot(event.clientX-r.left-r.width/2,event.clientY-r.top-r.height/2)<=22;}).flatMap(ids))];
+}
+function chooseStaffNote(event){
+  if(!phraseNoteEdit||!canEditPhraseNotes())return;
+  const ids=noteIdsAtStaffPoint(event).filter(id=>phraseSnapshot.notes[id]);
+  if(ids.length===1){selectPhraseNote(ids[0]);return;}
+  phraseNoteSelected=null;phraseNoteCandidates=ids;phraseNoteRevision=phraseSnapshot.noteRevision;phraseNoteMessage="";renderPhraseView();
+  if(ids.length>1)document.getElementById("phraseNoteChoice").focus({preventScroll:true});
+}
+function deleteSelectedPhraseNote(){
+  if(!phraseNoteEdit||!canEditPhraseNotes()||phraseNoteSelected===null)return;
+  const index=phraseNoteSelected,revision=phraseNoteRevision,note=phraseSnapshot.notes[index];
+  if(!note||revision!==phraseSnapshot.noteRevision){clearPhraseNoteSelection();phraseNoteMessage="The phrase changed. Select the note again.";renderPhraseView();return;}
+  const name=phraseDisplayName(note.note+phraseSnapshot.options.transpose);clearPhraseNoteSelection();
+  if(phraseEngine.deleteNote(index,revision)){phraseNoteMessage="Deleted "+name+". Undo delete can restore it."+(phraseSnapshot.saved?"":" Local saving is unavailable; this change is kept for this session.");renderPhraseView();document.getElementById("phraseNoteUndo").focus({preventScroll:true});}
+  else{phraseNoteMessage="The phrase changed. Select the note again.";renderPhraseView();}
+}
+function undoPhraseNoteDelete(){
+  if(!phraseNoteEdit||!canEditPhraseNotes()||!phraseSnapshot.undoDeleteCount)return;
+  if(phraseEngine.undoDelete(phraseSnapshot.noteRevision)){clearPhraseNoteSelection();phraseNoteMessage="Restored the deleted note."+(phraseSnapshot.saved?"":" Local saving is unavailable; this change is kept for this session.");renderPhraseView();document.getElementById("phraseNoteChoice").focus({preventScroll:true});}
+  else{phraseNoteMessage=phraseSnapshot.error||"The phrase changed. Try Undo again.";renderPhraseView();}
+}
+document.getElementById("phraseEditNotes").addEventListener("click",()=>{
+  if(!canEditPhraseNotes())return;cancelLoopDrag();phraseStaffDrag=null;phraseNoteEdit=!phraseNoteEdit;clearPhraseNoteSelection();phraseNoteBlockClick=false;phraseNoteRevision=phraseSnapshot.noteRevision;renderPhraseView();
+  if(phraseNoteEdit)document.getElementById("phraseNoteChoice").focus({preventScroll:true});
+});
+document.getElementById("phraseNoteChoice").addEventListener("change",event=>{if(event.target.value!=="")selectPhraseNote(Number(event.target.value));});
+for(const [id,direction]of[["phraseNotePrevious",-1],["phraseNoteNext",1]])document.getElementById(id).addEventListener("click",()=>selectPhraseNote(phraseNoteSelected===null?0:Math.max(0,Math.min(phraseSnapshot.notes.length-1,phraseNoteSelected+direction))));
+document.getElementById("phraseNoteDelete").addEventListener("click",deleteSelectedPhraseNote);document.getElementById("phraseNoteUndo").addEventListener("click",undoPhraseNoteDelete);
 phraseStaff.addEventListener("pointerdown",event=>{
   phraseStaffSuppressClick=false;
+  if(phraseNoteEdit){phraseNoteBlockClick=event.button!==0||event.isPrimary===false;if(canEditPhraseNotes()&&!phraseNoteBlockClick)phraseNoteGesture={id:event.pointerId,x:event.clientX,y:event.clientY,revision:phraseSnapshot.noteRevision};return;}
   // Touch keeps native scrolling; its completed tap is handled by click.
   if(event.pointerType==="touch"||event.button!==0||event.isPrimary===false||phraseStaffDrag||currentDialog||document.hidden||!canInspectPhrase())return;
   const mapper=staffPointMapper();if(!mapper)return;
   event.preventDefault();phraseStaff.focus({preventScroll:true});phraseStaffDrag={id:event.pointerId,mapper};phraseStaff.setPointerCapture?.(event.pointerId);inspectStaffPoint(event,mapper);
 });
-phraseStaff.addEventListener("pointermove",event=>{if(phraseStaffDrag?.id===event.pointerId)inspectStaffPoint(event,phraseStaffDrag.mapper);});
-phraseStaff.addEventListener("pointerup",event=>{if(phraseStaffDrag?.id!==event.pointerId)return;inspectStaffPoint(event,phraseStaffDrag.mapper);phraseStaffDrag=null;phraseStaffSuppressClick=true;});
-for(const name of ["pointercancel","lostpointercapture","scroll"])phraseStaff.addEventListener(name,()=>{phraseStaffDrag=null;if(name==="scroll"){cancelLoopDrag();positionLoopHandles();}});
+phraseStaff.addEventListener("pointermove",event=>{if(phraseNoteEdit){if(phraseNoteGesture?.id===event.pointerId&&Math.hypot(event.clientX-phraseNoteGesture.x,event.clientY-phraseNoteGesture.y)>8)phraseNoteBlockClick=true;return;}if(phraseStaffDrag?.id===event.pointerId)inspectStaffPoint(event,phraseStaffDrag.mapper);});
+phraseStaff.addEventListener("pointerup",event=>{if(phraseNoteEdit){if(phraseNoteGesture?.revision!==phraseSnapshot.noteRevision)phraseNoteBlockClick=true;phraseNoteGesture=null;return;}if(phraseStaffDrag?.id!==event.pointerId)return;inspectStaffPoint(event,phraseStaffDrag.mapper);phraseStaffDrag=null;phraseStaffSuppressClick=true;});
+for(const name of ["pointercancel","lostpointercapture","scroll"])phraseStaff.addEventListener(name,()=>{phraseStaffDrag=null;const interruptedNoteGesture=!!phraseNoteGesture;phraseNoteGesture=null;if(phraseNoteEdit&&(name!=="lostpointercapture"||interruptedNoteGesture))phraseNoteBlockClick=true;if(name==="scroll"){cancelLoopDrag();positionLoopHandles();}});
 phraseStaff.addEventListener("click",event=>{
+  if(phraseNoteEdit){if(!phraseNoteBlockClick)chooseStaffNote(event);phraseNoteBlockClick=false;return;}
   if(phraseStaffSuppressClick){phraseStaffSuppressClick=false;return;}
   if(event.detail===0){inspectPhraseTime(phraseInspectTime);return;}
   inspectStaffPoint(event);
 });
 phraseStaff.addEventListener("keydown",event=>{
+  if(phraseNoteEdit){
+    if(!canEditPhraseNotes())return;
+    if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End","Delete","Backspace","Escape"].includes(event.key)||(event.key.toLowerCase()==="z"&&(event.ctrlKey||event.metaKey))){
+      event.preventDefault();if(event.key==="Escape"){phraseNoteEdit=false;clearPhraseNoteSelection();renderPhraseView();document.getElementById("phraseEditNotes").focus({preventScroll:true});}
+      else if(event.key==="Delete"||event.key==="Backspace")deleteSelectedPhraseNote();else if(event.key.toLowerCase()==="z")undoPhraseNoteDelete();
+      else selectPhraseNote(event.key==="Home"?0:event.key==="End"?phraseSnapshot.notes.length-1:phraseNoteSelected===null?0:Math.max(0,Math.min(phraseSnapshot.notes.length-1,phraseNoteSelected+(["ArrowLeft","ArrowUp"].includes(event.key)?-1:1))));
+    }return;
+  }
   if(["Enter"," ","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Home","End"].includes(event.key)){
     event.preventDefault();const step=event.altKey?1:event.shiftKey?1000:100;
     inspectPhraseTime(event.key==="Home"?0:event.key==="End"?(phraseViewExample?phraseViewModel?.duration||0:phraseExtent()):phraseInspectTime+(["ArrowLeft","ArrowDown"].includes(event.key)?-step:["ArrowRight","ArrowUp"].includes(event.key)?step:0));
   }
 });
-// Display/inspection never change raw notes, transport, grading or audio.
+// Ordinary display/inspection remains read-only; note edits use guarded engine APIs.
 function savePhraseViewPreferences(){try{localStorage.setItem("keymemory.phrase.view",JSON.stringify({visibility:phraseViewVisibility,spelling:phraseViewSpelling,names:phraseViewNames}));}catch{}}
 function renderPhraseView(){
   // A view failure must never interrupt MIDI recording or an audio scheduler callback.
@@ -2319,7 +2403,9 @@ function renderPhraseViewContent(){
   document.getElementById("phraseViewVisibility").value=phraseViewVisibility;
   document.getElementById("phraseSpelling").value=phraseViewSpelling;
   document.getElementById("phraseNoteNames").checked=phraseViewNames;
-  if(!enabled)return;
+  if(!enabled){refreshPhraseNoteEditor();return;}
+  if(!canEditPhraseNotes()){phraseNoteEdit=false;clearPhraseNoteSelection();}
+  if(phraseNoteRevision!==(phraseSnapshot.noteRevision??0)){clearPhraseNoteSelection();phraseNoteRevision=phraseSnapshot.noteRevision??0;}
   const s=phraseSnapshot,view=window.KeyMemoryPhraseView,recording=s.state==="recording",playing=s.state==="playing";
   const exampleAllowed=["idle","complete"].includes(s.state)&&!phraseTransportPending;
   if(!exampleAllowed)phraseViewExample=false;
@@ -2328,7 +2414,7 @@ function renderPhraseViewContent(){
   document.getElementById("phraseDurationLegend").textContent=imported?"Solid = estimated note duration; no pedal data":"Solid = key held · dashed tail = pedal sustain";
   const exampleButton=document.getElementById("phraseViewExample");exampleButton.disabled=!exampleAllowed;exampleButton.textContent=phraseViewExample?"Back to my phrase":"Show example";
   const source=phraseViewExample?{duration:3000,notes:[48,60,64,67].map(note=>({note,channel:0,velocity:90,start:0,duration:600})).concat([{note:72,channel:0,velocity:90,start:2000,duration:500}]),controllers:[{controller:64,value:127,channel:0,time:200},{controller:64,value:0,channel:0,time:1500}],initialControllers:[]}:{notes:recording?(s.viewNotes||[]):s.notes,controllers:recording?(s.viewControllers||[]):s.controllers,initialControllers:recording?(s.viewInitialControllers||[]):s.initialControllers,duration:recording?s.viewDuration:phraseExtent()};
-  const signature=[phraseViewExample,s.state,source.notes.length,source.controllers?.length,source.duration,s.options.transpose,source.notes[0]?.note,source.notes.at(-1)?.note].join(":");
+  const signature=[s.noteRevision,phraseViewExample,s.state,source.notes.length,source.controllers?.length,source.duration,s.options.transpose,source.notes[0]?.note,source.notes.at(-1)?.note].join(":");
   if(signature!==phraseViewSignature||!phraseViewModel){phraseViewModel=view.prepareTimeline({...source,duration:recording||phraseViewExample?source.duration:s.duration},{transpose:recording||phraseViewExample?0:s.options.transpose});phraseViewSignature=signature;}
   const model=phraseViewModel,advancedElapsed=s.elapsed+((playing||(s.state==="practice"&&s.options.rhythm))?Math.max(0,Date.now()-phraseViewStamp):0),elapsed=playing&&s.looping&&s.playbackDuration>0?advancedElapsed%s.playbackDuration:advancedElapsed;
   const practiceTime=s.state==="practice"?s.options.sectionStart+(s.options.rhythm?elapsed:s.targetTime??0)*s.options.playBpm/s.options.sourceBpm:null;
@@ -2360,11 +2446,12 @@ function renderPhraseViewContent(){
     const width=Math.max(320,panel.clientWidth||800),inspectable=canInspectPhrase(),limit=Math.max(0,source.duration-phraseViewWindow);
     const start=Math.max(0,Math.min(limit,inspectable&&Number.isFinite(phraseInspectWindowStart)?phraseInspectWindowStart:time-phraseViewWindow/4)),end=start+phraseViewWindow;
     if(inspectable)phraseInspectWindowStart=start;
-    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,spelling:phraseViewSpelling,names:phraseViewNames,inspecting,includeContinuations:inspectable,loopStart:phraseViewExample?undefined:loopBounds().start,loopEnd:phraseViewExample?undefined:loopBounds().end,grid:phraseViewExample?undefined:window.KeyMemoryPhrase.timing.grid(s.options,start,end,120),gridConfirmed:s.options.gridConfirmed}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
+    document.getElementById("phraseStaff").innerHTML=source.notes.length&&view.timelineStaffSVG?view.timelineStaffSVG(model,{start,end,cursor:time,width:Math.max(240,document.getElementById("phraseStaff").clientWidth||width),maxNotes:400,selectedNoteId:phraseNoteEdit?phraseNoteSelected:null,spelling:phraseViewSpelling,names:phraseViewNames,inspecting,includeContinuations:inspectable,loopStart:phraseViewExample?undefined:loopBounds().start,loopEnd:phraseViewExample?undefined:loopBounds().end,grid:phraseViewExample?undefined:window.KeyMemoryPhrase.timing.grid(s.options,start,end,120),gridConfirmed:s.options.gridConfirmed}):view.staffSVG(pitches,{spelling:phraseViewSpelling,names:phraseViewNames});
     const names=[...new Set(pitches)].sort((a,b)=>a-b).map(n=>view.pitch(n,phraseViewSpelling).name);
     document.getElementById("phrasePitchText").setAttribute("aria-live",inspecting&&!showingLive?"polite":"off");
     document.getElementById("phrasePitchText").textContent=(phraseViewExample?"EXAMPLE — C major + bass, not your recording: ":playing?"Playing keys: ":showingLive?"Live keys: ":practicing?"Target keys: ":inspecting?(imported?"Selected time, estimated notes: ":"Selected time, keys held: "):"At cursor: ")+(names.join(" · ")||(imported?"No estimated notes active":"No keys held"))+([...inspectTails].some(n=>!inspectHeld.has(n))?". At inspected time, pedal only: "+[...inspectTails].filter(n=>!inspectHeld.has(n)).map(n=>view.pitch(n,phraseViewSpelling).name).join(" · "):"")+". C4 = middle C.";
-    document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,width,height:small?110:150,grid:phraseViewExample?undefined:window.KeyMemoryPhrase.timing.grid(s.options,start,end,120),gridConfirmed:s.options.gridConfirmed,names:phraseViewNames,spelling:phraseViewSpelling});
+    document.getElementById("phraseRoll").innerHTML=view.rollSVG(model,{start,end,cursor:time,maxNotes:400,selectedNoteId:phraseNoteEdit?phraseNoteSelected:null,width,height:small?110:150,grid:phraseViewExample?undefined:window.KeyMemoryPhrase.timing.grid(s.options,start,end,120),gridConfirmed:s.options.gridConfirmed,names:phraseViewNames,spelling:phraseViewSpelling});
+    phraseStaff.setAttribute("role","slider");phraseStaff.setAttribute("aria-describedby","phraseStaffHelp phraseStaffKeys phrasePitchText");phraseStaff.setAttribute("aria-label","Inspect staff time");phraseStaff.setAttribute("aria-orientation","horizontal");phraseStaff.setAttribute("aria-valuemin","0");
     phraseStaff.setAttribute("aria-valuemax",String(source.duration/1000));phraseStaff.setAttribute("aria-valuenow",String(time/1000));phraseStaff.setAttribute("aria-valuetext",phrasePositionText(time));phraseStaff.setAttribute("aria-disabled",String(!inspectable||!source.notes.length));phraseStaff.tabIndex=inspectable&&source.notes.length?0:-1;
     const seek=document.getElementById("phraseViewTime");seek.max=String(Math.max(.01,source.duration/1000));seek.value=String(time/1000);seek.disabled=!canInspectPhrase()||!source.notes.length;
     document.getElementById("phraseViewTimeLabel").textContent=phrasePositionText(time);
@@ -2374,7 +2461,7 @@ function renderPhraseViewContent(){
     const sectionContext=!phraseViewExample&&(s.options.sectionStart>0||s.options.sectionEnd<source.duration)?"Source context; loop ends at "+(Math.min(source.duration,s.options.sectionEnd)/1000).toFixed(2)+" s. ":"";
     document.getElementById("phraseControllerText").textContent=sectionContext+(imported?"Estimated note durations from audio. No pedal data; neutral playback velocity. Tempo is not detected.":channels.length?channels.map(ch=>"Ch "+(ch+1)+": pedal "+((cc.get(ch+":64")||0)>=64?"down":"up")+" · volume "+(cc.get(ch+":7")??100)+" · expression "+(cc.get(ch+":11")??127)).join(" | "):"Unquantized source seconds · solid key lengths; pedal tails are not extra pressed notes.");
   }
-  refreshPhraseTiming();refreshPhraseForgiveness();refreshPhraseMeter();refreshPhraseLoop();refreshTransportShortcuts();
+  refreshPhraseNoteEditor();refreshPhraseTiming();refreshPhraseForgiveness();refreshPhraseMeter();refreshPhraseLoop();refreshTransportShortcuts();
   if((playing||recording||(s.state==="practice"&&s.options.rhythm))&&!document.hidden)phraseViewTick=setTimeout(renderPhraseView,80);
 }
 for(const [id,apply]of[

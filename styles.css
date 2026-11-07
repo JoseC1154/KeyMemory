@@ -485,7 +485,7 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 #phrasePracticeToggle{font-size:12px;padding:6px 8px;min-height:32px}
 
 /* Reviewable, device-local audio import. */
-.audioImportPanel{width:min(820px,100%)}
+.audioImportPanel{width:min(680px,100%)}
 .audioImportPanel p{font-size:13px;line-height:1.5;color:#c7d5cc}
 .audioImportPanel input[type="number"]{width:100%;min-width:0;box-sizing:border-box;min-height:38px;padding:7px;color:#fff;background:#24362b;border:1px solid #55775f;border-radius:7px;font-size:14px}
 .audioImportPanel input[type="file"]{max-width:100%;min-width:0;flex:1;font-size:14px}
@@ -499,7 +499,7 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 .audioImportNote select{width:100%}
 .audioImportNote button{min-height:38px}
 #audioImportValidation{color:#ffd09c}
-#audioImportUse{background:#28643d;border-color:#5f9a70;min-height:44px;margin:4px 0 10px}
+#audioImportAnalyze,#audioImportUse{background:#28643d;border-color:#5f9a70;min-height:44px;margin:4px 0 10px}
 .audioImportPages{justify-content:space-between;font-size:13px}
 .phraseAudioOrigin{font-size:12px;color:#d4c69e;line-height:1.4;margin:2px 0 8px}
 @media(max-width:520px){.audioImportNote{grid-template-columns:1fr 1fr 1fr}.audioImportNote button{grid-column:1/-1;justify-self:end}.audioImportTrim{gap:8px}.audioImportPages{justify-content:center}.audioImportActions button{flex:1 1 auto}}
@@ -535,3 +535,26 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 .audioImportFeedback #audioImportStatus[data-tone="error"]{color:#ffc2b8}
 .audioImportFeedback #audioImportStatus[data-tone="warning"]{color:#ffe2a8}
 .audioImportFeedback progress{margin-top:10px}
+
+/* Optional detail stays out of the ordinary choose / analyze / import flow. */
+.audioImportDetails{margin:14px 0;border-top:1px solid #344d3c;padding-top:8px}
+.audioImportDetails summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:12px 0;color:#c7d5cc;font-size:13px}
+.audioImportDetails summary:focus-visible{outline:2px solid #91d9a6;outline-offset:3px;border-radius:4px}
+#audioImportReview{border-top:1px solid #344d3c;margin-top:16px;padding-top:8px}
+#audioImportReviewTitle{margin-bottom:6px}
+#audioImportSection{font-weight:600}
+
+/* An explicit, reversible single-note editor keeps inspection gestures intact. */
+.phraseNoteEditor{margin:10px 0;padding:12px;border:1px solid #9b65b4;border-radius:10px;background:#251c2c;color:#f2e3fa}
+.phraseNoteEditor p{font-size:13px;line-height:1.45;margin:0 0 8px}
+.phraseNoteEditActions{display:flex;align-items:end;flex-wrap:wrap;gap:8px}
+.phraseNoteEditActions label{display:flex;flex:1 1 230px;min-width:0;flex-direction:column;gap:4px}
+.phraseNoteEditActions button,.phraseNoteEditActions select{min-height:44px;max-width:100%;min-width:0}
+.phraseNoteEditActions select{width:100%;color:#fff;background:#34243d;border:1px solid #9b65b4;border-radius:6px;padding:8px}
+#phraseNoteEditStatus{margin:10px 0 0;overflow-wrap:anywhere}
+#phraseEditNotes[aria-pressed="true"]{background:#71368b;border-color:#be86d8}
+.phraseStaff.isNoteEditing{cursor:crosshair;outline:2px solid #9b65b4;outline-offset:2px}
+.phraseStaff.isNoteEditing .staffTimelineNote{cursor:pointer}
+.phraseStaff.isNoteEditing .staffTimelineNote:hover .staffNoteHead{stroke:#8b35a5;stroke-width:3}
+.rollNote.noteEditSelected rect{stroke:#9d48bd;stroke-width:3}
+@media(max-width:520px){.phraseNoteEditActions label{flex-basis:100%;order:-1}.phraseNoteEditActions button{flex:1 1 44%}}

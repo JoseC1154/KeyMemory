@@ -143,3 +143,21 @@ The native MIDI browser suite was attempted locally but Chromium failed before a
 - `tests/video-fixtures.cjs` also generates 18-second MOVs with AAC, PCM, absent audio, and a silent AAC track. `tests/video-import-browser.cjs` includes these and explicit original-preview UI checks. The browser suite is supplied but remains unexecuted for this candidate due to Chromium's socket startup restriction. The hosted browser's direct checks apply to live Build 48, not this unpublished candidate.
 
 The video size suite now accepts a mocked 30 MB, 18-second MOV and the exact 100 MiB boundary, rejects 100 MiB + 1 byte before reading, preserves the audio-only 20 MiB limit, and rejects a 121-second large video before whole-file reading. The fixture generator also creates a real 18-second H.264/AAC MOV above 30 MiB for native-browser decode, preview and analysis checks.
+
+
+## Simple import candidate (Build 2026.11.07.50)
+
+- `node tests/audio-import-simple.cjs` checks the collapsed note/timestamp and section controls, the direct WAV/MOV path without opening either, replacement confirmation/cancellation, first-time import wording, full-clip and first-30-second scope, exact saved fractional timing, shared modal Tab boundaries, optional invalid edits, empty results, new-file and reopen resets. Browser APIs and decoding are simulated. It is included in `npm run test:audio`.
+- `tests/audio-import-browser.cjs` checks that note times and section fields are not visible after analysis, takes a simple-result screenshot before opening the optional editor, and retains native editing, import, cancellation, local-only requests and viewport checks.
+- `tests/video-import-browser.cjs` checks hidden timing controls after real media analysis and includes short landscape (844×390) in addition to desktop and narrow portrait.
+
+Native browser execution was attempted for the transcription and import suites, including an escalated temporary-profile attempt. Chromium failed before assertions with `socket() failed: Operation not permitted`. These rendered layout, native accessibility interaction and codec checks remain unverified for the unpublished candidate; deterministic results do not substitute for them.
+
+
+## Individual staff-note deletion (Build 2026.11.07.50 candidate)
+
+- `npm run test:note-edit` runs the new engine and actual-app DOM suites. Engine coverage includes raw-index/revision validation, exact fractional/zero-duration events, unisons and channels, controllers/options preservation, bounded Undo order, final-note recovery, storage failures, replacement invalidation, recording guards, safe playback cancellation, and out-of-range-transpose refusal/retry.
+- UI coverage includes explicit editing versus normal inspection, purple selection, native overlap choices (including geometrically overlapping chromatic/continuation heads), all visible notes plus selection beyond the display cap, stale cache/selection invalidation, native-control focus, keyboard navigation/deletion/Undo, normal touch implicit capture release versus cancelled capture/swipes, 44-pixel near-hit disambiguation, zero-note recovery, preserved loop settings and narrow-screen DOM paths. DOM geometry is simulated.
+- `npm run test:note-edit-browser` supplies native Chromium desktop, 390/320-pixel portrait and short-landscape rendering, keyboard, touch tap, overlap choice, Delete/Undo, focus, control-size/overflow and screenshot checks. It is unexecuted because the Chromium launch restriction was established by the import browser attempts; no native/mobile pass is claimed.
+
+Existing cursor, loop, staff/timeline, playback-sync, MIDI, audio, import and layout suites remain applicable. No candidate code is published by these tests.

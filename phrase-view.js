@@ -118,7 +118,7 @@
   for(const n of visible){if(n.midi<low||n.midi>high)continue;
    const lanes=laneEnds.get(n.midi).length,yy=y(n.midi)+((n.lane+.5)/lanes-.5)*row*.8,h=Math.min(12,Math.max(.3,row*.65/lanes)),keyStart=Math.max(start,n.start),keyEnd=Math.min(end,n.keyEnd),tailStart=Math.max(start,n.keyEnd),tailEnd=Math.min(end,n.soundEnd),color=`hsl(${(n.channel*47+160)%360} 68% 34%)`;
    const active=cursor>=n.start&&cursor<n.keyEnd?'keyActive':cursor>=n.keyEnd&&cursor<n.soundEnd?'tailActive':'';
-   body+=`<g class="rollNote ${active}" data-note-id="${n.id}" data-midi="${n.midi}" data-channel="${n.channel}" data-lane="${n.lane}"><title>${esc(pitch(n.midi,spelling).name)}, channel ${n.channel+1}; onset ${n.start}ms, key release ${n.keyEnd}ms, sound end ${n.soundEnd}ms</title>`;
+   body+=`<g class="rollNote ${active}${n.id===options.selectedNoteId?' noteEditSelected':''}" data-note-id="${n.id}" data-midi="${n.midi}" data-channel="${n.channel}" data-lane="${n.lane}"><title>${esc(pitch(n.midi,spelling).name)}, channel ${n.channel+1}; onset ${n.start}ms, key release ${n.keyEnd}ms, sound end ${n.soundEnd}ms</title>`;
    if(keyEnd>keyStart||(n.keyEnd===n.start&&n.start>=start&&n.start<end))body+=`<rect class="keyDuration" x="${round(x(keyStart))}" y="${round(yy-h/2)}" width="${round(Math.max(.7,x(keyEnd)-x(keyStart)))}" height="${round(h)}" rx="1" fill="${color}"${active==='keyActive'?' stroke="#17251b" stroke-width="1.5"':''}/>`;
    if(tailEnd>tailStart)body+=`<line class="pedalTail" x1="${round(x(tailStart))}" x2="${round(x(tailEnd))}" y1="${round(yy)}" y2="${round(yy)}" stroke="${color}" stroke-width="${round(Math.max(active==='tailActive'?2:1,h*.55))}" stroke-dasharray="4 3" opacity="${active==='tailActive'?'.9':'.55'}"/>`;
    body+='</g>';
@@ -135,7 +135,10 @@
   pitch(60,spelling);
   // Original onsets stay exact. Inspection includes left-edge continuation marks
   // for earlier sounding notes; pedal tails never become pressed keys.
-  const candidates=timeline.notes.filter(n=>(n.start>=start&&n.start<end)||((options.inspecting||options.includeContinuations)&&n.start<start&&n.soundEnd>start)),visible=candidates.slice(0,maxNotes).map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
+  const candidates=timeline.notes.filter(n=>(n.start>=start&&(n.start<end||(n.id===options.selectedNoteId&&n.start===end)))||((options.inspecting||options.includeContinuations)&&n.start<start&&n.soundEnd>start)),shown=candidates.slice(0,maxNotes);
+  const selected=candidates.find(n=>n.id===options.selectedNoteId);
+  if(selected&&!shown.includes(selected)){shown[shown.length-1]=selected;shown.sort((a,b)=>a.start-b.start||a.id-b.id);}
+  const visible=shown.map(n=>({...n,...staffPosition(n.midi,spelling)})),omitted=candidates.length-visible.length;
   const left=80,right=64,plotW=width-left-right,x=t=>left+(t-start)/(end-start)*plotW;
   // Merge true unisons only: distinct channels/releases remain in the accessible title.
   const merged=new Map();
@@ -169,7 +172,8 @@
   for(const n of marks){
    const xx=n.headX,active=finite(cursor)&&n.voices.some(v=>cursor>=v.start&&cursor<v.keyEnd),tail=options.inspecting&&!active&&finite(cursor)&&n.voices.some(v=>cursor>=v.keyEnd&&cursor<v.soundEnd);
    const voiceLabel=n.voices.map(v=>`channel ${v.channel+1}, key release ${v.keyEnd}ms`).join('; ');
-   body+=`<g class="staffTimelineNote${active?' keyActive':''}${options.inspecting&&active?' staffSelectedKey':tail?' staffSelectedTail':''}" data-note-id="${esc(n.id)}" data-note-ids="${esc(n.voices.map(v=>v.id).join(','))}" data-voice-count="${n.voices.length}" data-onset-x="${n.onsetX}" data-midi="${n.midi}" data-channel="${esc(n.channel)}" data-clef="${n.clef}" data-diatonic="${n.diatonic}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(n.name)}, ${n.clef} staff; onset ${n.start}ms; ${n.voices.length} voice${n.voices.length===1?'':'s'}: ${esc(voiceLabel)}</title>`;
+   body+=`<g class="staffTimelineNote${n.voices.some(v=>v.id===options.selectedNoteId)?' noteEditSelected':''}${active?' keyActive':''}${options.inspecting&&active?' staffSelectedKey':tail?' staffSelectedTail':''}" data-note-id="${esc(n.id)}" data-note-ids="${esc(n.voices.map(v=>v.id).join(','))}" data-voice-count="${n.voices.length}" data-onset-x="${n.onsetX}" data-midi="${n.midi}" data-channel="${esc(n.channel)}" data-clef="${n.clef}" data-diatonic="${n.diatonic}" data-start="${n.start}" data-key-end="${n.keyEnd}"><title>${esc(n.name)}, ${n.clef} staff; onset ${n.start}ms; ${n.voices.length} voice${n.voices.length===1?'':'s'}: ${esc(voiceLabel)}</title>`;
+   if(n.voices.some(v=>v.id===options.selectedNoteId))body+=`<circle class="staffNoteEditRing" cx="${xx}" cy="${n.y}" r="11" fill="none" stroke="#8b35a5" stroke-width="3"/>`;
    if((names||n.voices.length>1)&&Math.abs(n.labelX-xx)>12)body+=`<line class="staffLabelConnector" x1="${xx}" x2="${n.labelX}" y1="${n.y}" y2="${n.y}" stroke="currentColor" stroke-dasharray="2 2" opacity=".3"/>`;
    if(n.start<start)body+=`<text class="staffContinuation" x="${xx-34}" y="${n.y+3}" font-size="12" fill="currentColor"><title>Note began before this window at ${n.start}ms</title>←</text>`;
    body+=`<circle class="staffOnsetMarker" cx="${n.onsetX}" cy="${n.y}" r="1.8" fill="currentColor"/>`;

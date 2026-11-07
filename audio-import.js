@@ -76,7 +76,7 @@
   function selection(){const start=el('audioImportStart').value,end=el('audioImportEnd').value;return bounds(start===''?NaN:Number(start),end===''?NaN:Number(end),buffer?.duration||0);}
   function proposalDuration(){try{return selection().duration*1000;}catch{return 0;}}
   function sync(){
-   const busy=phase==='loading'||phase==='analyzing';el('audioImportAnalyze').textContent=phase==='analyzing'?'Analyzing…':'Analyze';el('audioImportOriginal').textContent=previewStarting==='original'?'Starting audio…':previewKind==='original'?'Playing original…':'Hear original section';let selected=false;try{selection();selected=!!buffer;}catch{}
+   const busy=phase==='loading'||phase==='analyzing';el('audioImportAnalyze').textContent=phase==='analyzing'?'Analyzing…':phase==='review'?'Analyze again':'Analyze';el('audioImportOriginal').textContent=previewStarting==='original'?'Starting audio…':previewKind==='original'?'Playing original…':'Hear original section';let selected=false;try{selection();selected=!!buffer;}catch{}
    const valid=validNotes(notes,proposalDuration());
    el('audioImportFile').disabled=busy;el('audioImportStart').disabled=busy||!buffer;el('audioImportEnd').disabled=busy||!buffer;
    el('audioImportAnalyze').disabled=busy||!selected;el('audioImportOriginal').disabled=busy||!selected;
@@ -84,8 +84,14 @@
    el('audioImportReview').hidden=phase!=='review';el('audioImportNotesPreview').disabled=!valid;
    el('audioImportUse').disabled=!valid;el('audioImportAdd').disabled=notes.length>=MAX_NOTES;
    el('audioImportReset').disabled=!detected.length;el('audioImportStopPreview').hidden=!previewKind&&!previewStarting;
-   el('audioImportCount').textContent=notes.length+' detected / edited notes';
-   el('audioImportValidation').textContent=phase==='review'&&!valid?(notes.length?'Correct invalid pitches or times before previewing or using this phrase.':'No notes remain. Add a note or analyze another section.') : '';
+   el('audioImportCount').textContent=notes.length?notes.length+' note'+(notes.length===1?'':'s')+(valid?' ready':' to check'):'No notes to import';
+   const replacing=!!config.hasSavedPhrase?.();
+   el('audioImportUse').textContent=replacing?'Replace saved phrase':'Import notes';
+   el('audioImportSaveHint').textContent=replacing?'Your saved phrase stays unchanged until you confirm replacement. Closing discards this draft and its audio.':'Nothing is saved until you import. Closing discards this draft and its audio.';
+   let section='Analyze up to 30 seconds at a time. Clear piano recordings work best.';
+   if(buffer)try{const chosen=selection(),seconds=n=>Number(n.toFixed(2));section=chosen.start===0&&Math.abs(chosen.end-buffer.duration)<.000001?'Full clip · '+seconds(chosen.duration)+' seconds':chosen.start===0?'First '+seconds(chosen.duration)+' seconds of your '+seconds(buffer.duration)+'-second file':'Selected section · '+seconds(chosen.start)+'–'+seconds(chosen.end)+' seconds';}catch{section='Choose a valid section in Section & file options.';}
+   el('audioImportSection').textContent=section;
+   el('audioImportValidation').textContent=phase==='review'&&!valid?(notes.length?'Correct invalid pitches or times in Edit notes before previewing or importing.':'Add notes under Edit notes, or analyze another section.') : '';
   }
   function audioContext(){const Audio=w.AudioContext||w.webkitAudioContext;if(!Audio)throw Error('Audio is unavailable in this browser.');if(context?.state==='closed')context=null;return context ||= new Audio();}
   function stopPreview(){
@@ -95,9 +101,9 @@
    voices.clear();sync();
   }
   function abortWork(){generation++;controller?.abort();controller=null;}
-  function resetDraft(){notes=[];detected=[];page=0;nextId=0;renderNotes();}
-  function close(){abortWork();stopPreview();buffer=null;resetDraft();phase='empty';el('audioImportFile').value='';el('audioImportFilename').textContent='';el('audioImportStart').value='0';el('audioImportEnd').value='0';const old=context;context=null;if(old)w.setTimeout(()=>{try{Promise.resolve(old.close()).catch(()=>{});}catch{}},45);sync();}
-  function begin(){close();status('Step 1: Choose a file. Then use Hear original section to check its sound, or Analyze to detect notes. Choosing a file does not start analysis.');sync();}
+  function resetDraft(){el('audioImportEditor').open=false;notes=[];detected=[];page=0;nextId=0;renderNotes();}
+  function close(){el('audioImportOptions').open=false;abortWork();stopPreview();buffer=null;resetDraft();phase='empty';el('audioImportFile').value='';el('audioImportFilename').textContent='';el('audioImportStart').value='0';el('audioImportEnd').value='0';const old=context;context=null;if(old)w.setTimeout(()=>{try{Promise.resolve(old.close()).catch(()=>{});}catch{}},45);sync();}
+  function begin(){close();status('Choose a file, then Analyze. Choosing a file does not start analysis.');sync();}
   function metadata(file,signal){return new Promise((resolve,reject)=>{
    if(signal.aborted){reject(abortError());return;}
    const media=d.createElement(isVideoFile(file)?'video':'audio'),url=w.URL.createObjectURL(file);let timer,settled=false;
@@ -110,7 +116,7 @@
   });}
   async function chooseFile(){
    const file=el('audioImportFile').files?.[0];if(!file)return;el('audioImportFile').value='';
-   abortWork();stopPreview();buffer=null;el('audioImportStart').value='0';el('audioImportEnd').value='0';resetDraft();const request=generation;controller=new w.AbortController();phase='loading';el('audioImportProgress').removeAttribute('value');el('audioImportFilename').textContent=file.name;status(isVideoFile(file)?'Reading video details on this device… Videos may be up to 100 MB, but their audio must be 2 minutes or shorter.':'Reading audio on this device…');sync();
+   el('audioImportOptions').open=false;abortWork();stopPreview();buffer=null;el('audioImportStart').value='0';el('audioImportEnd').value='0';resetDraft();const request=generation;controller=new w.AbortController();phase='loading';el('audioImportProgress').removeAttribute('value');el('audioImportFilename').textContent=file.name;status(isVideoFile(file)?'Reading video details on this device… Videos may be up to 100 MB, but their audio must be 2 minutes or shorter.':'Reading audio on this device…');sync();
    try{
     const limit=fileByteLimit(file),limitLabel=(limit/1024/1024)+' MB';
     if(!finite(file.size)||file.size<=0)throw Error('This file is empty or could not be read. Choose a '+(isVideoFile(file)?'video':'audio')+' file up to '+limitLabel+'.');
@@ -118,19 +124,19 @@
     await metadata(file,controller.signal);if(request!==generation||!open())return;
     status('File selected. Reading its audio data locally…');
     const signal=controller.signal,bytes=await bounded(()=>file.arrayBuffer(),signal,DECODE_TIMEOUT_MS,'Reading this file took too long. Try a smaller file or export its audio as WAV or MP3.');if(request!==generation||!open())return;
-    status('Decoding the audio track locally… Larger videos can take longer. Keep this tab open; Start, End, Analyze and preview unlock when ready.');
+    status('Decoding the audio track locally… Larger videos can take longer. Keep this tab open; Analyze unlocks when ready.');
     const audio=audioContext();let decoded;
     decoded=await bounded(async()=>{try{return await audio.decodeAudioData(bytes);}catch{throw Error(decodeMessage(file));}},signal,DECODE_TIMEOUT_MS,'The browser did not finish decoding this file. Try a smaller file or export its audio as WAV or MP3.');
     if(request!==generation||!open())return;
     validateSource(decoded);const audible=sectionHasSignal(decoded,0,decoded.duration);buffer=decoded;phase='ready';controller=null;el('audioImportStart').value='0';el('audioImportEnd').value=String(Math.min(MAX_CLIP_SECONDS,decoded.duration));
-    status(audible?(isVideoFile(file)?'Video audio is ready. ':'Audio is ready. ')+decoded.duration.toFixed(1)+' seconds loaded. Step 2: Hear original section or choose Analyze to detect notes. Analysis does not play the recording.':SILENT_MESSAGE,audible?'success':'warning');
+    status(audible?(isVideoFile(file)?'Video audio is ready. ':'Audio is ready. ')+'Choose Analyze to detect notes.':SILENT_MESSAGE,audible?'success':'warning');
    }catch(error){if(request!==generation||!open())return;phase='empty';controller=null;status(error.name==='AbortError'?'Canceled. Your saved phrase is unchanged.':'File not ready: '+(error.message||decodeMessage(file)),error.name==='AbortError'?'info':'error');}
    finally{if(request===generation&&open())sync();}
   }
   async function analyze(){
    if(!buffer||!open()||['loading','analyzing'].includes(phase))return;
    let chosen;try{chosen=selection();}catch(error){status(error.message);return;}
-   abortWork();stopPreview();resetDraft();const request=generation;controller=new w.AbortController();const signal=controller.signal;phase='analyzing';status('Preparing your selected audio locally…');el('audioImportProgress').value=0;sync();
+   el('audioImportOptions').open=false;abortWork();stopPreview();resetDraft();const request=generation;controller=new w.AbortController();const signal=controller.signal;phase='analyzing';status('Preparing your selected audio locally…');el('audioImportProgress').value=0;sync();
    try{
     const samples=await prepareClip(buffer,chosen.start,chosen.end,w.OfflineAudioContext||w.webkitOfflineAudioContext);
     if(request!==generation||!open())return;
@@ -139,7 +145,7 @@
     const result=await w.KeyMemoryAudio.transcribe(samples,{signal,onProgress:value=>{if(request!==generation||!open())return;el('audioImportProgress').value=value.progress;status(value.stage==='loading'?'Loading the local note-detection model… The first analysis needs an internet connection; your recording stays on this device.':value.stage==='processing'?'Preparing detected notes…':'Detecting notes locally… '+Math.round(value.progress*100)+'%');}});
     if(request!==generation||!open())return;
     detected=normalizeNotes(result,chosen.duration*1000);notes=detected.map(n=>({...n,id:++nextId}));phase='review';controller=null;page=0;renderNotes();
-    status(notes.length?notes.length+' notes detected. Review the notes before using them. You can change pitches and timing, remove extra notes, or add missing ones.':'No clear notes were detected. Try a cleaner or shorter section, or add notes manually.');
+    status(notes.length?'Your notes are ready. Import them to play and practice.':'No clear notes were detected. Try a clearer recording or another section. You can also add notes under Edit notes.',notes.length?'success':'warning');
    }catch(error){if(request!==generation||!open())return;phase='ready';controller=null;status(error.name==='AbortError'?'Analysis canceled. Your saved phrase is unchanged.':error.message||'Analysis failed. Try a shorter clip.',error.name==='AbortError'?'info':'error');}
    finally{if(request===generation&&open())sync();}
   }
@@ -164,7 +170,7 @@
     if(audio.state!=='running')throw Error('Audio could not start. Tap Preview again.');
     previewStarting='';previewKind=kind;status(kind==='original'?'Playing original section. If you cannot hear it, check the browser tab and device volume.':'Playing detected notes.');const anchor=audio.currentTime+.03;
     if(kind==='original'){
-     const source=audio.createBufferSource(),gain=audio.createGain();source.buffer=buffer;source.connect(gain);gain.connect(audio.destination);gain.gain.setValueAtTime(0,anchor);gain.gain.linearRampToValueAtTime(1,anchor+.01);gain.gain.setValueAtTime(1,anchor+Math.max(.01,chosen.duration-.01));gain.gain.linearRampToValueAtTime(0,anchor+chosen.duration);const voice={source,gain,envelope:{start:anchor,attackEnd:anchor+.01,holdEnd:anchor+Math.max(.01,chosen.duration-.01),releaseEnd:anchor+chosen.duration,amplitude:1}};previewSource=voice;source.onended=()=>{source.disconnect();gain.disconnect();if(previewSource===voice){previewSource=null;previewKind='';status('Original section finished. '+(notes.length?'Continue reviewing the detected notes.':'Choose Analyze to detect notes.'));sync();}};source.start(anchor,chosen.start,chosen.duration);
+     const source=audio.createBufferSource(),gain=audio.createGain();source.buffer=buffer;source.connect(gain);gain.connect(audio.destination);gain.gain.setValueAtTime(0,anchor);gain.gain.linearRampToValueAtTime(1,anchor+.01);gain.gain.setValueAtTime(1,anchor+Math.max(.01,chosen.duration-.01));gain.gain.linearRampToValueAtTime(0,anchor+chosen.duration);const voice={source,gain,envelope:{start:anchor,attackEnd:anchor+.01,holdEnd:anchor+Math.max(.01,chosen.duration-.01),releaseEnd:anchor+chosen.duration,amplitude:1}};previewSource=voice;source.onended=()=>{source.disconnect();gain.disconnect();if(previewSource===voice){previewSource=null;previewKind='';status('Original section finished. '+(notes.length?'Your notes are ready to import.':'Choose Analyze to detect notes.'));sync();}};source.start(anchor,chosen.start,chosen.duration);
     }else{
      const ordered=notes.map(n=>({...n})).sort((a,b)=>a.start-b.start),length=chosen.duration;let index=0;
      const pump=()=>{
@@ -174,7 +180,7 @@
        if(voices.size>=64){stopPreview();status('The preview is too dense. Remove extra notes or use a shorter section.');return;}
        const osc=audio.createOscillator(),gain=audio.createGain();osc.type='triangle';osc.frequency.value=440*2**((n.note-69)/12);gain.gain.setValueAtTime(0,start);gain.gain.linearRampToValueAtTime(.035,start+Math.min(.008,(end-start)/2));gain.gain.setValueAtTime(.035,end);gain.gain.linearRampToValueAtTime(0,end+.035);osc.connect(gain);gain.connect(audio.destination);const voice={osc,gain,envelope:{start,attackEnd:start+Math.min(.008,(end-start)/2),holdEnd:end,releaseEnd:end+.035,amplitude:.035}};voices.add(voice);osc.onended=()=>{osc.disconnect();gain.disconnect();voices.delete(voice);};osc.start(start);osc.stop(end+.04);
       }
-      if(audio.currentTime>=anchor+length+.06){stopPreview();status('Detected-note preview finished. Continue reviewing before using this phrase.');}
+      if(audio.currentTime>=anchor+length+.06){stopPreview();status('Preview finished. Your notes are ready to import.');}
      };
      pump();if(previewKind)previewTimer=w.setInterval(pump,30);
     }
@@ -184,14 +190,14 @@
   function usePhrase(){
    if(!open()||phase!=='review'||!validNotes(notes,proposalDuration()))return;
    stopPreview();const payload={notes:notes.map(({id,...n})=>({...n})).sort((a,b)=>a.start-b.start||a.note-b.note),duration:proposalDuration(),sourceBpm:120};
-   try{if(config.onCommit(payload))config.onClose();else status('Your saved phrase is unchanged. Continue reviewing or close this import.');}catch(error){status(error.message||'The phrase could not be imported. Your saved phrase is unchanged.');}
+   try{if(config.onCommit(payload))config.onClose();else status('Your saved phrase is unchanged. Import when ready, or close this window.');}catch(error){status(error.message||'The phrase could not be imported. Your saved phrase is unchanged.');}
   }
   el('audioImportFile').addEventListener('change',chooseFile);
   for(const id of ['audioImportStart','audioImportEnd'])el(id).addEventListener('change',trimChanged);
   el('audioImportAnalyze').addEventListener('click',analyze);el('audioImportClose').addEventListener('click',config.onClose);
   el('phraseImportOverlay').addEventListener('click',event=>{if(event.target===event.currentTarget)config.onClose();});
   el('audioImportCancel').addEventListener('click',()=>{abortWork();phase=buffer?'ready':'empty';status('Canceled. Your saved phrase is unchanged.');sync();});
-  el('audioImportOriginal').addEventListener('click',()=>preview('original'));el('audioImportNotesPreview').addEventListener('click',()=>preview('notes'));el('audioImportStopPreview').addEventListener('click',()=>{stopPreview();status('Preview stopped. '+(notes.length?'Continue reviewing the detected notes.':'Choose Analyze to detect notes.'));});
+  el('audioImportOriginal').addEventListener('click',()=>preview('original'));el('audioImportNotesPreview').addEventListener('click',()=>preview('notes'));el('audioImportStopPreview').addEventListener('click',()=>{stopPreview();status('Preview stopped. '+(notes.length?'Your notes are ready to import.':'Choose Analyze to detect notes.'));});
   el('audioImportUse').addEventListener('click',usePhrase);
   el('audioImportPrevious').addEventListener('click',()=>{page--;renderNotes();});el('audioImportNext').addEventListener('click',()=>{page++;renderNotes();});
   el('audioImportAdd').addEventListener('click',()=>{stopPreview();if(notes.length>=MAX_NOTES)return;notes.push({note:60,velocity:90,channel:0,start:0,duration:Math.min(500,proposalDuration()),id:++nextId});page=Math.floor((notes.length-1)/PAGE);renderNotes();status('Added C4. Adjust its pitch, start and length.');});

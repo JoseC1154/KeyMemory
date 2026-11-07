@@ -3,7 +3,7 @@
 const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {createVideoFixtures}=require('./video-fixtures.cjs'),root=path.resolve(__dirname,'..');
 async function runVideoImportChecks(browser,origin,fixtureDir){
- for(const [width,height,mobile]of[[1280,900,false],[390,844,true],[320,740,true]]){
+ for(const [width,height,mobile]of[[1280,900,false],[390,844,true],[320,740,true],[844,390,true]]){
   const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile}),page=await context.newPage(),requests=[],errors=[];
   page.on('request',r=>requests.push({url:r.url(),method:r.method()}));page.on('pageerror',e=>errors.push(e.message));
   await context.addInitScript(()=>localStorage.setItem('keymemory.phrase.v1',JSON.stringify({version:1,sourceBpm:90,duration:1000,notes:[{note:48,velocity:90,channel:0,start:0,duration:800}]})));
@@ -21,6 +21,7 @@ async function runVideoImportChecks(browser,origin,fixtureDir){
   assert(!requests.some(r=>r.url.includes('/assets/audio/')),'metadata and decode do not fetch the model');
   await page.locator('#audioImportAnalyze').click();await page.waitForFunction(()=>!document.getElementById('audioImportReview').hidden,{},{timeout:120000});
   assert(await page.locator('.audioImportNote').count()>=3,'compressed synthetic notes reach real model review');
+  assert(!await page.locator('#audioImportEditor').evaluate(el=>el.open));assert(!await page.locator('.audioImportNote input').first().isVisible());assert(!await page.locator('#audioImportStart').isVisible());
   assert(!await page.locator('#audioImportUse').isDisabled());assert.equal(await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1')),saved);
   const bounds=await page.locator('.audioImportPanel').evaluate(panel=>{const r=panel.getBoundingClientRect();return{left:r.left,right:r.right,width:innerWidth,overflow:panel.scrollWidth>panel.clientWidth+1};});assert(bounds.left>=0&&bounds.right<=bounds.width+1&&!bounds.overflow,JSON.stringify(bounds));
   await page.screenshot({path:path.join(fixtureDir,`video-review-${width}x${height}.png`)});
