@@ -9,12 +9,14 @@ async function runVideoImportChecks(browser,origin,fixtureDir){
   await context.addInitScript(()=>localStorage.setItem('keymemory.phrase.v1',JSON.stringify({version:1,sourceBpm:90,duration:1000,notes:[{note:48,velocity:90,channel:0,start:0,duration:800}]})));
   await page.goto(origin);await page.locator('#openModes').click();await page.locator('[data-mode=phrase]').click();const saved=await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1'));
   await page.locator('#phraseImport').click();assert.match(await page.locator('#audioImportTitle').innerText(),/video/);
-  for(const filename of mobile?['generated-piano.webm']:['generated-piano.mp4','generated-piano.mov','generated-piano.webm']){
+  for(const filename of mobile?['generated-18s-large.mov']:['generated-piano.mp4','generated-piano.mov','generated-18s-aac.mov','generated-18s-pcm.mov','generated-piano.webm','generated-18s-large.mov']){
+   if(filename==='generated-18s-large.mov')assert(fs.statSync(path.join(fixtureDir,filename)).size>30*1024*1024,'large MOV fixture must exceed the reported 30 MB');
    await page.locator('#audioImportFile').setInputFiles(path.join(fixtureDir,filename));
    await page.waitForFunction(()=>document.getElementById('audioImportCancel').hidden);
    assert(!await page.locator('#audioImportAnalyze').isDisabled(),`${filename}: ${await page.locator('#audioImportStatus').innerText()}`);
    assert.match(await page.locator('#audioImportStatus').innerText(),/Video audio is ready/);
    assert.equal(await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1')),saved);
+   await page.locator('#audioImportOriginal').click();await page.waitForFunction(()=>document.getElementById('audioImportStatus').textContent.startsWith('Playing original section'));assert.match(await page.locator('#audioImportStatus').innerText(),/Playing original/);await page.locator('#audioImportStopPreview').click();
   }
   assert(!requests.some(r=>r.url.includes('/assets/audio/')),'metadata and decode do not fetch the model');
   await page.locator('#audioImportAnalyze').click();await page.waitForFunction(()=>!document.getElementById('audioImportReview').hidden,{},{timeout:120000});
@@ -25,15 +27,16 @@ async function runVideoImportChecks(browser,origin,fixtureDir){
   page.once('dialog',dialog=>dialog.accept());await page.locator('#audioImportUse').click();assert(!await page.locator('#phraseImportOverlay').isVisible());
   const imported=await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1'));assert.equal(JSON.parse(imported).origin,'audio');assert(!imported.includes('generated-piano'));assert(await page.locator('#phraseAudioOrigin').isVisible());
   await page.locator('#phraseImport').click();
-  for(const filename of ['no-audio.mp4','invalid.mp4']){
+  for(const filename of ['no-audio.mp4','invalid.mp4','generated-18s-no-audio.mov']){
    await page.locator('#audioImportFile').setInputFiles(path.join(fixtureDir,filename));await page.waitForFunction(()=>document.getElementById('audioImportCancel').hidden);
    assert(await page.locator('#audioImportAnalyze').isDisabled());assert.match(await page.locator('#audioImportStatus').innerText(),/no audio track this browser can decode/);assert.equal(await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1')),imported);
   }
+  await page.locator('#audioImportFile').setInputFiles(path.join(fixtureDir,'generated-18s-silent.mov'));await page.waitForFunction(()=>document.getElementById('audioImportCancel').hidden);assert.match(await page.locator('#audioImportStatus').innerText(),/No audible signal/);await page.locator('#audioImportOriginal').click();assert.match(await page.locator('#audioImportStatus').innerText(),/No audible signal/);await page.locator('#audioImportAnalyze').click();await page.waitForFunction(()=>!document.getElementById('audioImportReview').hidden);assert.equal(await page.locator('.audioImportNote').count(),0);assert.equal(await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1')),imported);
   await page.locator('#audioImportFile').setInputFiles(path.join(fixtureDir,'generated-piano.webm'));await page.waitForFunction(()=>!document.getElementById('audioImportAnalyze').disabled);
   await page.locator('#audioImportAnalyze').click();await page.locator('#audioImportCancel').click();await page.locator('#audioImportClose').click();await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>localStorage.getItem('keymemory.phrase.v1')),imported);
   assert(requests.every(r=>r.method==='GET'&&(r.url.startsWith(origin+'/')||r.url.startsWith('blob:'+origin+'/'))),JSON.stringify(requests));assert(requests.some(r=>r.url.endsWith('.wasm')));assert.deepEqual(errors,[]);await context.close();
  }
- console.log('PASS real Chromium video import: MP4/AAC, MOV/AAC, WebM/Opus decode; real WebM audio resampling/worker transcription/review/accept; silent/corrupt video rejection; no media upload/persistence; cancel/retry; desktop and two mobile layouts. Synthetic media, not physical-device or listening validation. Screenshots: '+fixtureDir);
+ console.log('PASS real Chromium video import: MP4/AAC, MOV/AAC and MOV/PCM, WebM/Opus decode; real 18-second MOV above 30 MiB resampling/worker transcription/review/accept; missing/silent/corrupt audio feedback; no media upload/persistence; cancel/retry; desktop and two mobile layouts. Synthetic media, not physical-device or listening validation. Screenshots: '+fixtureDir);
 }
 module.exports={runVideoImportChecks};
 if(require.main===module)(async()=>{

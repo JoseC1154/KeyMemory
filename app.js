@@ -7,7 +7,7 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.07.48";
+const APP_VERSION = "2026.11.07.49";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}

@@ -13,6 +13,13 @@ function createVideoFixtures(directory=fs.mkdtempSync(path.join(os.tmpdir(),'key
  ffmpeg(['-i',path.join(directory,'generated-piano.mp4'),'-c','copy',path.join(directory,'generated-piano.mov')]);
  ffmpeg([...input,'-c:v','libvpx-vp9','-c:a','libopus','-b:a','48k','-shortest',path.join(directory,'generated-piano.webm')]);
  ffmpeg(['-f','lavfi','-i','color=c=blue:s=160x90:r=10:d=2','-c:v','libx264','-pix_fmt','yuv420p','-an',path.join(directory,'no-audio.mp4')]);
+ // 18-second screen-recording variants: same picture, AAC/PCM signal, missing or silent audio.
+ const screenInput=['-f','lavfi','-i','color=c=blue:s=160x90:r=10:d=18'];
+ ffmpeg([...screenInput,'-stream_loop','-1','-i',audio,'-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-t','18','-movflags','+faststart',path.join(directory,'generated-18s-aac.mov')]);
+ ffmpeg(['-i',path.join(directory,'generated-18s-aac.mov'),'-c:v','copy','-c:a','pcm_s16le',path.join(directory,'generated-18s-pcm.mov')]);
+ ffmpeg([...screenInput,'-c:v','libx264','-pix_fmt','yuv420p','-an',path.join(directory,'generated-18s-no-audio.mov')]);
+ ffmpeg([...screenInput,'-f','lavfi','-i','anullsrc=r=44100:cl=stereo','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-t','18',path.join(directory,'generated-18s-silent.mov')]);
+ ffmpeg(['-f','lavfi','-i','testsrc2=size=1280x720:rate=30:duration=18','-stream_loop','-1','-i',audio,'-c:v','libx264','-preset','ultrafast','-threads','2','-b:v','16M','-minrate','16M','-maxrate','16M','-bufsize','16M','-x264-params','nal-hrd=cbr:filler=1','-pix_fmt','yuv420p','-c:a','aac','-t','18','-movflags','+faststart',path.join(directory,'generated-18s-large.mov')]);
  fs.writeFileSync(path.join(directory,'invalid.mp4'),'This is not a video container.');
  return directory;
 }

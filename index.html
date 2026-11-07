@@ -7,14 +7,14 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <meta content="#121212" name="theme-color"/>
 <title>KeyMemory — Piano</title>
-<link href="./styles.css?v=20261107-48" rel="stylesheet"/>
-<script defer="" src="./midi-transport.js?v=20261107-48"></script>
-<script defer="" src="./midi.js?v=20261107-48"></script>
-<script defer="" src="./phrase.js?v=20261107-48"></script>
-<script defer="" src="./phrase-view.js?v=20261107-48"></script>
-<script defer="" src="./audio-transcription.js?v=20261107-48"></script>
-<script defer="" src="./audio-import.js?v=20261107-48"></script>
-<script defer="" src="./app.js?v=20261107-48"></script>
+<link href="./styles.css?v=20261107-49" rel="stylesheet"/>
+<script defer="" src="./midi-transport.js?v=20261107-49"></script>
+<script defer="" src="./midi.js?v=20261107-49"></script>
+<script defer="" src="./phrase.js?v=20261107-49"></script>
+<script defer="" src="./phrase-view.js?v=20261107-49"></script>
+<script defer="" src="./audio-transcription.js?v=20261107-49"></script>
+<script defer="" src="./audio-import.js?v=20261107-49"></script>
+<script defer="" src="./app.js?v=20261107-49"></script>
 </head>
 <body>
 <main class="shell">
@@ -109,12 +109,14 @@
 <section id="phraseImportOverlay" class="modalOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="audioImportTitle" aria-describedby="audioImportPrivacy">
 <div class="modalPanel audioImportPanel">
 <div class="modalTop"><h2 id="audioImportTitle">Import audio / video</h2><button id="audioImportClose" type="button">Close</button></div>
-<p id="audioImportPrivacy">Files stay on this device. Choose an audio or video file up to 2 minutes / 20 MB, then analyze up to 30 seconds of its audio. Clean solo piano or a single instrument works best; full song mixes can include wrong or missing notes.</p>
+<p id="audioImportPrivacy">Files stay on this device. Choose a video up to 100 MB or an audio file up to 20 MB, each up to 2 minutes long, then analyze up to 30 seconds of its audio. Clean solo piano or a single instrument works best; full song mixes can include wrong or missing notes.</p>
 <label class="audioImportFile">Audio or video file <input id="audioImportFile" type="file" accept="audio/*,video/*,.wav,.mp3,.m4a,.flac,.ogg,.mp4,.m4v,.mov,.webm" aria-describedby="audioImportFormats"/></label><p id="audioImportFilename" class="audioImportFilename"></p>
+<div class="audioImportFeedback"><p id="audioImportStatus" role="status" aria-live="polite" aria-atomic="true"></p><progress id="audioImportProgress" max="1" hidden aria-label="Audio analysis progress"></progress></div>
 <p id="audioImportFormats">WAV, MP3, or video with a browser-supported audio track, such as MP4/AAC or WebM/Opus. MOV and other formats vary by browser. Video images are not analyzed. URL and YouTube imports are not supported.</p>
-<div class="audioImportTrim"><label>Start (seconds) <input id="audioImportStart" type="number" min="0" max="120" step="any" value="0" disabled/></label><label>End (seconds) <input id="audioImportEnd" type="number" min="0" max="120" step="any" value="0" disabled/></label></div>
+<p id="audioImportTrimHint">Start and End unlock after the audio loads. Until then, check the file status above. The default section is the first 30 seconds or the full clip if shorter.</p>
+<div class="audioImportTrim"><label>Start (seconds) <input id="audioImportStart" aria-describedby="audioImportTrimHint" type="number" min="0" max="120" step="any" value="0" disabled/></label><label>End (seconds) <input id="audioImportEnd" aria-describedby="audioImportTrimHint" type="number" min="0" max="120" step="any" value="0" disabled/></label></div>
 <div class="audioImportActions"><button id="audioImportOriginal" type="button" disabled>Hear original section</button><button id="audioImportAnalyze" type="button" disabled>Analyze</button><button id="audioImportCancel" type="button" hidden>Cancel</button><button id="audioImportStopPreview" type="button" hidden>Stop preview</button></div>
-<progress id="audioImportProgress" max="1" hidden aria-label="Audio analysis progress"></progress><p id="audioImportStatus" role="status" aria-live="polite"></p>
+
 <section id="audioImportReview" hidden aria-labelledby="audioImportReviewTitle">
 <h3 id="audioImportReviewTitle">Review and correct</h3><p>Listen and check the notes before practicing. Change a pitch, start or length; remove extra notes or add missing ones. Timing is preserved, not quantized. Tempo, pedal, hands and original key-release timing are not detected. Playback uses neutral velocity.</p>
 <div class="audioImportActions"><button id="audioImportNotesPreview" type="button" disabled>Hear detected notes</button><button id="audioImportAdd" type="button">Add note</button><button id="audioImportReset" type="button" disabled>Restore detected notes</button></div>

@@ -528,3 +528,10 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 
 .phraseMeterControls[hidden]{display:none}.phraseMeterControls select,.phraseMeterControls input[type=number]{background:#24362b;color:white;border:1px solid #55775f;border-radius:5px;padding:4px}.phraseMeterControls #phraseGridHint{max-width:100%;overflow-wrap:anywhere}
 .phraseMeterControls label{max-width:100%;flex-wrap:wrap}.scoreSeek{flex-wrap:wrap}.scoreSeek output{max-width:100%;overflow-wrap:anywhere}
+
+/* Keep loading, silence and errors beside the selected file, before disabled actions. */
+.audioImportFeedback{margin:12px 0;padding:12px;border:1px solid #5a8066;border-radius:9px;background:#14251b}
+.audioImportFeedback #audioImportStatus{margin:0;color:#e2f3e7;font-weight:600}
+.audioImportFeedback #audioImportStatus[data-tone="error"]{color:#ffc2b8}
+.audioImportFeedback #audioImportStatus[data-tone="warning"]{color:#ffe2a8}
+.audioImportFeedback progress{margin-top:10px}

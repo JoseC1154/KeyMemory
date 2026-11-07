@@ -135,3 +135,11 @@ Native Chromium remains blocked here by `socket() failed: Operation not permitte
 `stale-key-visuals.cjs` checks the separate live state behind Settings/Hint/Modes. `wrong-key-browser.cjs` expects held Phrase MIDI notes to remain pink after red fades. `phrase-timing-controls.cjs` verifies explicit inspected-time pedal wording.
 
 The native MIDI browser suite was attempted locally but Chromium failed before assertions with `socket() failed: Operation not permitted`. Local deterministic success is not a native-browser or physical-MIDI pass.
+
+
+## Import feedback candidate
+
+- `node tests/audio-import-feedback.cjs`: prominent status placement; choose-versus-analyze instructions; 18-second silent MOV; missing/unsupported-track and size-specific errors; read/decode/audio-resume timeout recovery; late callbacks; preview start/end/stop/focus interruption; no model call for silence; invalid decoded samples; saved-phrase preservation. Browser APIs and decoding are mocked.
+- `tests/video-fixtures.cjs` also generates 18-second MOVs with AAC, PCM, absent audio, and a silent AAC track. `tests/video-import-browser.cjs` includes these and explicit original-preview UI checks. The browser suite is supplied but remains unexecuted for this candidate due to Chromium's socket startup restriction. The hosted browser's direct checks apply to live Build 48, not this unpublished candidate.
+
+The video size suite now accepts a mocked 30 MB, 18-second MOV and the exact 100 MiB boundary, rejects 100 MiB + 1 byte before reading, preserves the audio-only 20 MiB limit, and rejects a 121-second large video before whole-file reading. The fixture generator also creates a real 18-second H.264/AAC MOV above 30 MiB for native-browser decode, preview and analysis checks.

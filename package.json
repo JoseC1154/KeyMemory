@@ -7,7 +7,7 @@
     "build:audio": "node scripts/build-audio-runtime.mjs",
     "test:audio-runtime": "node tests/audio-transcription-controller.cjs && node tests/audio-transcription-model.mjs && node tests/audio-transcription-bundle.cjs",
     "test:audio-browser": "node tests/audio-transcription-browser.cjs && node tests/audio-import-browser.cjs",
-    "test:audio": "node tests/audio-import-utils.cjs && node tests/audio-import-ui.cjs && node tests/audio-import-preview-audio.cjs && node tests/phrase-import-engine.cjs && npm run test:audio-runtime",
+    "test:audio": "node tests/audio-import-utils.cjs && node tests/audio-import-ui.cjs && node tests/audio-import-feedback.cjs && node tests/audio-import-preview-audio.cjs && node tests/phrase-import-engine.cjs && npm run test:audio-runtime",
     "test:video": "node tests/video-import-ui.cjs",
     "test:video-browser": "node tests/video-import-browser.cjs"
   },
