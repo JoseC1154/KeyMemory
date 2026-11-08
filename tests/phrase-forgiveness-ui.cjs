@@ -67,7 +67,7 @@ test('cancel, Escape and blur restore uncommitted preview',()=>{
 });
 test('empty, example, recording/count-in and pending audio disable both controls',async()=>{
  let h=setup();try{h.mode('phrase');disabled(h,true);}finally{h.close();}
- h=ready();try{disabled(h,false);h.click('phraseViewExample');disabled(h,true);h.click('phraseViewExample');disabled(h,false);await h.connect();h.click('phraseRecord');await flush();assert.equal(h.snapshot().state,'record-countin');disabled(h,true);h.advance(2000);assert.equal(h.snapshot().state,'recording');disabled(h,true);h.click('phraseStop');disabled(h,false);}finally{h.close();}
+ h=ready();try{disabled(h,false);h.click('phraseViewExample');disabled(h,true);h.click('phraseViewExample');disabled(h,false);await h.connect();h.click('phraseRecord');assert(!h.el('phraseRecordConfirm').hidden);h.click('phraseRecord');await flush();assert.equal(h.snapshot().state,'record-countin');disabled(h,true);h.advance(2000);assert.equal(h.snapshot().state,'recording');disabled(h,true);h.click('phraseStop');disabled(h,false);}finally{h.close();}
  h=ready();try{h.defer(true);h.click('phrasePlay');disabled(h,true);h.click('phraseStop');await flush();disabled(h,false);for(const resolve of h.resumes)resolve();await flush();assert.equal(h.snapshot().state,'idle');}finally{h.close();}
 });
 test('forgiving mode still rejects wrong MIDI pitch and preserves source',async()=>{

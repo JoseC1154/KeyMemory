@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '..', 'audio-transcription.js'), 'utf8');
-function fixture(overrides = {}) {
+function fixture(overrides = {}, scriptURL = 'https://example.test/KeyMemory/audio-transcription.js') {
   const workers = [];
   class Worker {
     constructor(url, options) { this.url = url; this.options = options; this.terminations = 0; workers.push(this); }
@@ -13,7 +13,7 @@ function fixture(overrides = {}) {
   }
   const window = {Worker, WebAssembly, ...overrides};
   vm.runInNewContext(source, {window, Float32Array, URL, Error, TypeError, RangeError,
-    document: {currentScript: {src: 'https://example.test/KeyMemory/audio-transcription.js'}, baseURI: 'https://example.test/KeyMemory/'}});
+    document: {currentScript: {src: scriptURL}, baseURI: 'https://example.test/KeyMemory/'}});
   return {api: window.KeyMemoryAudio, workers};
 }
 (async () => {
@@ -23,12 +23,13 @@ function fixture(overrides = {}) {
   assert.equal(api.MAX_SECONDS, 30);
   assert.equal(workers.length, 0, 'runtime stays lazy');
   const updates = [];
-  let promise = api.transcribe(samples, {onProgress: value => updates.push(value)});
+  let promise = api.transcribe(samples, {includeAttackEvidence:true,onProgress: value => updates.push(value)});
   let worker = workers[0];
   assert.equal(worker.url, 'https://example.test/KeyMemory/assets/audio/audio-transcription-worker.js');
   assert.notEqual(worker.sent.samples.buffer, samples.buffer, 'caller retains samples');
   assert.deepEqual(worker.sent.samples, samples);
   assert.equal(worker.transfers[0], worker.sent.samples.buffer);
+  assert.equal(worker.sent.includeAttackEvidence,true);
   worker.emit({type: 'progress', stage: 'loading', progress: 0.5});
   assert.equal(updates[0].progress, 0.5);
   const notes = [{pitchMidi: 60, startTimeSeconds: 0, durationSeconds: 1, amplitude: 0.7}];
@@ -39,6 +40,11 @@ function fixture(overrides = {}) {
   assert.equal(worker.onmessage, null);
   stale({data: {type: 'progress', stage: 'processing', progress: 1}});
   assert.equal(updates.length, 1, 'late callbacks ignored');
+
+  const versioned=fixture({},'https://example.test/KeyMemory/audio-transcription.js?v=release-52');
+  const versionedResult=versioned.api.transcribe(samples);
+  assert.equal(versioned.workers[0].url,'https://example.test/KeyMemory/assets/audio/audio-transcription-worker.js?v=release-52');
+  versioned.workers[0].emit({type:'result',notes:[]});await versionedResult;
 
   for (const invalid of [[], new Float32Array(), new Float32Array(22050 * 30 + 1), new Float32Array([NaN]), new Float32Array([Infinity])]) {
     await assert.rejects(api.transcribe(invalid));

@@ -171,7 +171,7 @@ No candidate source is uploaded, pushed or deployed by these tests.
 
 ## Manual scrubbing and edit-note audition
 
-- `npm run test:audition` checks the dedicated preview synth and its actual-app integration. Native/fallback audio envelopes preserve attack/hold/release continuity on cancellation; async resumes cannot revive superseded previews; voices and summed gain are bounded; durations/offsets end within 600 ms. App tests cover forward/reverse traversal, exact chords, held-note gesture start, Sound off, transpose, edit/Delete/Undo, immutable source/options, main playback exclusion, and sheet/mode/mute/blur/transport cancellation.
+- `npm run test:audition` checks the dedicated preview synth and its actual-app integration. Native/fallback audio envelopes preserve attack/hold/release continuity on cancellation; async resumes cannot revive superseded previews; voices and summed gain are bounded; durations/offsets end within 600 ms. App tests cover forward/reverse traversal, exact chords, held-note gesture start, always-enabled sound, transpose, edit/Delete/Undo, immutable source/options, main playback exclusion, and sheet/mode/blur/transport cancellation.
 - Existing pointer/keyboard staff inspection remains silent. Only manual Inspect-slider movement and explicit editor selection request audition. Fixtures use simulated audio contexts; these passes do not establish audible output, native mobile gestures or device latency.
 
 
@@ -191,3 +191,28 @@ These are deterministic clock/DOM/audio tests. Native Chromium, physical MIDI la
 - `npm run test:tempo-browser` supplies optional native desktop/mobile geometry, input/focus and repeated/canceled review checks using a generated local WAV and deterministic transcription output. It does not publish or upload media.
 
 Native Chromium launch was attempted with the default and an escalated temporary profile for this candidate; both failed before assertions with `socket() failed: Operation not permitted`. No native-rendering, actual-device, physical-MIDI, listening or arbitrary-music accuracy pass is claimed.
+
+
+## Two-press Record and compact transport
+
+- `npm run test:record-confirm` checks the first/second Record press, exact preservation of saved notes/controllers/options until a nonempty take finishes, canceled count-ins and empty takes, Keep phrase/Stop/Escape/navigation/background/disconnect cancellation, stale phrase revisions, keyboard repeats, pending/rejected audio, and MIDI note/CC release edges. Transpose controls are in Settings, and mapped MIDI transpose works with Settings closed.
+- `npm run test:record-browser` supplies optional real-browser mouse/touch/keyboard and responsive-prompt checks at desktop, phone and landscape sizes. These tests use synthetic MIDI, not a physical instrument. Native Chromium launch remains blocked here by `socket() failed: Operation not permitted`; no rendered-layout, actual-device or listening pass is claimed.
+## Import note smoothing
+
+- `npm run test:smoothing` runs the pure smoother, synthetic frame-output probes and actual-app draft UI tests. Coverage includes strength/Off reversibility, confidence dropouts, direct doubtful onsets, clear and quiet repeats, energy-rise protection, staccato, chords, gaps, overlaps, boundaries, dense bounded work, immutable source data, preview scheduling/cancellation, manual-edit protection, restore focus, atomic/canceled import, evidence stripping and new/closed/stale drafts.
+- `npm run test:audio-runtime` additionally verifies evidence-bearing output preserves original detection exactly; real Basic Pitch/WASM synthetic repeated/quiet notes, staccato and cross-window held chords survive maximum smoothing. The generated worker returns finite attack metadata, loads only local assets, and preserves cancellation/error/memory behavior.
+- `npm run test:smoothing-browser` supplies native desktop, portrait and landscape range-keyboard/touch checks, geometry/screenshots, preview interruption, manual edit/reset focus, acceptance cancellation and repeated/Escape/Close lifecycle using a generated WAV and deterministic note output.
+
+The native smoothing suite was attempted but Chromium failed before assertions with `socket() failed: Operation not permitted`. Browser rendering, actual-device gestures, physical MIDI, listening and accuracy on arbitrary recordings are not established by the passing deterministic/model tests. No user recording was used. All test media is generated locally.
+## Always-enabled instrument sound
+
+- `node tests/sound-toggle.cjs` retains its historical filename but now checks removal of the toggle, ignored old mute preferences, no load-time audio, all nine modes, pointer/MIDI voices, polyphony, Scale preview, unlock failure/retry, pending cancellation, recording and independent Click.
+- Audition and transport suites cover always-enabled previews and Click changes without silencing instruments. These are simulated WebAudio checks, not audible-device verification.
+
+## Phrase workspace cleanup
+
+- `npm run test:phrase-cleanup` covers empty/populated/recording-example and final-note Undo visibility, speed beside transport with the score hidden, native nonmodal Timing & grid/Help, preserved warnings, responsive DOM states at 1280×900, 390×844, 320×740 and 844×390, and valid accessible descriptions/unique IDs.
+- `npm run test:phrase-cleanup-browser` supplies keyboard disclosure, rendered empty/populated state, speed, example-return, uninterrupted playback, overflow and screenshot checks at those viewports. Existing meter/tempo/falling/legend browser checks open the new disclosure before using its controls.
+- Native Chromium was attempted and failed before assertions with `socket() failed: Operation not permitted`. The hosted browser could not reach the local preview (`ERR_CONNECTION_REFUSED`). Candidate visual layout, actual touch devices, physical MIDI and audible sound are not verified by the deterministic checks.
+
+The empty score/editor stays hidden until a phrase or active recording exists. Deleting the final note keeps the editing workspace available for Undo. Source tempo, meter, count-in and loop-grid setup live in Timing & grid, which does not stop transport. Longer score/inspection guidance, the color legend and the read-only example live in Help. Imported-note uncertainty and loop warnings remain outside Help. The speed dial remains accessible in piano-only view.

@@ -81,29 +81,49 @@ export async function evaluateFrames(model, samples, {onProgress, shouldCancel, 
   return {frames, onsets};
 }
 
-export async function transcribeWithModel(model, samples, options = {}) {
-  const {frames, onsets} = await evaluateFrames(model, samples, options);
-  cancelled(options.shouldCancel);
-  if (options.onProgress) options.onProgress({stage: 'processing', progress: 0});
+// Keep only compact, pitch-specific attack evidence in the disposable review.
+// Raw model onsets are deliberately separate from Basic Pitch's inferred onsets:
+// a confidence rebound may split a held note without a fresh physical strike.
+export function attackEvidenceAt(frames, onsets, startFrame, pitchMidi) {
+  const pitch = pitchMidi - 21;
+  const value = (rows, frame) => Math.max(0, Math.min(1, rows[frame]?.[pitch] || 0));
+  let onset = 0, before = 0, after = 0, count = 0;
+  for (let i = Math.max(0, startFrame - 2); i <= Math.min(onsets.length - 1, startFrame + 2); i++) onset = Math.max(onset, value(onsets, i));
+  // Look behind a short confidence dip rather than treating its rebound as an
+  // attack. This is supporting evidence, not proof that two notes are one hold.
+  for (let i = Math.max(0, startFrame - 10); i <= startFrame - 3; i++) before = Math.max(before, value(frames, i));
+  for (let i = startFrame; i <= Math.min(frames.length - 1, startFrame + 3); i++) {after += value(frames, i); count++;}
+  return {onset, before, rise: Math.max(0, (count ? after / count : 0) - before)};
+}
+
+export function notesFromFrames(frames, onsets, duration, {includeAttackEvidence = false} = {}) {
   if (frames.length < 2) return [];
   // Official polyphonic postprocessor and time conversion, including its
   // window-offset correction. Never quantize, invent tempo, or add pedal data.
-  const duration = samples.length / SAMPLE_RATE;
-  const notes = noteFramesToTime(outputToNotesPoly(frames, onsets, 0.5, 0.3, 5))
-    .map(note => {
+  const events = outputToNotesPoly(frames, onsets, 0.5, 0.3, 5);
+  return noteFramesToTime(events)
+    .map((note, index) => {
       const start = Math.max(0, note.startTimeSeconds);
       const end = Math.min(duration, note.startTimeSeconds + note.durationSeconds);
       return {
         pitchMidi: note.pitchMidi,
         startTimeSeconds: start,
         durationSeconds: end - start,
-        amplitude: Math.max(0, Math.min(1, note.amplitude))
+        amplitude: Math.max(0, Math.min(1, note.amplitude)),
+        ...(includeAttackEvidence ? {attackEvidence: attackEvidenceAt(frames, onsets, events[index].startFrame, note.pitchMidi)} : {})
       };
     })
     .filter(note => Number.isInteger(note.pitchMidi) && note.pitchMidi >= 21 && note.pitchMidi <= 108 &&
       Number.isFinite(note.startTimeSeconds) && Number.isFinite(note.durationSeconds) &&
       Number.isFinite(note.amplitude) && note.durationSeconds > 0)
     .sort((a, b) => a.startTimeSeconds - b.startTimeSeconds || a.pitchMidi - b.pitchMidi);
+}
+
+export async function transcribeWithModel(model, samples, options = {}) {
+  const {frames, onsets} = await evaluateFrames(model, samples, options);
+  cancelled(options.shouldCancel);
+  if (options.onProgress) options.onProgress({stage: 'processing', progress: 0});
+  const notes = notesFromFrames(frames, onsets, samples.length / SAMPLE_RATE, options);
   cancelled(options.shouldCancel);
   if (options.onProgress) options.onProgress({stage: 'processing', progress: 1});
   return notes;

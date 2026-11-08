@@ -21,7 +21,9 @@ function setup(saved){
  return{w,d,el,click,change,send,off,advance,connect,port,access,sounds,controls,oscillators,cc:(controller,value,channel=0)=>send(controller,value,channel,0xb0),mode:m=>w.phraseTest.mode(m),get:()=>w.phraseTest.get(),snapshot:()=>engine.snapshot(),now:()=>now,close:()=>w.close()};
 }
 async function beginRecord(h){
- h.click('phraseRecord');await flush();
+ const replacing=h.snapshot().notes.length>0;h.click('phraseRecord');
+ if(replacing&&h.port.onmidimessage){assert(!h.el('phraseRecordConfirm').hidden);assert.equal(h.el('phraseRecord').textContent,'● Record again');h.click('phraseRecord');}
+ await flush();
  if(h.snapshot().state!=='record-countin')return;
  const beat=60000/h.snapshot().options.sourceBpm;
  assert.equal(h.snapshot().countIn,1);h.advance(beat);assert.equal(h.snapshot().countIn,2);h.advance(beat);assert.equal(h.snapshot().countIn,3);h.advance(beat);assert.equal(h.snapshot().countIn,4);h.advance(beat);assert.equal(h.snapshot().state,'recording');assert.equal(h.snapshot().elapsed,0);
@@ -40,8 +42,24 @@ async function recordExample(h){
  const h=setup();await h.connect();h.mode('phrase');assert.equal(h.get().activeMode,'phrase');assert(!h.el('phraseActions').hidden);assert(h.el('timerControls').hidden);assert(h.el('dictionaryActions').hidden);assert(h.el('nextChallenge').hidden);assert.equal(h.el('phraseTolerance').value,String(h.snapshot().options.tolerance),'initial tolerance has a visible option');
  await recordExample(h);assert(h.snapshot().saved);const original=JSON.stringify(h.snapshot().notes);const saved=h.w.localStorage.getItem('keymemory.phrase.v1');assert(saved);
  // Explicit cancellation protects the saved phrase; disconnected recording gives actionable feedback.
- h.w.confirm=()=>false;await beginRecord(h);assert.equal(h.snapshot().state,'idle');h.click('phraseClear');assert.equal(JSON.stringify(h.snapshot().notes),original);h.w.confirm=()=>true;
+ h.w.confirm=()=>{throw new Error('Record must not open a native confirmation');};h.click('phraseRecord');assert(!h.el('phraseRecordConfirm').hidden);assert.equal(h.snapshot().state,'idle');assert.equal(JSON.stringify(h.snapshot().notes),original);h.click('phraseRecordCancel');assert(h.el('phraseRecordConfirm').hidden);assert.equal(JSON.stringify(h.snapshot().notes),original);h.w.confirm=()=>false;h.click('phraseClear');assert.equal(JSON.stringify(h.snapshot().notes),original);h.w.confirm=()=>true;
  h.click('disconnectMidi');await beginRecord(h);assert.equal(h.snapshot().state,'idle');assert.match(h.el('trainingPrompt').textContent,/Connect.*MIDI/);await h.connect();
+ // Confirmation is scoped to the current action and revision, never left armed by navigation.
+ for(const action of ['cancel','escape','stop','play','practice','settings','mode','blur','hidden','disconnect','transpose','tempo']){
+  const pending=setup(saved);await pending.connect();pending.mode('phrase');let dialogs=0;pending.w.confirm=()=>{dialogs++;return true;};
+  assert.equal(pending.el('phraseDelete'),null);pending.click('phraseRecord');assert(!pending.el('phraseRecordConfirm').hidden);assert.equal(pending.snapshot().state,'idle');assert.equal(pending.w.localStorage.getItem('keymemory.phrase.v1'),saved);
+  if(action==='cancel')pending.click('phraseRecordCancel');
+  else if(action==='escape')pending.d.dispatchEvent(new pending.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+  else if(action==='settings')pending.click('openSettings');
+  else if(action==='mode')pending.mode('free');
+  else if(action==='blur')pending.w.dispatchEvent(new pending.w.Event('blur'));
+  else if(action==='hidden'){Object.defineProperty(pending.d,'hidden',{configurable:true,value:true});pending.d.dispatchEvent(new pending.w.Event('visibilitychange'));}
+  else if(action==='disconnect')pending.click('disconnectMidi');
+  else if(action==='transpose')pending.click('phraseUp');
+  else if(action==='tempo')pending.change('phraseSourceBpm',100);
+  else pending.click({stop:'phraseStop',play:'phrasePlay',practice:'phrasePractice'}[action]);
+  await flush();assert(pending.el('phraseRecordConfirm').hidden,action+' clears confirmation');assert.notEqual(pending.el('phraseRecord').textContent,'● Record again');assert.equal(dialogs,0);assert.equal(JSON.stringify(pending.snapshot().notes),original);pending.close();
+ }
  // Independent UI tempo/transpose settings drive actual playback events and preserve recording.
  h.click('phraseUp');h.click('phraseUp');assert.equal(h.snapshot().options.transpose,2);assert.match(h.el('phraseTransposeValue').textContent,/2/);h.change('phraseSourceBpm',120);h.click('openSettings');h.change('phrasePlayBpm',60);assert.match(h.el('practiceSummary').textContent,/Notes only.*60 quarter-note BPM/);h.click('closeSettings');assert.match(h.el('practiceSummary').textContent,/Notes only.*60 quarter-note BPM/);
  await beginPlay(h);assert.equal(h.snapshot().state,'playing');h.advance(0);await flush();assert.deepEqual(h.sounds[0].slice(0,3),[62,72,1000]);h.advance(1400);await flush();assert.deepEqual(h.sounds[1].slice(0,3),[66,110,600]);h.advance(700);assert.equal(h.snapshot().state,'playing');assert(h.snapshot().looping);h.click('phrasePlay');assert.equal(h.snapshot().state,'idle');assert.equal(JSON.stringify(h.snapshot().notes),original);

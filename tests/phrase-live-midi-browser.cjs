@@ -34,6 +34,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   await page.evaluate(()=>{midiTransport.setMapping('stop',{kind:'note',number:60,channel:0});midiTransport.setEnabled(true);sendMidi(60);});assert.equal(await key.evaluate(el=>el.classList.contains('phraseLive')),false);
   await page.evaluate(()=>sendMidi(60,100,1));assert.match(await key.evaluate(el=>getComputedStyle(el).backgroundImage),/rgb\(240, 140, 224\).*35%/);assert.match(await key.getAttribute('aria-label'),/MIDI shortcuts: Stop.*your MIDI key held/);await page.evaluate(()=>{sendMidi(60,0,1);sendMidi(60,0);});
   await page.emulateMedia({reducedMotion:'reduce'});await page.evaluate(()=>sendMidi(64));assert.equal(await page.locator('.key[data-midi="64"]').evaluate(el=>getComputedStyle(el).transitionDuration),'0s');await page.evaluate(()=>sendMidi(64,0));
+  await page.locator('#phraseHelp > summary').click();
   const bounds=await page.locator('#phraseKeyLegend').boundingBox();assert(bounds&&bounds.x>=0&&bounds.x+bounds.width<=width+1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.locator('#phraseKeyLegend').screenshot({path:path.join(__dirname,`phrase-live-legend-${width}x${height}.png`)});assert.deepEqual(errors,[]);await context.close();
  }}finally{await browser.close();}
  console.log('PASS: live pink/diamond, black/white geometry, playback and inspection overlap, red overlay, channel-specific shortcuts, reduced motion and responsive legend. Synthetic MIDI only.');

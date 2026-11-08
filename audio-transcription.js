@@ -7,6 +7,9 @@
   const script = typeof document !== 'undefined' && document.currentScript;
   const base = script && script.src || (typeof document !== 'undefined' && document.baseURI);
   const workerURL = new URL('assets/audio/audio-transcription-worker.js', base);
+  // Match the controller's release query so new review metadata cannot receive
+  // an older cached worker after a static-site update.
+  if (base) workerURL.search = new URL(base).search;
   let active = null;
 
   function abortError() {
@@ -70,7 +73,7 @@
         };
         // Transfer a copy so callers retain their samples for preview or retry.
         const copy = new Float32Array(samples);
-        worker.postMessage({samples: copy}, [copy.buffer]);
+        worker.postMessage({samples: copy, includeAttackEvidence: options.includeAttackEvidence === true}, [copy.buffer]);
       } catch (error) {
         finish(error);
       }

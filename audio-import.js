@@ -41,7 +41,7 @@
   for(const event of events){
    if(!event||!Number.isInteger(event.pitchMidi)||event.pitchMidi<0||event.pitchMidi>127||!finite(event.startTimeSeconds)||!finite(event.durationSeconds)||event.durationSeconds<=0)throw Error('The transcription returned invalid notes. Try again or use a clearer recording.');
    const start=Math.max(0,event.startTimeSeconds*1000),end=Math.min(duration,(event.startTimeSeconds+event.durationSeconds)*1000);
-   if(end>start)notes.push({note:event.pitchMidi,velocity:90,channel:0,start,duration:end-start});
+   if(end>start)notes.push({note:event.pitchMidi,velocity:90,channel:0,start,duration:end-start,...(event.attackEvidence && ['onset','rise','before'].every(key=>finite(event.attackEvidence[key])&&event.attackEvidence[key]>=0&&event.attackEvidence[key]<=1)?{attackEvidence:{...event.attackEvidence}}:{})});
   }
   return notes.sort((a,b)=>a.start-b.start||a.note-b.note);
  }
@@ -67,7 +67,7 @@
   const w=config.window||window,d=w.document,el=id=>d.getElementById(id),open=()=>config.isOpen();
   let buffer=null,notes=[],detected=[],phase='empty',generation=0,controller=null,context=null,page=0,nextId=0,previewToken=0,previewTimer=null,previewKind='',previewStarting='',previewSource=null;
   const voices=new Set(),PAGE=12;
-  let tempoSuggestion=null,tempoChosen=false,tempoTaps=[];
+  let tempoSuggestion=null,tempoChosen=false,tempoTaps=[],smoothing=0,joined=0,manuallyEdited=false;
   const sourceBpm=()=>el('audioImportBpm').value===''?NaN:Number(el('audioImportBpm').value);
   const validBpm=()=>finite(sourceBpm())&&sourceBpm()>=30&&sourceBpm()<=300;
   function updateTempo(){tempoSuggestion=w.KeyMemoryTempo?.estimate(notes)||null;}
@@ -87,7 +87,11 @@
    el('audioImportCancel').hidden=!busy;el('audioImportProgress').hidden=!busy;
    el('audioImportReview').hidden=phase!=='review';el('audioImportNotesPreview').disabled=!valid;
    el('audioImportUse').disabled=!valid||!validBpm();el('audioImportAdd').disabled=notes.length>=MAX_NOTES;
-   el('audioImportReset').disabled=!detected.length;el('audioImportStopPreview').hidden=!previewKind&&!previewStarting;
+   el('audioImportReset').disabled=!detected.length&&!manuallyEdited;el('audioImportReset').hidden=!smoothing&&!manuallyEdited;
+   const smoothingControl=el('audioImportSmoothing');smoothingControl.value=String(smoothing);smoothingControl.disabled=busy||!detected.length||manuallyEdited||!w.KeyMemoryNoteSmoothing;smoothingControl.setAttribute('aria-valuetext',smoothing?smoothing+' percent smoothing':'Off');
+   el('audioImportSmoothingValue').textContent=smoothing?smoothing+'% · '+joined+' join'+(joined===1?'':'s'):'Off';
+   el('audioImportSmoothingHint').textContent=!w.KeyMemoryNoteSmoothing?'Note smoothing did not load. Reload the app to use it.':manuallyEdited?'Your manual edits are kept. Restore detected notes to adjust smoothing again.':'Joins short breaks in the same note. Hear the result and reduce smoothing if repeated strikes are joined.';
+   el('audioImportNotesPreview').textContent=smoothing&&joined?'Hear smoothed notes':'Hear detected notes';el('audioImportStopPreview').hidden=!previewKind&&!previewStarting;
    el('audioImportCount').textContent=notes.length?notes.length+' note'+(notes.length===1?'':'s')+(valid?' ready':' to check'):'No notes to import';
    const replacing=!!config.hasSavedPhrase?.();
    el('audioImportUse').textContent=replacing?'Replace saved phrase':'Import notes';
@@ -109,7 +113,7 @@
    voices.clear();sync();
   }
   function abortWork(){generation++;controller?.abort();controller=null;}
-  function resetDraft(){tempoSuggestion=null;tempoChosen=false;tempoTaps=[];el('audioImportBpm').value='120';el('audioImportEditor').open=false;notes=[];detected=[];page=0;nextId=0;renderNotes();}
+  function resetDraft(){smoothing=0;joined=0;manuallyEdited=false;tempoSuggestion=null;tempoChosen=false;tempoTaps=[];el('audioImportBpm').value='120';el('audioImportEditor').open=false;notes=[];detected=[];page=0;nextId=0;renderNotes();}
   function close(){el('audioImportOptions').open=false;abortWork();stopPreview();buffer=null;resetDraft();phase='empty';el('audioImportFile').value='';el('audioImportFilename').textContent='';el('audioImportStart').value='0';el('audioImportEnd').value='0';const old=context;context=null;if(old)w.setTimeout(()=>{try{Promise.resolve(old.close()).catch(()=>{});}catch{}},45);sync();}
   function begin(){close();status('Choose a file, then Analyze. Choosing a file does not start analysis.');sync();}
   function metadata(file,signal){return new Promise((resolve,reject)=>{
@@ -150,12 +154,18 @@
     if(request!==generation||!open())return;
     if(!hasSignal(samples)){phase='review';controller=null;renderNotes();status(SILENT_MESSAGE,'warning');return;}
     if(!w.KeyMemoryAudio)throw Error('The transcription module did not load. Reload the app and try again.');
-    const result=await w.KeyMemoryAudio.transcribe(samples,{signal,onProgress:value=>{if(request!==generation||!open())return;el('audioImportProgress').value=value.progress;status(value.stage==='loading'?'Loading the local note-detection model… The first analysis needs an internet connection; your recording stays on this device.':value.stage==='processing'?'Preparing detected notes…':'Detecting notes locally… '+Math.round(value.progress*100)+'%');}});
+    const result=await w.KeyMemoryAudio.transcribe(samples,{signal,includeAttackEvidence:true,onProgress:value=>{if(request!==generation||!open())return;el('audioImportProgress').value=value.progress;status(value.stage==='loading'?'Loading the local note-detection model… The first analysis needs an internet connection; your recording stays on this device.':value.stage==='processing'?'Preparing detected notes…':'Detecting notes locally… '+Math.round(value.progress*100)+'%');}});
     if(request!==generation||!open())return;
     detected=normalizeNotes(result,chosen.duration*1000);notes=detected.map(n=>({...n,id:++nextId}));phase='review';controller=null;page=0;renderNotes();
     status(notes.length?'Your notes are ready. Import them to play and practice.':'No clear notes were detected. Try a clearer recording or another section. You can also add notes under Edit notes.',notes.length?'success':'warning');
    }catch(error){if(request!==generation||!open())return;phase='ready';controller=null;status(error.name==='AbortError'?'Analysis canceled. Your saved phrase is unchanged.':error.message||'Analysis failed. Try a shorter clip.',error.name==='AbortError'?'info':'error');}
    finally{if(request===generation&&open())sync();}
+  }
+  function applySmoothing(){
+   if(!open()||phase!=='review')return;if(manuallyEdited||!w.KeyMemoryNoteSmoothing){sync();return;}
+   const strength=Math.max(0,Math.min(100,Number(el('audioImportSmoothing').value)||0));stopPreview();smoothing=strength;
+   const result=w.KeyMemoryNoteSmoothing?.smooth(detected,smoothing)||{notes:detected,joined:0};joined=result.joined;notes=result.notes.map(n=>({...n,id:++nextId}));page=0;renderNotes();
+   status(smoothing?(joined?joined+' short break'+(joined===1?' was':'s were')+' joined. Hear the smoothed notes before importing.':'No likely fragments joined at this setting. Repeated or uncertain attacks stay separate.'):'Smoothing is off. Original detected notes restored.');
   }
   function trimChanged(){if(!buffer)return;abortWork();stopPreview();resetDraft();phase='ready';try{selection();status('Section changed. Analyze again to detect notes for this section.');}catch(error){status(error.message);}sync();}
   function renderNotes(){
@@ -198,7 +208,7 @@
   }
   function usePhrase(){
    if(!open()||phase!=='review'||!validNotes(notes,proposalDuration())||!validBpm())return;
-   stopPreview();const payload={notes:notes.map(({id,...n})=>({...n})).sort((a,b)=>a.start-b.start||a.note-b.note),duration:proposalDuration(),sourceBpm:sourceBpm()};
+   stopPreview();const payload={notes:notes.map(({id,attackEvidence,...n})=>({...n})).sort((a,b)=>a.start-b.start||a.note-b.note),duration:proposalDuration(),sourceBpm:sourceBpm()};
    try{if(config.onCommit(payload))config.onClose();else status('Your saved phrase is unchanged. Import when ready, or close this window.');}catch(error){status(error.message||'The phrase could not be imported. Your saved phrase is unchanged.');}
   }
   el('audioImportFile').addEventListener('change',chooseFile);
@@ -207,15 +217,16 @@
   el('phraseImportOverlay').addEventListener('click',event=>{if(event.target===event.currentTarget)config.onClose();});
   el('audioImportCancel').addEventListener('click',()=>{abortWork();phase=buffer?'ready':'empty';status('Canceled. Your saved phrase is unchanged.');sync();});
   el('audioImportOriginal').addEventListener('click',()=>preview('original'));el('audioImportNotesPreview').addEventListener('click',()=>preview('notes'));el('audioImportStopPreview').addEventListener('click',()=>{stopPreview();status('Preview stopped. '+(notes.length?'Your notes are ready to import.':'Choose Analyze to detect notes.'));});
+  el('audioImportSmoothing').addEventListener('input',applySmoothing);el('audioImportSmoothing').addEventListener('change',()=>{if(Number(el('audioImportSmoothing').value)!==smoothing)applySmoothing();});
   el('audioImportUse').addEventListener('click',usePhrase);
   el('audioImportBpm').addEventListener('change',()=>{tempoChosen=true;tempoTaps=[];sync();});
   el('audioImportUseTempo').addEventListener('click',()=>{if(!open()||phase!=='review'||!tempoSuggestion?.bpm)return;el('audioImportBpm').value=String(tempoSuggestion.bpm);tempoChosen=true;tempoTaps=[];sync();});
   el('audioImportTapTempo').addEventListener('click',()=>{if(!open()||phase!=='review')return;const now=w.Date.now();if(tempoTaps.length&&now-tempoTaps.at(-1)>2000)tempoTaps=[];tempoTaps.push(now);tempoTaps=tempoTaps.slice(-5);if(tempoTaps.length<2)return;const bpm=60000*(tempoTaps.length-1)/(tempoTaps.at(-1)-tempoTaps[0]);if(bpm>=30&&bpm<=300){el('audioImportBpm').value=String(Math.round(bpm*10)/10);tempoChosen=true;sync();}});
   el('audioImportPrevious').addEventListener('click',()=>{page--;renderNotes();});el('audioImportNext').addEventListener('click',()=>{page++;renderNotes();});
-  el('audioImportAdd').addEventListener('click',()=>{stopPreview();if(notes.length>=MAX_NOTES)return;notes.push({note:60,velocity:90,channel:0,start:0,duration:Math.min(500,proposalDuration()),id:++nextId});page=Math.floor((notes.length-1)/PAGE);renderNotes();status('Added C4. Adjust its pitch, start and length.');});
-  el('audioImportReset').addEventListener('click',()=>{stopPreview();notes=detected.map(n=>({...n,id:++nextId}));page=0;renderNotes();status('Restored the detected notes.');});
-  el('audioImportNoteList').addEventListener('change',event=>{const field=event.target.dataset.field,row=event.target.closest('[data-note-id]'),n=notes.find(n=>n.id===Number(row?.dataset.noteId));if(!n||!['note','start','duration'].includes(field))return;stopPreview();const value=event.target.value===''?NaN:Number(event.target.value);n[field]=field==='note'?value:value*1000;updateTempo();sync();});
-  el('audioImportNoteList').addEventListener('click',event=>{if(!event.target.dataset.remove)return;stopPreview();const row=event.target.closest('[data-note-id]');notes=notes.filter(n=>n.id!==Number(row.dataset.noteId));renderNotes();status('Note removed from the draft.');});
+  el('audioImportAdd').addEventListener('click',()=>{stopPreview();if(notes.length>=MAX_NOTES)return;manuallyEdited=true;notes.push({note:60,velocity:90,channel:0,start:0,duration:Math.min(500,proposalDuration()),id:++nextId});page=Math.floor((notes.length-1)/PAGE);renderNotes();status('Added C4. Adjust its pitch, start and length.');});
+  el('audioImportReset').addEventListener('click',()=>{stopPreview();smoothing=0;joined=0;manuallyEdited=false;notes=detected.map(n=>({...n,id:++nextId}));page=0;renderNotes();el('audioImportSmoothing').focus();status('Restored the detected notes.');});
+  el('audioImportNoteList').addEventListener('change',event=>{const field=event.target.dataset.field,row=event.target.closest('[data-note-id]'),n=notes.find(n=>n.id===Number(row?.dataset.noteId));if(!n||!['note','start','duration'].includes(field))return;stopPreview();manuallyEdited=true;const value=event.target.value===''?NaN:Number(event.target.value);n[field]=field==='note'?value:value*1000;updateTempo();sync();});
+  el('audioImportNoteList').addEventListener('click',event=>{if(!event.target.dataset.remove)return;stopPreview();manuallyEdited=true;const row=event.target.closest('[data-note-id]');notes=notes.filter(n=>n.id!==Number(row.dataset.noteId));renderNotes();status('Note removed from the draft.');});
   function interruptPreview(){const playing=previewKind||previewStarting;stopPreview();if(playing&&open())status('Preview stopped when the app lost focus. Choose a preview button to listen again.');}
   w.addEventListener('blur',interruptPreview);d.addEventListener('visibilitychange',()=>{if(d.hidden)interruptPreview();});w.addEventListener('pagehide',close);
   sync();return{open:begin,close,stopPreview};

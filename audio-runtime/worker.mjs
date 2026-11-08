@@ -16,7 +16,7 @@ self.onmessage = async event => {
     model = await loadModel(new URL('model.json', self.location.href).href, {
       onProgress: progress => onProgress({stage: 'loading', progress})
     });
-    const notes = await transcribeWithModel(model, samples, {onProgress});
+    const notes = await transcribeWithModel(model, samples, {onProgress, includeAttackEvidence: event.data.includeAttackEvidence === true});
     self.postMessage({type: 'result', notes});
   } catch (error) {
     self.postMessage({type: 'error', name: error && error.name || 'Error',

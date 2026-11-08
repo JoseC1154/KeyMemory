@@ -248,6 +248,13 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 }
 
 .phraseActions{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}
+.phraseRecordConfirm{flex:1 0 100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px;border:1px solid #b77729;border-radius:8px;background:#fff4db;color:#56370a}
+.phraseRecordConfirm p{flex:1 1 200px;margin:0;font-size:14px;line-height:1.4}
+.phraseRecordConfirm button{min-height:44px}
+#phraseRecord[aria-expanded="true"]{outline:2px solid #b77729;outline-offset:2px}
+.phraseTransposeSettings{width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.phraseTransposeSettings strong{font-size:13px}
+.phraseTransposeSettings button{min-width:44px;min-height:44px}
 .phraseTranspose{display:inline-flex;align-items:center;gap:5px}
 #phraseTransposeValue{font-size:12px;min-width:57px;text-align:center}
 #phraseClock{font-size:12px;font-variant-numeric:tabular-nums;color:#b9ffcf}
@@ -395,9 +402,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visi
 .scalePausePanel #resumeScale{min-height:44px;min-width:120px}
 .scaleRunPanel .modalTop [data-pause-scale]{flex-shrink:0}
 
-#soundToggle,#hearBuilder{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 12px}#soundToggle svg{flex-shrink:0;pointer-events:none}#soundToggle[aria-pressed="true"]{background:#d9f3e6;color:#123d2a;border-color:#38885e}#soundToggle[aria-pressed="false"] .soundWaves,#soundToggle[aria-pressed="true"] .soundMuted{display:none}
+#hearBuilder{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 12px}
 
-@media(max-width:600px){#soundToggle span{display:none}#soundToggle{min-width:44px;padding:8px}#hearBuilder{padding:8px;gap:4px}.scalePractice .practiceActions{gap:5px}}
+@media(max-width:600px){#hearBuilder{padding:8px;gap:4px}.scalePractice .practiceActions{gap:5px}}
 
 /* Phrase transport and exact-time staff retain normal scroll on small displays. */
 #phraseRecordIndicator{color:#a61f2b;font-weight:900;font-size:13px}
@@ -580,3 +587,27 @@ button[data-midi-action],.midiTransportRow strong[data-midi-action]{background:v
 .audioImportTempo{padding:10px 0;border-top:1px solid #55775f;}
 .audioImportTempo label{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
 .audioImportPanel .audioImportTempo input{width:88px;}
+
+.audioImportSmoothing{margin:12px 0;padding:12px;border:1px solid #344d3c;border-radius:9px;background:#142019}
+.audioImportSmoothingHeading,.audioImportSmoothingScale{display:flex;justify-content:space-between;gap:12px}
+.audioImportSmoothingHeading{font-size:14px;font-weight:600;flex-wrap:wrap}
+.audioImportSmoothingHeading output{font-size:13px;color:#c7d5cc}
+.audioImportSmoothing input[type="range"]{display:block;box-sizing:border-box;width:100%;min-height:44px;margin:0;accent-color:#91d9a6}
+.audioImportSmoothingScale{font-size:12px;color:#c7d5cc}
+.audioImportSmoothing p{margin-bottom:0}
+.audioImportSmoothing button{margin-top:10px;min-height:44px}
+
+/* Keep routine practice close to the piano; reveal setup and guidance on demand. */
+.phraseOptions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 16px;margin:4px 0}
+.phraseOptions[hidden],.phraseDisclosure[hidden],#phraseSpeedControl[hidden],#phraseLoopGrid[hidden],#phraseLoopControls[hidden]{display:none}
+.phraseDisclosure{min-width:0;max-width:100%;font-size:13px}
+.phraseDisclosure[open]{flex-basis:100%;border:1px solid #486551;border-radius:8px;padding:0 10px 8px;background:#18231c}
+.phraseDisclosure>summary{cursor:pointer;min-height:40px;padding:10px 4px;box-sizing:border-box;overflow-wrap:anywhere}
+.phraseDisclosure>summary:focus-visible{outline:2px solid #91d9a6;outline-offset:2px;border-radius:4px}
+#phraseTimingSetupSummary{margin-left:8px;font-size:12px;color:#c4d5c8}
+.phraseHelpContent{font-size:12px;line-height:1.5}
+.phraseHelpContent p{margin:8px 0;font-size:12px}
+.phraseHelpContent #phraseDurationLegend{display:block;margin:8px 0}
+.phraseActions .phraseSpeedControl{gap:6px;font-size:12px;padding:0 4px}
+.phraseActions .phraseTimingDial{width:44px;height:44px;min-width:44px}
+@media(max-width:600px){.phraseDisclosure>summary{min-height:44px}#phraseTimingSetupSummary{display:block;margin:4px 0 0 16px}.phraseOptions{gap:4px 12px}.phraseActions .phraseSpeedControl{padding:0 2px}}

@@ -1,0 +1,31 @@
+'use strict';
+const assert=require('node:assert/strict'),{setup,flush}=require('./audio-import-ui.cjs');
+const evidence={onset:.05,rise:0,before:.8};
+const fragmented=[
+ {pitchMidi:60,startTimeSeconds:.1,durationSeconds:.5,attackEvidence:{onset:.9,rise:.7,before:0}},
+ {pitchMidi:60,startTimeSeconds:.63,durationSeconds:.5,attackEvidence:evidence},
+ {pitchMidi:64,startTimeSeconds:.1,durationSeconds:1.03,attackEvidence:{onset:.9,rise:.7,before:0}},
+ {pitchMidi:60,startTimeSeconds:1.16,durationSeconds:.5,attackEvidence:{onset:.8,rise:.1,before:.8}}
+];
+async function ready(output=fragmented){const h=setup();h.open();await h.setFile();h.setOutput(output);h.click('audioImportAnalyze');await flush();await flush();return h;}
+function smooth(h,value){h.el('audioImportSmoothing').value=value;h.el('audioImportSmoothing').dispatchEvent(new h.w.Event('input',{bubbles:true}));}
+(async()=>{
+ let h=await ready();assert.equal(h.el('audioImportSmoothing').value,'0');assert(!h.el('audioImportSmoothing').disabled);assert(h.el('audioImportReset').hidden);assert.equal(h.el('audioImportNoteList').children.length,4);assert.equal(h.progress[0].includeAttackEvidence,true);
+ smooth(h,100);assert.equal(h.el('audioImportNoteList').children.length,3);assert.match(h.el('audioImportSmoothingValue').textContent,/100% · 1 join$/);assert.match(h.el('audioImportNotesPreview').textContent,/smoothed/);assert.equal(h.el('audioImportSmoothing').getAttribute('aria-valuetext'),'100 percent smoothing');assert.equal(h.store(),h.original);assert.equal(h.count().calls,1,'smoothing never reruns model');
+ // Downward and repeated changes derive from original data, not earlier merges.
+ smooth(h,0);assert.equal(h.el('audioImportNoteList').children.length,4);smooth(h,100);smooth(h,100);assert.equal(h.el('audioImportNoteList').children.length,3);h.click('audioImportReset');assert.equal(h.el('audioImportSmoothing').value,'0');assert.equal(h.el('audioImportNoteList').children.length,4);assert.equal(h.d.activeElement.id,'audioImportSmoothing');
+ // Preview uses the current draft and smoothing cancels pending audio starts.
+ h.holdResume(true);h.click('audioImportNotesPreview');smooth(h,100);h.resolveResume();await flush();assert(h.el('audioImportStopPreview').hidden);assert.equal(h.store(),h.original);h.holdResume(false);h.click('audioImportNotesPreview');await flush();assert(!h.el('audioImportStopPreview').hidden);smooth(h,0);assert(h.el('audioImportStopPreview').hidden);
+ // Manual edits never vanish on dial input. Reset explicitly discards them.
+ smooth(h,100);let start=h.el('audioImportNoteList').firstElementChild.querySelector('[data-field=start]');start.value='.08';start.dispatchEvent(new h.w.Event('change',{bubbles:true}));assert(h.el('audioImportSmoothing').disabled);assert.match(h.el('audioImportSmoothingHint').textContent,/manual edits are kept/);smooth(h,0);assert.equal(h.el('audioImportNoteList').firstElementChild.querySelector('[data-field=start]').value,'.08');h.click('audioImportReset');assert(!h.el('audioImportSmoothing').disabled);assert.equal(h.el('audioImportNoteList').children.length,4);assert.equal(h.el('audioImportNoteList').firstElementChild.querySelector('[data-field=start]').value,'0.1');
+ h.click('audioImportAdd');assert(h.el('audioImportSmoothing').disabled);h.click('audioImportReset');h.el('audioImportNoteList').firstElementChild.querySelector('button').click();assert(h.el('audioImportSmoothing').disabled);h.click('audioImportReset');
+ // Accept saves only final notes, never temporary model evidence; canceled acceptance preserves both original and draft.
+ smooth(h,100);h.w.confirm=()=>false;h.click('audioImportUse');assert.equal(h.store(),h.original);assert.equal(h.el('audioImportSmoothing').value,'100');h.w.confirm=()=>true;h.click('audioImportUse');const result=h.snapshot();assert.equal(result.notes.length,3);assert.equal(result.notes[0].start,100);assert.equal(result.notes[0].duration,1030);assert(result.notes.every(n=>!('attackEvidence'in n)));assert(!h.store().includes('attackEvidence'));assert.equal(result.notes[2].start,1160);h.close();
+ // Scheduled note preview uses merged duration, then original duration after Off.
+ h=await ready(fragmented.map(n=>({...n,startTimeSeconds:n.startTimeSeconds-.1})));const oscillators=[];h.w.AudioContext.prototype.createOscillator=function(){const osc={frequency:{value:0},connect(){},disconnect(){},start(time){osc.startAt=time;},stop(time){osc.stopAt=time;}};oscillators.push(osc);return osc;};smooth(h,100);h.click('audioImportNotesPreview');await flush();assert(Math.abs(oscillators[0].stopAt-oscillators[0].startAt-1.07)<1e-8);smooth(h,0);h.click('audioImportNotesPreview');await flush();assert(Math.abs(oscillators[2].stopAt-oscillators[2].startAt-.54)<1e-8);h.close();
+ // No evidence, silence, empty notes, trim/new file, close and canceled/late model results are safe.
+ h=await ready(fragmented.map(({attackEvidence,...n})=>n));smooth(h,100);assert.equal(h.el('audioImportNoteList').children.length,4);assert.match(h.el('audioImportStatus').textContent,/No likely fragments/);h.change('audioImportEnd',3);assert(h.el('audioImportReview').hidden);assert.equal(h.el('audioImportSmoothing').value,'0');h.close();
+ h=await ready([]);assert(h.el('audioImportSmoothing').disabled);h.click('audioImportAdd');assert(!h.el('audioImportReset').hidden);assert(!h.el('audioImportReset').disabled);h.click('audioImportReset');assert(h.el('audioImportUse').disabled);h.close();
+ h=await ready();smooth(h,100);await h.setFile();assert.equal(h.el('audioImportSmoothing').value,'0');assert(h.el('audioImportReview').hidden);h.holdModel(true);h.click('audioImportAnalyze');await flush();h.click('audioImportClose');h.resolveModel();await flush();h.open();assert.equal(h.el('audioImportSmoothing').value,'0');assert(h.el('audioImportReview').hidden);assert.equal(h.store(),h.original);h.close();
+ console.log('PASS note smoothing UI: off by default, reversible local dial, attack metadata request, no rerun, original/reset, preserved manual edits, preview interruption, confirmation/cancellation, stripped evidence and new/closed/late drafts. Simulated audio/model.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

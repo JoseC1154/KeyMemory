@@ -8,6 +8,8 @@ import * as tf from '@tensorflow/tfjs-core';
 import {BasicPitch} from '@spotify/basic-pitch';
 import {initializeBackend, loadModel, transcribeWithModel, evaluateFrames, SAMPLE_RATE} from '../audio-runtime/runtime.mjs';
 import fixtures from './audio-fixtures.cjs';
+import smoothing from '../note-smoothing.js';
+import importer from '../audio-import.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const asset = name => path.join(root, 'assets/audio', name);
@@ -42,6 +44,19 @@ try {
   }
   assert(notes.every(note => note.startTimeSeconds >= 0 && note.startTimeSeconds + note.durationSeconds <= 7));
   const repeated = await transcribeWithModel(model, samples, {afterWindow: checkMemory});
+  const detailed = await transcribeWithModel(model, samples, {includeAttackEvidence:true,afterWindow:checkMemory});
+  assert.deepEqual(detailed.map(({attackEvidence,...n})=>n),notes,'evidence preserves exact original model notes');
+  assert(detailed.every(n=>Object.values(n.attackEvidence).every(v=>Number.isFinite(v)&&v>=0&&v<=1)));
+  const articulated = [
+    {pitch:60,start:.2,duration:.35}, {pitch:60,start:.6,duration:.35}, {pitch:60,start:1,duration:.35,gain:.12},
+    {pitch:64,start:1.6,duration:.15}, {pitch:64,start:1.85,duration:.15},
+    {pitch:67,start:2.5,duration:2.6}, {pitch:72,start:2.5,duration:2.6}
+  ];
+  const articulatedOutput=await transcribeWithModel(model,fixtures.synthesize(articulated,5.5),{includeAttackEvidence:true,afterWindow:checkMemory});
+  const smoothed=smoothing.smooth(importer.normalizeNotes(articulatedOutput,5500),100).notes;
+  for(const expected of articulated) assert(smoothed.some(n=>n.note===expected.pitch&&Math.abs(n.start-expected.start*1000)<120),'maximum smoothing preserves synthetic reattacks, quiet repeat, staccato, and cross-window chord');
+  assert(smoothed.every(n=>n.start>=0&&n.start+n.duration<=5500));
+  console.log('Maximum smoothing real-model smoke: repeated and quiet strikes, staccato, cross-window sustained chord retained; evidence output matches unmodified notes.');
   assert.deepEqual(repeated, notes, 'repeat inference is deterministic');
   checkMemory();
 

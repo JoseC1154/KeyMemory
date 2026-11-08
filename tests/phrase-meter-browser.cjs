@@ -6,6 +6,7 @@ const root=path.resolve(__dirname,'..'),server=http.createServer((req,res)=>{con
  for(const [width,height,mobile]of [[1280,900,false],[390,844,true],[320,740,true],[844,390,true]]){
   const context=await browser.newContext({viewport:{width,height},isMobile:mobile,hasTouch:mobile});await context.addInitScript(()=>localStorage.setItem('keymemory.phrase.v1',JSON.stringify({version:1,sourceBpm:120,duration:4100,notes:[{note:60,velocity:90,channel:0,start:100.25,duration:400},{note:64,velocity:90,channel:0,start:2300.5,duration:500}]})));
   const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto(`http://127.0.0.1:${server.address().port}`);await page.evaluate(()=>activateMode('phrase'));
+  await page.locator('#phraseTimingDetails > summary').click();
   await page.locator('#phraseViewVisibility').selectOption('hide');assert(await page.locator('#phraseMeterControls').isVisible());assert(!await page.locator('#phraseScore').isVisible());
   await page.locator('#phraseMeterNumerator').selectOption('6');await page.locator('#phraseMeterDenominator').selectOption('8');assert.equal(await page.locator('#phrasePulseUnit').innerText(),'dotted quarter BPM');assert.equal(await page.locator('#phrasePulseBpm').inputValue(),'80');
   await page.locator('#phrasePulseBpm').fill('100');await page.locator('#phrasePulseBpm').press('Tab');assert.equal(await page.evaluate(()=>phraseSnapshot.options.sourceBpm),150);assert.equal(await page.evaluate(()=>phraseSnapshot.options.playBpm),150);

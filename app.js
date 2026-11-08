@@ -7,12 +7,13 @@ const piano = document.getElementById("piano");
 const rangeText = document.getElementById("rangeText");
 const noteText = document.getElementById("noteText");
 const selected = new Set();
-const APP_VERSION = "2026.11.07.51";
+const APP_VERSION = "2026.11.07.52";
 let midiController = null;
 let midiTransportState={enabled:false,mappings:{},learning:null},phrasePracticeVisible=true;
 try{phrasePracticeVisible=localStorage.getItem("keymemory.phrase.practicePanel")!=="hidden";}catch{}
 let phraseEngine = null, phraseSnapshot = null, phraseImporter = null, phraseAuditioner = null;
 let phraseTempoRevision=-1,phraseTempoSuggestion=null;
+let phraseRecordConfirmation=null;
 const phraseRawHeld=new Set();
 // Physical presses are independent of musical grading and reserved MIDI shortcuts.
 const physicalMidiHeld=new Set();
@@ -555,18 +556,9 @@ const builderControls = document.getElementById("builderControls");
 const builderLevel = document.getElementById("builderLevel");
 const builderHint = document.getElementById("builderHint");
 const hearBuilder = document.getElementById("hearBuilder");
-const soundToggle = document.getElementById("soundToggle");
-let soundEnabled=false,soundReady=false,soundUnlockRequest=0;
-try{soundEnabled=localStorage.getItem("keymemory.sound.v1")==="on";}catch{}
-function updateSoundControl(){
-  soundToggle.setAttribute("aria-pressed",String(soundEnabled));
-  const label=soundEnabled?"Sound on":"Sound off";
-  soundToggle.querySelector("span").textContent=label;
-  soundToggle.title=label+(soundEnabled&&!soundReady?" · tap a piano key or Replay to enable audio":" · click to "+(soundEnabled?"mute":"enable"));
-  soundToggle.setAttribute("aria-label",soundToggle.title);
-}
+// Instrument sound is always enabled. Unlock only from an interaction, never on load.
+let soundReady=false,soundUnlockRequest=0;
 async function enableSoundAudio(){
-  if(!soundEnabled)return false;
   const request=++soundUnlockRequest;
   try{
     const Audio=window.AudioContext||window.webkitAudioContext;
@@ -575,28 +567,20 @@ async function enableSoundAudio(){
     // Reuse one unlocked context for all engines; existing contexts stay supported.
     builderAudioContext ||= midiAudioContext;phraseAudioContext ||= midiAudioContext;
     await Promise.all([...new Set([midiAudioContext,builderAudioContext,phraseAudioContext])].map(c=>c.resume()));
-    if(!soundEnabled||request!==soundUnlockRequest)return false;
+    if(request!==soundUnlockRequest)return false;
     soundReady=[midiAudioContext,builderAudioContext,phraseAudioContext].every(c=>c.state==="running");
     if(!soundReady)throw Error("Audio locked");
     if(phraseAudioAnchor)phraseAudioAnchor.audio=phraseAudioContext.currentTime-(Date.now()-phraseAudioAnchor.wall)/1000;
     for(const state of phrasePlaybackChannels.values())state.gain.gain.setValueAtTime((state.volume/127)*(state.expression/127),phraseAudioContext.currentTime);
-    document.getElementById("audioStatus").hidden=true;
-    updateSoundControl();return true;
+    const status=document?.getElementById("audioStatus");if(status)status.hidden=true;
+    return true;
   }catch{
-    if(request!==soundUnlockRequest||!soundEnabled)return false;
-    soundReady=false;updateSoundControl();
-    const status=document.getElementById("audioStatus");status.hidden=false;status.textContent="Sound is enabled, but audio is unavailable. Tap a key or Replay to try again.";
+    if(request!==soundUnlockRequest)return false;
+    soundReady=false;
+    const status=document?.getElementById("audioStatus");if(status){status.hidden=false;status.textContent="Audio is unavailable. Tap a piano key or Replay to try again.";}
     return false;
   }
 }
-soundToggle.addEventListener("click",()=>{
-  soundEnabled=!soundEnabled;soundUnlockRequest++;
-  try{localStorage.setItem("keymemory.sound.v1",soundEnabled?"on":"off");}catch{}
-  if(soundEnabled)enableSoundAudio();
-  else{soundReady=false;stopBuilderAudio();resetMidiAudio();silencePhrase(false);phraseTransportWake?.();if(pendingAdvance?.mode===activeMode)scheduleAutoNext(pendingAdvance.reason);}
-  updateSoundControl();updateHearControl();
-});
-updateSoundControl();
 const TRIAD_LESSONS = [
   {id:"major", name:"major", intervals:[0,4,7], third:"major third", fifth:"perfect fifth"},
   {id:"minor", name:"minor", intervals:[0,3,7], third:"minor third", fifth:"perfect fifth"},
@@ -823,7 +807,7 @@ function stopScaleChooseCue(){
 }
 function soundScaleChooseCue(){
   stopScaleChooseCue();
-  if(!soundEnabled||activeMode!=="scale"||scalePhase!=="reverse-answer"||currentDialog||document.hidden)return;
+  if(activeMode!=="scale"||scalePhase!=="reverse-answer"||currentDialog||document.hidden)return;
   const context=[midiAudioContext,builderAudioContext].find(context=>context?.state==="running");
   if(!context)return;
   try{
@@ -851,7 +835,7 @@ function stopBuilderAudio() {
   if(activeMode==="scale")resetMidiAudio();
   builderAudioRequest++;
   audioResumePending=false;hearBuilder.setAttribute("aria-busy","false");
-  document.getElementById("audioStatus").hidden=true;document.getElementById("audioStatus").textContent="";
+  const status=document.getElementById("audioStatus");status.hidden=true;status.textContent="";
   builderAudioUntil=0;
   const now=builderAudioContext?.currentTime || 0;
   for (const voice of builderVoices) {
@@ -885,7 +869,7 @@ function updateHearControl() {
   if(activeMode==="phrase"){hearBuilder.hidden=true;return;}
   const notes=currentHearNotes();
   hearBuilder.hidden=false;
-  hearBuilder.disabled=!soundEnabled||notes.length===0;
+  hearBuilder.disabled=notes.length===0;
   const chord=activeMode==="degrees"&&notes.length>=3 || activeMode==="builder"&&notes.length>=3 || activeMode==="dictionary"&&!dictionaryPractice;
   const label=activeMode==="semitones"&&!lastCorrectNotes.length?"Replay start note":chord?"Replay chord":notes.length===1?"Replay note":"Replay notes";
   let description=activeMode==="semitones"&&!lastCorrectNotes.length?"Hear the starting note":
@@ -895,14 +879,13 @@ function updateHearControl() {
     activeMode==="builder"?"Hear the notes built so far":activeMode==="scale"?"Hear the currently shown or requested scale note":"Hear the current notes";
   if(!notes.length)description="Select notes to hear them";
   hearBuilder.querySelector("span").textContent=label;
-  if(!soundEnabled)description="Turn Sound on to replay notes";
   hearBuilder.title=description;
   hearBuilder.setAttribute("aria-label",label+" — "+description);
   hearBuilder.setAttribute("aria-busy",String(audioResumePending));
 }
 hearBuilder.addEventListener("click", async () => {
   const notes=currentHearNotes();
-  if(!soundEnabled||!notes.length)return;
+  if(!notes.length)return;
   const mode=activeMode;
   const duration=hearDuration(mode,notes);
   stopBuilderAudio();
@@ -914,10 +897,10 @@ hearBuilder.addEventListener("click", async () => {
     if (!Audio) throw new Error("Audio unavailable");
     builderAudioContext ||= new Audio();
     await builderAudioContext.resume();
-    if(!soundEnabled||request!==builderAudioRequest || activeMode!==mode)return;
+    if(request!==builderAudioRequest || activeMode!==mode)return;
     if(builderAudioContext.state!=="running")throw Error("Audio locked");
     midiAudioContext ||= builderAudioContext;phraseAudioContext ||= builderAudioContext;
-    soundReady=true;updateSoundControl();audioResumePending=false;updateHearControl();
+    soundReady=true;audioResumePending=false;updateHearControl();
     const now = builderAudioContext.currentTime;
     builderAudioUntil=Date.now()+(duration.sustain+duration.release)*1000;
     for (const midi of notes) {
@@ -1266,6 +1249,7 @@ function answerKey(midi) {
 }
 
 function activateMode(mode) {
+  cancelPhraseRecordConfirmation();
   phraseAuditioner?.stop();
   phraseLoopDrag=null;phraseLoopDraft=null;phraseForgivenessPreview=null;
   if(currentDialog?.id==="phraseImportOverlay")closePracticeDialog();
@@ -1619,6 +1603,7 @@ function closePracticeDialog(options={}) {
   if(activeMode==="phrase")renderPhraseView();
 }
 function openPracticeDialog(id,buttonId) {
+  cancelPhraseRecordConfirmation();
   cancelLoopDrag();
   stopBuilderAudio();resetMidiAudio();
   if(scaleUserPause)return;
@@ -1654,7 +1639,7 @@ document.getElementById("confirmScaleRun").addEventListener("click",()=>{
   piano.querySelector('[data-midi="'+scaleNotes[0]+'"]')?.focus({preventScroll:true});
 });
 document.querySelectorAll(".startMode").forEach(button=>button.addEventListener("click",()=>{
-  closePracticeDialog();activateMode(button.dataset.mode);
+  unlockMidiAudio();closePracticeDialog();activateMode(button.dataset.mode);
 }));
 nextChallenge.addEventListener("click",()=>activeMode==="builder"?advanceBuilder():chooseChallenge());
 document.addEventListener("keydown",event=>{
@@ -1755,11 +1740,11 @@ function resetMonitorControllers(){
 }
 function resetMidiAudio(){midiVoiceGeneration++;midiNoteRequests.clear();phraseMonitorRequests.clear();for(const note of midiVoices.keys())releaseMidiNote(note);for(const voice of [...phraseMonitorAll])stopMonitorVoice(voice);}
 async function soundPhraseMonitor(note,velocity,channel){
-  if(!soundEnabled||!midiAudioContext)return;
+  if(!midiAudioContext)return;
   const key=channel+":"+note,request=++phraseMonitorRequest,generation=midiVoiceGeneration;
   phraseMonitorRequests.set(key,request);
   try{
-    await midiAudioContext.resume();if(!soundEnabled||midiAudioContext.state!=="running"||generation!==midiVoiceGeneration||phraseMonitorRequests.get(key)!==request||activeMode!=="phrase"||currentDialog||document.hidden)return;
+    await midiAudioContext.resume();if(midiAudioContext.state!=="running"||generation!==midiVoiceGeneration||phraseMonitorRequests.get(key)!==request||activeMode!=="phrase"||currentDialog||document.hidden)return;
     // A prior pedal-latched release is a separate voice, not replaced by a new strike.
     const prior=phraseMonitorVoices.get(key);if(prior)stopMonitorVoice(prior);phraseMonitorRequests.delete(key);
     if(phraseMonitorAll.size>=64)stopMonitorVoice(phraseMonitorAll.values().next().value);
@@ -1772,13 +1757,13 @@ async function soundPhraseMonitor(note,velocity,channel){
     osc.onended=()=>{osc.disconnect();gain.disconnect();phraseMonitorAll.delete(voice);if(phraseMonitorVoices.get(key)===voice)phraseMonitorVoices.delete(key);};
   }catch{}
 }
-function unlockMidiAudio(){if(soundEnabled)enableSoundAudio();}
+function unlockMidiAudio(){enableSoundAudio();}
 async function soundMidiNote(note){
-  if(!soundEnabled||!midiAudioContext)return;
+  if(!midiAudioContext)return;
   const generation=midiVoiceGeneration,request=++midiNoteRequest;
   midiNoteRequests.set(note,request);
   try{
-    await midiAudioContext.resume();if(!soundEnabled||midiAudioContext.state!=="running"||generation!==midiVoiceGeneration||midiNoteRequests.get(note)!==request||currentDialog||document.hidden)return;
+    await midiAudioContext.resume();if(midiAudioContext.state!=="running"||generation!==midiVoiceGeneration||midiNoteRequests.get(note)!==request||currentDialog||document.hidden)return;
     releaseMidiNote(note);
     const now=midiAudioContext.currentTime,osc=midiAudioContext.createOscillator(),gain=midiAudioContext.createGain();
     osc.type="triangle";osc.frequency.value=440*2**((note-69)/12);
@@ -1873,7 +1858,9 @@ function midiTransportAction(action){
     click("nextChallenge");return;
   }
   if(activeMode!=="phrase"||currentDialog)return;
-  const id={record:"phraseRecord",stop:"phraseStop",play:"phrasePlay",practice:"phrasePractice",transposeDown:"phraseDown",transposeUp:"phraseUp"}[action];if(id)click(id);
+  if(action!=="record"&&action!=="stop")cancelPhraseRecordConfirmation();
+  if(action==="transposeDown"||action==="transposeUp"){transposePhrase(action==="transposeDown"?-1:1);return;}
+  const id={record:"phraseRecord",stop:"phraseStop",play:"phrasePlay",practice:"phrasePractice"}[action];if(id)click(id);
 }
 if(window.KeyMemoryMidiTransport){
   midiTransport=window.KeyMemoryMidiTransport.create({onAction:midiTransportAction,onChange:refreshTransportUI});
@@ -1890,7 +1877,7 @@ if(window.KeyMemoryMidi)midiController=window.KeyMemoryMidi.create({
   status:document.getElementById("midiStatus"),select:document.getElementById("midiInput"),
   connect:document.getElementById("connectMidi"),disconnect:document.getElementById("disconnectMidi"),
   onConnect:unlockMidiAudio,onReset:resetMidiAudio,onRelease:releaseMidiNote,onKeyState:handlePhysicalMidiKey,
-  onSuspend:()=>{clearPhysicalMidiKeys();phraseRawHeld.clear();resetMidiAudio();resetMonitorControllers();phraseEngine?.stop({releaseHeld:true,preservePaused:true});if(activeMode==="phrase"){selected.clear();renderPiano();}},
+  onSuspend:()=>{cancelPhraseRecordConfirmation();clearPhysicalMidiKeys();phraseRawHeld.clear();resetMidiAudio();resetMonitorControllers();phraseEngine?.stop({releaseHeld:true,preservePaused:true});if(activeMode==="phrase"){selected.clear();renderPiano();}},
   onConnection:()=>{if(activeMode==="phrase")refreshPhraseUI();if(activeMode==="scale")renderPiano();},
   onRaw:event=>{
     if(!phraseEngine)return false;
@@ -1925,9 +1912,9 @@ let phraseAudioContext=null,phraseSoundGeneration=0,phraseAudioAnchor=null,phras
 const phraseVoices=new Set(),phraseBeatVoices=new Set(),phrasePlaybackChannels=new Map();
 if(window.KeyMemoryPhraseAudition){
   phraseAuditioner=window.KeyMemoryPhraseAudition.create({
-    canPlay:()=>soundEnabled&&!currentDialog&&!document.hidden&&canInspectPhrase(),
+    canPlay:()=>!currentDialog&&!document.hidden&&canInspectPhrase(),
     getContext:async()=>{
-      if(!soundEnabled||!canInspectPhrase())return null;
+      if(!canInspectPhrase())return null;
       if(phraseAudioContext?.state==="running"&&soundReady)return phraseAudioContext;
       return await enableSoundAudio()?phraseAudioContext:null;
     }
@@ -1946,12 +1933,7 @@ function silencePhrase(cancelTransport=true){
   if(cancelTransport){phrasePlaybackChannels.clear();silencePhraseMetronome();}
 }
 function unlockPhraseAudio(){
-  if(soundEnabled)return enableSoundAudio().then(ok=>{if(!ok&&soundEnabled)throw Error("Audio unavailable");});
-  if(!phraseSnapshot?.options.metronome)return Promise.resolve();
-  const Audio=window.AudioContext||window.webkitAudioContext;
-  if(!Audio)return Promise.reject(Error("Audio unavailable"));
-  phraseAudioContext ||= midiAudioContext || new Audio();
-  return phraseAudioContext.resume().then(()=>{if(phraseAudioContext.state!=="running")throw Error("Audio unavailable");if(phraseAudioAnchor)phraseAudioAnchor.audio=phraseAudioContext.currentTime-(Date.now()-phraseAudioAnchor.wall)/1000;});
+  return enableSoundAudio().then(ok=>{if(!ok)throw Error("Audio unavailable");});
 }
 
 function phraseAudioTime(plannedAt){
@@ -1966,11 +1948,11 @@ function playbackChannel(channel){
 function soundPhraseControl({controller,value,channel,at,initial=false}){
   if(!phraseAudioContext||activeMode!=="phrase"||controller===64)return;
   const state=playbackChannel(channel);state[controller===7?"volume":"expression"]=value;
-  const t=Math.max(phraseAudioContext.currentTime,phraseAudioTime(at)),valueProduct=soundEnabled?(state.volume/127)*(state.expression/127):0;
+  const t=Math.max(phraseAudioContext.currentTime,phraseAudioTime(at)),valueProduct=(state.volume/127)*(state.expression/127);
   if(initial)state.gain.gain.setValueAtTime(valueProduct,t);else state.gain.gain.setTargetAtTime(valueProduct,t,.008);
 }
 function soundPhrase(note,velocity,durationMs,plannedAt,meta={}){
-  if(!soundEnabled||!phraseAudioContext||phraseAudioContext.state!=="running"||activeMode!=="phrase")return;
+  if(!phraseAudioContext||phraseAudioContext.state!=="running"||activeMode!=="phrase")return;
   try{
     const scheduled=phraseAudioTime(plannedAt),t=Math.max(phraseAudioContext.currentTime,scheduled),duration=Math.max(.001,durationMs/1000)-(t-scheduled);
     if(duration<=0)return; // Do not shift a missed old note into the next beat.
@@ -1994,7 +1976,7 @@ function soundPhraseBeat({accent,at}){
   }catch{}
 }
 async function startPhraseTransport(action,kind=""){
-  cancelLoopDrag();
+  cancelPhraseRecordConfirmation();cancelLoopDrag();
   if(!phraseEngine||phraseTransportPending)return;
   phraseEngine.stop({preservePaused:kind==="play"});dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();
   const request=++phraseTransportRequest;phraseTransportPending=true;phraseTransportAction=kind;phraseInspectSelected=false;phraseInspectWindowStart=null;refreshPhraseUI();
@@ -2021,15 +2003,25 @@ function refreshPhraseUI(snapshot=phraseSnapshot){
   const metro=document.getElementById("phraseMetronome");metro.setAttribute("aria-pressed",String(o.metronome));metro.textContent="Click "+(o.metronome?"on":"off");
   document.getElementById("phraseImport").disabled=!phraseImporter||phraseTransportPending||s.state==="recording"||s.state==="record-countin";
   document.getElementById("phraseAudioOrigin").hidden=activeMode!=="phrase"||s.origin!=="audio"||s.state==="recording";
-  document.getElementById("phraseRecord").disabled=phraseTransportPending||s.state==="recording"||s.state==="record-countin";
+  // A confirmation belongs only to this phrase and this uninterrupted recording attempt.
+  if(phraseRecordConfirmation!==null&&(phraseRecordConfirmation!==s.noteRevision||!has||activeMode!=="phrase"||currentDialog||document.hidden||phraseTransportPending||["recording","record-countin"].includes(s.state)))phraseRecordConfirmation=null;
+  const confirming=phraseRecordConfirmation!==null,recordButton=document.getElementById("phraseRecord");
+  recordButton.disabled=phraseTransportPending||s.state==="recording"||s.state==="record-countin";
+  const recordLabel=confirming?"Record again":"Record";
+  if(recordButton.textContent.trim()!=="● "+recordLabel)recordButton.innerHTML='<span aria-hidden="true">●</span> '+recordLabel;
+  recordButton.setAttribute("aria-expanded",String(confirming));
+  if(confirming)recordButton.setAttribute("aria-describedby","phraseRecordConfirmMessage");else recordButton.removeAttribute("aria-describedby");
+  document.getElementById("phraseRecordConfirm").hidden=!confirming;
+  const confirmMessage=document.getElementById("phraseRecordConfirmMessage"),confirmText=confirming?"Press Record again to replace your saved phrase. An empty recording keeps it.":"";
+  if(confirmMessage.textContent!==confirmText)confirmMessage.textContent=confirmText;
   const playButton=document.getElementById("phrasePlay"),playOn=s.state==="playing"||s.state==="play-countin"||(phraseTransportPending&&phraseTransportAction==="play");
   playButton.disabled=(phraseTransportPending&&!playOn)||!has||s.state==="recording"||s.state==="record-countin";
   playButton.textContent=s.state==="playing"?"Pause phrase":playOn?"Cancel playback":Number.isFinite(s.pausedAt)?"Resume phrase":"Play phrase";playButton.setAttribute("aria-pressed",String(playOn));
   document.getElementById("phrasePractice").disabled=phraseTransportPending||!has||s.state==="recording"||s.state==="record-countin";
   const stopButton=document.getElementById("phraseStop"),paused=Number.isFinite(s.pausedAt);
-  stopButton.disabled=!active&&!paused;stopButton.textContent=s.state==="playing"?"Pause":paused?"Reset":"Stop";
-  stopButton.title=s.state==="playing"?"Pause and keep the current position":paused?"Return to the beginning of the selected section":"Stop the current activity";
-  document.getElementById("phraseDelete").disabled=!s.notes.length||phraseTransportPending||["recording","record-countin"].includes(s.state);
+  stopButton.disabled=!active&&!paused&&!confirming;stopButton.textContent=confirming?"Cancel record":s.state==="playing"?"Pause":paused?"Reset":"Stop";
+  stopButton.title=confirming?"Cancel recording replacement and keep your phrase":s.state==="playing"?"Pause and keep the current position":paused?"Return to the beginning of the selected section":"Stop the current activity";
+  document.getElementById("phraseClear").disabled=!s.notes.length||phraseTransportPending||["recording","record-countin"].includes(s.state);
   for(const id of ["phraseDown","phraseUp"])document.getElementById(id).disabled=!has||phraseTransportPending||s.state==="recording"||s.state==="record-countin";
   document.getElementById("phraseTransposeValue").textContent=o.transpose?((o.transpose>0?"+":"")+o.transpose+" st"):"Original";
   document.getElementById("phraseClock").textContent=s.state==="recording"?"REC "+phraseTime(s.elapsed)+" / 2:00":has?phraseTime(s.duration)+" · "+s.notes.length+" notes":"Up to 2:00";
@@ -2069,19 +2061,44 @@ document.getElementById("phraseImport").addEventListener("click",()=>{
   openPracticeDialog("phraseImportOverlay","phraseImport");phraseImporter.open();
 });
 function phraseAction(action){if(!phraseEngine)return;cancelLoopDrag();phraseViewExample=false;dismissAchievement();clearWrongKeyFeedback();stopBuilderAudio();resetMidiAudio();unlockPhraseAudio().catch(()=>{});action();}
+function cancelPhraseRecordConfirmation(){
+  if(phraseRecordConfirmation===null)return false;
+  phraseRecordConfirmation=null;refreshPhraseUI();return true;
+}
 document.getElementById("phraseRecord").addEventListener("click",()=>{
-  if(!midiController?.isConnected()){trainingPrompt.textContent="Connect a MIDI keyboard in Settings before recording.";return;}
-  if(phraseSnapshot?.notes.length&&!window.confirm("Replace the saved phrase with a new recording? An empty recording keeps the previous phrase."))return;
-  startPhraseTransport(()=>phraseEngine.record());
+  if(!phraseEngine||activeMode!=="phrase"||currentDialog||document.hidden||phraseTransportPending||["recording","record-countin"].includes(phraseSnapshot?.state))return;
+  if(!midiController?.isConnected()){cancelPhraseRecordConfirmation();trainingPrompt.textContent="Connect a MIDI keyboard in Settings before recording.";refreshPhrasePracticePanel();return;}
+  if(phraseSnapshot.notes.length&&phraseRecordConfirmation!==phraseSnapshot.noteRevision){
+    phraseRecordConfirmation=phraseSnapshot.noteRevision;refreshPhraseUI();return;
+  }
+  cancelPhraseRecordConfirmation();startPhraseTransport(()=>phraseEngine.record(),"record");
 });
+document.getElementById("phraseRecordCancel").addEventListener("click",()=>{if(cancelPhraseRecordConfirmation())document.getElementById("phraseRecord").focus({preventScroll:true});});
+// Native button activation covers mouse, touch and keyboard; MIDI routes to the same button.
+// Holding Enter must not count as the deliberate second press.
+document.getElementById("phraseRecord").addEventListener("keydown",event=>{if(event.repeat&&(event.key==="Enter"||event.key===" "))event.preventDefault();});
+document.addEventListener("keydown",event=>{
+  if(phraseRecordConfirmation===null)return;
+  if(event.key==="Escape"){event.preventDefault();cancelPhraseRecordConfirmation();document.getElementById("phraseRecord").focus({preventScroll:true});}
+  else if(!["Tab","Shift"].includes(event.key)&&!event.target.closest?.("#phraseRecord,#phraseRecordCancel,#phraseStop"))cancelPhraseRecordConfirmation();
+},true);
+for(const type of ["click","input","change","pointerdown"])document.addEventListener(type,event=>{
+  if(!event.target.closest?.("#phraseRecord,#phraseRecordConfirm,#phraseStop"))cancelPhraseRecordConfirmation();
+},true);
+window.addEventListener("blur",cancelPhraseRecordConfirmation);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)cancelPhraseRecordConfirmation();});
 document.getElementById("phrasePlay").addEventListener("click",()=>{if(["playing","play-countin"].includes(phraseSnapshot?.state)||(phraseTransportPending&&phraseTransportAction==="play")){selected.clear();if(phraseSnapshot?.state==="playing")phraseEngine.pause();else phraseEngine?.stop();resetMidiAudio();return;}if(!window.AudioContext&&!window.webkitAudioContext){incorrect("Audio is unavailable. Your saved phrase is unchanged.");return;}startPhraseTransport(()=>phraseEngine.play({loop:true}),"play");});
 document.getElementById("phrasePractice").addEventListener("click",()=>startPhraseTransport(()=>{selected.clear();phraseEngine.practice();}));
-document.getElementById("phraseStop").addEventListener("click",()=>{selected.clear();
+document.getElementById("phraseStop").addEventListener("click",()=>{if(cancelPhraseRecordConfirmation())return;selected.clear();
   if(phraseSnapshot?.state==="playing")phraseEngine.pause();
   else{if(Number.isFinite(phraseSnapshot?.pausedAt)){phraseInspectTime=phraseSnapshot.options.sectionStart;phraseInspectSelected=true;phraseInspectWindowStart=null;}phraseEngine?.stop();}
   resetMidiAudio();
 });
-for(const [id,step]of[["phraseDown",-1],["phraseUp",1]])document.getElementById(id).addEventListener("click",()=>phraseAction(()=>phraseEngine.setOptions({transpose:phraseSnapshot.options.transpose+step})));
+function transposePhrase(step){
+  if(activeMode!=="phrase"||!phraseSnapshot?.notes.length||phraseTransportPending||["recording","record-countin"].includes(phraseSnapshot.state))return;
+  cancelPhraseRecordConfirmation();phraseAction(()=>phraseEngine.setOptions({transpose:phraseSnapshot.options.transpose+step}));
+}
+for(const [id,step]of[["phraseDown",-1],["phraseUp",1]])document.getElementById(id).addEventListener("click",()=>transposePhrase(step));
 document.getElementById("phraseMetronome").addEventListener("click",()=>{
   phraseEngine?.setMetronome(!phraseSnapshot.options.metronome);
   if(phraseSnapshot.options.metronome)unlockPhraseAudio().catch(()=>{incorrect("Tempo click could not start. Tap Click off, then on to retry.");});
@@ -2095,7 +2112,7 @@ function deleteSavedPhrase(){
   phraseLoopDraft=null;phraseLoopDrag=null;phraseStaffDrag=null;phraseInspectTime=0;phraseInspectSelected=false;phraseInspectWindowStart=null;phraseViewModel=null;phraseViewSignature="";
   selected.clear();phraseSeenLow=21;phraseSeenHigh=108;phraseViewExample=false;phraseEngine?.clear();
 }
-for(const id of ["phraseClear","phraseDelete"])document.getElementById(id).addEventListener("click",deleteSavedPhrase);
+document.getElementById("phraseClear").addEventListener("click",deleteSavedPhrase);
 let phraseTaps=[];
 document.getElementById("phraseTap").addEventListener("click",()=>{const now=Date.now();if(phraseTaps.length&&now-phraseTaps.at(-1)>2000)phraseTaps=[];phraseTaps.push(now);phraseTaps=phraseTaps.slice(-5);if(phraseTaps.length<2)return;const bpm=60000*(phraseTaps.length-1)/(phraseTaps.at(-1)-phraseTaps[0])*phraseTimingMetrics().pulseQuarters;if(bpm>=30&&bpm<=300)phraseEngine?.setSourceTempo(bpm);});
 
@@ -2114,6 +2131,7 @@ function refreshPhraseMeter(){
   for(const id of ["phraseBarOne","phraseGridReset","phraseLoopPadEnd"])document.getElementById(id).disabled=disabled||!phraseSnapshot.notes.length;
   const hint=document.getElementById("phraseGridHint"),hintText=(o.gridConfirmed?"Reference grid: ":"Choose the source tempo and meter for this reference grid. Tempo suggestions are estimates; meter is not detected. ")+o.meterNumerator+"/"+o.meterDenominator+" · bar 1 at "+(o.gridOriginMs/1000).toFixed(3)+" s. Notes keep their original timing.";
   if(hint.textContent!==hintText)hint.textContent=hintText;
+  document.getElementById("phraseTimingSetupSummary").textContent=Number((o.sourceBpm/m.pulseQuarters).toFixed(1))+" "+m.beatLabel+" BPM · "+o.meterNumerator+"/"+o.meterDenominator+" · "+(o.countInBars?o.countInBars+"-bar count-in":"no count-in");
   refreshPhraseTempoSuggestion(disabled);
 }
 function refreshPhraseTempoSuggestion(disabled){
@@ -2213,7 +2231,7 @@ function inspectPhraseTime(time,windowStart,audition=false){
   if(audition)auditionPhraseScrub(previous,next,first);
 }
 function auditionPhraseScrub(previous,next,includeStart=false){
-  if(!phraseAuditioner||!canInspectPhrase()||currentDialog||document.hidden||!soundEnabled)return;
+  if(!phraseAuditioner||!canInspectPhrase()||currentDialog||document.hidden)return;
   const notes=phraseViewModel?.notes||[],direction=next>=previous?1:-1;
   let crossed=notes.filter(n=>next===previous?includeStart&&n.start<=next&&n.keyEnd>next:direction>0?(n.start>previous||(includeStart&&n.start===previous))&&n.start<=next:n.start<previous&&n.start>=next);
   crossed.sort((a,b)=>direction*(a.start-b.start)||a.id-b.id);
@@ -2332,6 +2350,7 @@ function refreshPhraseNoteEditor(){
   const s=phraseSnapshot,allowed=!!canEditPhraseNotes(),button=document.getElementById("phraseEditNotes"),panel=document.getElementById("phraseNoteEditor"),staff=document.getElementById("phraseStaff");
   if(!allowed){phraseNoteEdit=false;clearPhraseNoteSelection();}
   if(phraseNoteRevision!==(s?.noteRevision??0)){clearPhraseNoteSelection();phraseNoteRevision=s?.noteRevision??0;}
+  button.hidden=!(s?.notes.length||s?.undoDeleteCount);
   button.disabled=!allowed||!(s?.notes.length||s?.undoDeleteCount);button.textContent=phraseNoteEdit?"Done editing":"Edit notes";button.setAttribute("aria-pressed",String(phraseNoteEdit));panel.hidden=!phraseNoteEdit;
   staff.classList.toggle("isNoteEditing",phraseNoteEdit);
   if(!phraseNoteEdit)return;
@@ -2432,7 +2451,7 @@ function savePhraseViewPreferences(){try{localStorage.setItem("keymemory.phrase.
 function renderPhraseView(){
   // A view failure must never interrupt MIDI recording or an audio scheduler callback.
   try{renderPhraseViewContent();document.getElementById("phraseViewControls")?.removeAttribute("data-view-error");}
-  catch(error){if(phraseViewTick!==null){clearTimeout(phraseViewTick);phraseViewTick=null;}const panel=document.getElementById("phraseScore");if(panel)panel.hidden=true;piano.parentElement.hidden=false;document.querySelector(".pianoHint").hidden=false;document.querySelector(".info").hidden=false;document.getElementById("phraseViewControls")?.setAttribute("data-view-error","Score unavailable; your recording and controls are unchanged.");console.error("Phrase display could not render",error);}
+  catch(error){if(phraseViewTick!==null){clearTimeout(phraseViewTick);phraseViewTick=null;}const panel=document.getElementById("phraseScore");if(panel)panel.hidden=true;piano.parentElement.hidden=false;document.querySelector(".pianoHint").hidden=false;document.querySelector(".info").hidden=false;document.getElementById("phraseViewControls").hidden=false;document.getElementById("phraseViewControls")?.setAttribute("data-view-error","Score unavailable; your recording and controls are unchanged.");console.error("Phrase display could not render",error);}
 }
 function renderPhraseViewContent(){
   const controls=document.getElementById("phraseViewControls"),panel=document.getElementById("phraseScore");
@@ -2440,21 +2459,31 @@ function renderPhraseViewContent(){
   if(phraseViewTick!==null){clearTimeout(phraseViewTick);phraseViewTick=null;}
   if(phraseFallFrame!==null){cancelAnimationFrame(phraseFallFrame);phraseFallFrame=null;}
   const enabled=activeMode==="phrase"&&!!window.KeyMemoryPhraseView&&!!phraseSnapshot;
-  controls.hidden=!enabled;
+  if(enabled&&(!["idle","complete"].includes(phraseSnapshot.state)||phraseTransportPending))phraseViewExample=false;
+  // Empty states show the instrument, not a disabled editing workspace. Keep an
+  // empty edited phrase reachable while Undo can still restore its final note.
+  const hasPhrase=enabled&&!!phraseSnapshot.notes.length;
+  const hasWorkspace=enabled&&(hasPhrase||phraseViewExample||phraseSnapshot.state==="recording"||phraseSnapshot.undoDeleteCount>0);
+  controls.hidden=!hasWorkspace;
+  document.getElementById("phraseOptions").hidden=!enabled;
   document.getElementById("phraseMeterControls").hidden=!enabled;
+  document.getElementById("phraseLoopGrid").hidden=!hasPhrase;
+  document.getElementById("phraseLoopControls").hidden=!hasPhrase;
+  document.getElementById("phraseSpeedControl").hidden=!hasPhrase;
   const small=window.innerWidth<1050||window.innerHeight<550;
-  const show=enabled&&(phraseViewVisibility==="show"||(phraseViewVisibility==="auto"&&(!small||phraseSmallScore)));
+  const show=hasWorkspace&&(phraseViewVisibility==="show"||(phraseViewVisibility==="auto"&&(!small||phraseSmallScore)));
   panel.hidden=!show;
+  document.getElementById("phraseControllerText").hidden=!show;
   const hidePiano=show&&small;
   const wasPianoHidden=piano.parentElement.hidden;
   if(hidePiano&&!wasPianoHidden)phrasePianoScroll=piano.parentElement.scrollLeft;
   piano.parentElement.hidden=hidePiano;
   if(!hidePiano&&wasPianoHidden){renderPiano();piano.parentElement.scrollLeft=activeMode==="phrase"?phrasePianoScroll:0;}
   document.querySelector(".pianoHint").hidden=hidePiano;
-  document.getElementById("phraseKeyLegend").hidden=!enabled||hidePiano;
+  document.getElementById("phraseKeyLegend").hidden=!enabled;
   document.querySelector(".info").hidden=hidePiano;
-  document.getElementById("phraseRoll").hidden=!enabled||hidePiano;
-  document.getElementById("phraseFallingHeader").hidden=!enabled;
+  document.getElementById("phraseRoll").hidden=!hasWorkspace||hidePiano;
+  document.getElementById("phraseFallingHeader").hidden=!hasWorkspace;
   const toggle=document.getElementById("phraseViewSwitch");toggle.hidden=!small;toggle.textContent=show?"Show piano":"Show score";toggle.setAttribute("aria-expanded",String(show));
   document.getElementById("phraseViewVisibility").value=phraseViewVisibility;
   document.getElementById("phraseSpelling").value=phraseViewSpelling;

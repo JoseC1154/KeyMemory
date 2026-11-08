@@ -7,7 +7,7 @@
     "build:audio": "node scripts/build-audio-runtime.mjs",
     "test:audio-runtime": "node tests/audio-transcription-controller.cjs && node tests/audio-transcription-model.mjs && node tests/audio-transcription-bundle.cjs",
     "test:audio-browser": "node tests/audio-transcription-browser.cjs && node tests/audio-import-browser.cjs",
-    "test:audio": "node tests/audio-import-utils.cjs && node tests/audio-import-ui.cjs && node tests/audio-import-simple.cjs && node tests/audio-import-feedback.cjs && node tests/audio-import-preview-audio.cjs && node tests/phrase-import-engine.cjs && npm run test:audio-runtime",
+    "test:audio": "node tests/audio-import-utils.cjs && node tests/audio-import-ui.cjs && node tests/audio-import-simple.cjs && node tests/audio-import-feedback.cjs && node tests/audio-import-preview-audio.cjs && node tests/phrase-import-engine.cjs && npm run test:smoothing && npm run test:audio-runtime",
     "test:video": "node tests/video-import-ui.cjs",
     "test:video-browser": "node tests/video-import-browser.cjs",
     "test:note-edit": "node tests/phrase-note-edit-engine.cjs && node tests/phrase-note-edit-ui.cjs",
@@ -17,7 +17,13 @@
     "test:audition": "node tests/phrase-audition.cjs && node tests/phrase-audition-ui.cjs",
     "test:pause": "node tests/phrase-pause-engine.cjs && node tests/phrase-pause-ui.cjs",
     "test:tempo": "node tests/tempo-estimate.cjs && node tests/tempo-import-ui.cjs && node tests/tempo-phrase-ui.cjs",
-    "test:tempo-browser": "node tests/tempo-browser.cjs"
+    "test:tempo-browser": "node tests/tempo-browser.cjs",
+    "test:record-confirm": "node tests/phrase-record-confirm.cjs && node tests/phrase-integration.cjs && node tests/phrase-transport-integration.cjs && node tests/phrase-transpose-controls.cjs",
+    "test:record-browser": "node tests/phrase-record-browser.cjs",
+    "test:smoothing": "node tests/note-smoothing.cjs && node tests/note-smoothing-runtime.mjs && node tests/note-smoothing-ui.cjs",
+    "test:smoothing-browser": "node tests/note-smoothing-browser.cjs",
+    "test:phrase-cleanup": "node tests/phrase-cleanup-ui.cjs",
+    "test:phrase-cleanup-browser": "node tests/phrase-cleanup-browser.cjs"
   },
   "devDependencies": {
     "@spotify/basic-pitch": "1.0.1",

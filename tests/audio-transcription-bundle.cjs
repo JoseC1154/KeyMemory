@@ -39,7 +39,7 @@ async function run(samples, failModel = false) {
   globals.self = globals;
   const context = vm.createContext(globals);
   vm.runInContext(await fs.readFile(path.join(root, 'assets/audio/audio-transcription-worker.js'), 'utf8'), context);
-  await context.onmessage({data: {samples}});
+  await context.onmessage({data: {samples, includeAttackEvidence: true}});
   await done;
   assert(closed);
   return {requests, messages};
@@ -53,6 +53,7 @@ async function run(samples, failModel = false) {
   for (const expected of melody) {
     assert(result.notes.some(note => note.pitchMidi === expected.pitch && Math.abs(note.startTimeSeconds - expected.start) < 0.12));
   }
+  assert(result.notes.every(note => ['onset','rise','before'].every(key => Number.isFinite(note.attackEvidence?.[key]))), 'worker returns compact attack evidence');
   assert(requests.includes('model.json') && requests.includes('group1-shard1of1.bin'));
   assert(requests.some(name => name.endsWith('.wasm')));
   assert(!requests.some(name => name.includes('threaded')));

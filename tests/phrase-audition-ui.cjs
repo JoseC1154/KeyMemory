@@ -33,9 +33,9 @@ const fixture={version:1,sourceBpm:120,duration:1600,notes:[{note:60,start:0,dur
 const input=(h,ms)=>{h.el('phraseViewTime').value=String(ms/1000);h.el('phraseViewTime').dispatchEvent(new h.w.Event('input',{bubbles:true}));};
 const pitch=o=>Math.round(69+12*Math.log2(o.frequency.value/440));
 const ready=()=>{const h=setup(JSON.stringify(fixture));h.w.innerWidth=1280;h.w.innerHeight=900;h.mode('phrase');return h;};
-const sound=async h=>{h.click('soundToggle');await flush();};
+const sound=async h=>{await flush();};
 (async()=>{
- let h=ready();const stored=h.w.localStorage.getItem('keymemory.phrase.v1');input(h,1000);await flush();assert.equal(h.oscillators.length,0,'Sound off stays off');h.click('phraseEditNotes');h.change('phraseNoteChoice',2);await flush();assert.equal(h.oscillators.length,0);h.close();
+ let h=ready();const stored=h.w.localStorage.getItem('keymemory.phrase.v1');h.close();
  h=ready();await sound(h);let before=JSON.stringify(h.snapshot());input(h,1000);await flush();let voices=h.oscillators.slice();assert.deepEqual(voices.map(pitch),[60,64,67,72,64]);assert.equal(voices[1].startedAt,voices[2].startedAt,'exact chord onsets audition together');assert(voices[4].startedAt-voices[0].startedAt<=.36+1e-9);assert(voices.every(o=>o.stops[0]<=h.now()/1000+.6+1e-9));assert.equal(JSON.stringify(h.snapshot()),before,'scrubbing leaves transport/settings/source alone');assert.equal(h.sounds.length,0,'previews never enter the phrase playback scheduler');assert.equal(h.w.localStorage.getItem('keymemory.phrase.v1'),stored);
  h.advance(700);let count=h.oscillators.length;input(h,50);await flush();assert.deepEqual(h.oscillators.slice(count).map(pitch),[64,72,64,67],'reverse scrubbing follows traversal order');
  h.advance(700);count=h.oscillators.length;input(h,60);await flush();assert.equal(h.oscillators.length,count,'moving within the same hold does not rapidly retrigger');h.el('phraseViewTime').dispatchEvent(new h.w.Event('pointerdown'));await flush();assert.deepEqual(h.oscillators.slice(count).map(pitch),[60],'starting a gesture previews a currently held note');
@@ -44,14 +44,14 @@ const sound=async h=>{h.click('soundToggle');await flush();};
  // Playback has exclusive transport ownership; user/programmatic slider events cannot add auditions.
  h.change('phraseCountInBars',0);h.click('phrasePlay');await flush();assert.equal(h.snapshot().state,'playing');count=h.oscillators.length;before=JSON.stringify(h.snapshot());input(h,1200);h.change('phraseSpelling','flat');await flush();assert.equal(h.oscillators.length,count);assert.equal(JSON.stringify(h.snapshot()),before);h.click('phraseStop');h.close();
  // Every stop path invalidates unresolved sound startup, without stale delayed notes.
- for(const cancel of ['sheet','mode','mute','blur','transport']){
+ for(const cancel of ['sheet','mode','blur','transport']){
   h=ready();await sound(h);h.defer(true);h.w.phraseTest.lockSound();input(h,1000);await flush();assert(h.resumes.length>0,cancel);const initial=h.oscillators.length;
-  if(cancel==='sheet')h.click('openSettings');else if(cancel==='mode')h.mode('free');else if(cancel==='mute')h.click('soundToggle');else if(cancel==='blur')h.w.dispatchEvent(new h.w.Event('blur'));else{h.click('phrasePlay');h.click('phrasePlay');}
+  if(cancel==='sheet')h.click('openSettings');else if(cancel==='mode')h.mode('free');else if(cancel==='blur')h.w.dispatchEvent(new h.w.Event('blur'));else{h.click('phrasePlay');h.click('phrasePlay');}
   h.defer(false);for(const resume of h.resumes.splice(0))resume();await flush();assert.equal(h.oscillators.length,initial,cancel+' cancels late audition');h.close();
  }
  // Clearing an edit selection cancels both its sounding voice and pending startup.
  h=ready();await sound(h);h.click('phraseEditNotes');h.defer(true);h.w.phraseTest.lockSound();h.change('phraseNoteChoice',2);await flush();assert(h.resumes.length>0);h.el('phraseStaff').dispatchEvent(new h.w.MouseEvent('click',{bubbles:true,detail:1,clientX:1000,clientY:1000}));assert.equal(h.el('phraseNoteChoice').value,'');h.defer(false);for(const resume of h.resumes.splice(0))resume();await flush();assert.equal(h.oscillators.length,0,'cleared selection cannot start late audio');h.close();
  // No sound from staff inspection or rerenders. Only the explicit slider and edit selection audition.
  h=ready();await sound(h);h.el('phraseStaff').dispatchEvent(new h.w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));h.change('phraseSpelling','flat');await flush();assert.equal(h.oscillators.length,0);h.close();
- console.log('PASS app audition: forward/reverse/chord scrubbing, currently-held gesture, no jitter retriggers, Sound off, transposed edit preview, source/settings preservation, independent playback, note deletion and pending startup cancellation on sheet/mode/mute/blur/transport. Simulated audio/DOM only.');
+ console.log('PASS app audition: forward/reverse/chord scrubbing, currently-held gesture, no jitter retriggers, always-enabled sound, transposed edit preview, source/settings preservation, independent playback, note deletion and pending startup cancellation on sheet/mode/blur/transport. Simulated audio/DOM only.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
